@@ -9,14 +9,7 @@ Se você já criou a tabela `ia_records`, execute este SQL para garantir que tod
 Abra o **SQL Editor** e execute:
 
 ```sql
--- Garantir que a tabela existe
-create table if not exists ia_records (
-  id text primary key,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Tabela de Perfis de Usuário
+-- 1. Tabela de Perfis de Usuário (Referenciando auth.users)
 create table if not exists profiles (
   id uuid references auth.users on delete cascade primary key,
   updated_at timestamp with time zone default timezone('utc'::text, now()),
@@ -27,26 +20,45 @@ create table if not exists profiles (
   contato text
 );
 
--- Tabela de Mensagens (Chat)
+-- 2. Tabela de Mensagens (Chat) com Cascade Delete
 create table if not exists messages (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()),
-  sender_id uuid references profiles(id) not null, -- Referência a profiles(id)
+  sender_id uuid references profiles(id) on delete cascade not null,
   content text not null,
   is_private boolean default false,
-  recipient_id uuid references profiles(id) -- Referência a profiles(id)
+  recipient_id uuid references profiles(id) on delete cascade
 );
 
--- SE VOCÊ RECEBER O ERRO PGRST200 (Relationship not found), execute estes comandos:
--- alter table messages drop constraint if exists messages_sender_id_fkey;
--- alter table messages add constraint messages_sender_id_fkey foreign key (sender_id) references profiles(id);
--- alter table messages drop constraint if exists messages_recipient_id_fkey;
--- alter table messages add constraint messages_recipient_id_fkey foreign key (recipient_id) references profiles(id);
+-- 3. Habilitar Realtime (com verificação para evitar erro 42710)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' 
+    and schemaname = 'public' 
+    and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table messages;
+  end if;
+end $$;
 
--- IMPORTANTE: Habilitar Realtime para a tabela de mensagens
--- Sem isso, as mensagens só aparecerão ao atualizar a página.
--- Execute isto no SQL Editor do Supabase:
-alter publication supabase_realtime add table messages;
+-- 4. Tabela de Inventário de IA
+create table if not exists ia_records (
+  id text primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  data jsonb,
+  unidade_setor text,
+  responsavel_preenchimento text,
+  cargo text,
+  data_registro date,
+  utiliza_ia text,
+  nome_ferramenta text,
+  fornecedor text,
+  status_uso text,
+  classificacao_risco text
+);
 
 -- CONFIGURAÇÃO PARA UPLOAD DE FOTOS (STORAGE)
 -- 1. Vá em 'Storage' no painel do Supabase.
