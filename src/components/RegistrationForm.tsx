@@ -336,28 +336,25 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <InputGroup label="Unidade ou Setor" required>
                   <input 
-                    className={`${sharedInputClass} ${(profile?.role !== "admin" && !isAdmin) ? "opacity-70 cursor-not-allowed bg-black/10" : ""}`}
+                    className={sharedInputClass}
                     value={formData.unidadeSetor || ""}
                     onChange={(e) => updateField("unidadeSetor", e.target.value)}
                     placeholder="Ex: NIT, TI, Marketing, Hematologia..."
                     list="setores-list"
                     required
-                    disabled={profile?.role !== "admin" && !isAdmin}
                   />
-                  {(profile?.role === "admin" || isAdmin) && (
-                    <datalist id="setores-list">
-                      <option value="NIT" />
-                      <option value="TI" />
-                      <option value="Marketing" />
-                      <option value="Administrativo" />
-                      <option value="Jurídico" />
-                      <option value="Direção Técnica" />
-                      <option value="Qualidade" />
-                      <option value="Atendimento / Recepção" />
-                      <option value="Laboratório de Patologia" />
-                      <option value="Laboratório Central" />
-                    </datalist>
-                  )}
+                  <datalist id="setores-list">
+                    <option value="NIT" />
+                    <option value="TI" />
+                    <option value="Marketing" />
+                    <option value="Administrativo" />
+                    <option value="Jurídico" />
+                    <option value="Direção Técnica" />
+                    <option value="Qualidade" />
+                    <option value="Atendimento / Recepção" />
+                    <option value="Laboratório de Patologia" />
+                    <option value="Laboratório Central" />
+                  </datalist>
                 </InputGroup>
                 <InputGroup label="Responsável pelo Preenchimento" required>
                   <input 

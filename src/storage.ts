@@ -43,15 +43,6 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       .from('ia_records')
       .select('*');
 
-    if (!isAdmin && userId) {
-      console.log('🛡️ Aplicando filtros de segurança para usuário comum');
-      // Filtrando apenas por setor se o usuário não for admin
-      if (userSector) {
-        const escapedSector = `"${userSector}"`;
-        query = query.eq('unidade_setor', userSector);
-      }
-    }
-
     const { data, error, status } = await query.order('id', { ascending: true });
 
     if (error) {
@@ -104,22 +95,12 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       if (localRecords.length > 0) {
         console.log('📦 Carregando do LocalStorage:', localRecords.length);
         
-        // Aplicar filtro de setor no fallback local também
-        if (!isAdmin && userId && userSector) {
-          return localRecords.filter(r => r.unidadeSetor === userSector);
-        }
-        
         return localRecords;
       }
     }
 
     console.log('💡 Carregando registros padrão/exemplo.');
     const examples = getExampleRecords();
-    
-    // Aplicar filtro de setor nos exemplos também
-    if (!isAdmin && userId && userSector) {
-      return examples.filter(r => r.unidadeSetor === userSector);
-    }
     
     return examples;
   } catch (error) {

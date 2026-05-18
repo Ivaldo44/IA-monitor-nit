@@ -409,27 +409,25 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
             </div>
           </div>
 
-          {isAdmin && (
-            <div className="glass p-8 rounded-3xl border border-[var(--border-lab)] text-[var(--text-main)] relative overflow-hidden group shadow-lg">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 blur-3xl rounded-full"></div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-4">
-                   <div className="bg-brand-green/10 text-brand-green p-1.5 rounded-lg border border-brand-green/20">
-                     <PlusCircle size={14} />
-                   </div>
-                   <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Ação Necessária</h3>
-                </div>
-                <p className="text-xl font-bold tracking-tight leading-tight mb-8 text-[var(--text-bright)] group-hover:translate-x-1 transition-transform">Expandir o Inventário de IA para novos departamentos.</p>
-                <button 
-                  onClick={() => onNavigate("new")}
-                  className="w-full bg-brand-green text-black py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-brand-green/90 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
-                >
-                  Novo Registro <ChevronRight size={14} />
-                </button>
+          <div className="glass p-8 rounded-3xl border border-[var(--border-lab)] text-[var(--text-main)] relative overflow-hidden group shadow-lg">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 blur-3xl rounded-full"></div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-4">
+                 <div className="bg-brand-green/10 text-brand-green p-1.5 rounded-lg border border-brand-green/20">
+                   <PlusCircle size={14} />
+                 </div>
+                 <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Ação Necessária</h3>
               </div>
-              <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="" className="absolute right-[-20px] bottom-[-20px] size-48 opacity-[0.05] dark:opacity-[0.03] rotate-12 pointer-events-none group-hover:scale-110 transition-transform" />
+              <p className="text-xl font-bold tracking-tight leading-tight mb-8 text-[var(--text-bright)] group-hover:translate-x-1 transition-transform">Expandir o Inventário de IA para novos departamentos.</p>
+              <button 
+                onClick={() => onNavigate("new")}
+                className="w-full bg-brand-green text-black py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-brand-green/90 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+              >
+                Novo Registro <ChevronRight size={14} />
+              </button>
             </div>
-          )}
+            <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="" className="absolute right-[-20px] bottom-[-20px] size-48 opacity-[0.05] dark:opacity-[0.03] rotate-12 pointer-events-none group-hover:scale-110 transition-transform" />
+          </div>
         </div>
       </div>
 

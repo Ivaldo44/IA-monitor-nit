@@ -249,15 +249,13 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
               <FileSpreadsheet size={14} className="text-brand-green group-hover/btn:scale-110 transition-transform" />
               Exportar Inventário
             </button>
-            {isAdmin && (
-              <button 
-                onClick={onAdd}
-                className="px-8 py-4 bg-brand-green hover:bg-brand-green/80 text-black font-bold rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase"
-              >
-                <PlusCircle size={16} />
-                Novo Registro
-              </button>
-            )}
+            <button 
+              onClick={onAdd}
+              className="px-8 py-4 bg-brand-green hover:bg-brand-green/80 text-black font-bold rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase"
+            >
+              <PlusCircle size={16} />
+              Novo Registro
+            </button>
           </div>
         </div>
 

@@ -156,11 +156,6 @@ export const Chat: React.FC = () => {
       .select("*")
       .neq("id", user?.id || "");
     
-    // Privacidade Total: Usuários comuns veem apenas membros do seu próprio setor
-    if (profile?.role !== "admin" && profile?.setor) {
-      query = query.eq("setor", profile.setor);
-    }
-
     const { data } = await query;
     setUsers(data || []);
   };

@@ -192,13 +192,13 @@ export default function App() {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "inventory", label: "Inventário de IA", icon: ClipboardList },
-    { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
-    { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: true },
-    { id: "new", label: "Novo Cadastro", icon: PlusCircle, adminOnly: true },
+    { id: "sectors", label: "Mapa de IAs", icon: Users },
+    { id: "admin", label: "Gestão Admin", icon: ShieldAlert },
+    { id: "new", label: "Novo Cadastro", icon: PlusCircle },
     { id: "report", label: "Relatórios", icon: FileText },
     { id: "chat", label: "Colaboração Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
-  ].filter(item => !item.adminOnly || profile?.role === "admin");
+  ];
 
   if (authLoading) {
     return (
@@ -394,7 +394,7 @@ export default function App() {
               {activeTab === "sectors" && (
                 <SectorMap records={records} profiles={profiles} />
               )}
-              {activeTab === "admin" && profile?.role === "admin" && (
+              {activeTab === "admin" && (
                 <AdminPanel 
                   records={records} 
                   profiles={profiles}
