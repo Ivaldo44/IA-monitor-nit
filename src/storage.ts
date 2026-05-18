@@ -6,6 +6,7 @@
 import { supabase } from "./lib/supabase";
 import {
   IARecord,
+  StatusAuditoria,
   StatusUso,
   Criticidade,
   ClassificacaoRisco,
@@ -14,105 +15,141 @@ import {
   EtapaProcesso,
   NaturezaUso,
   GrauAutonomia,
-  RiscoResidual
+  RiscoResidual,
+  UserProfile
 } from "./types";
 
 const STORAGE_KEY = "cedro_ia_inventory";
 
-export const getRecords = async (): Promise<IARecord[]> => {
+export const getProfiles = async (): Promise<UserProfile[]> => {
   try {
-    console.log('🔍 Buscando registros no Supabase...');
     const { data, error } = await supabase
-      .from('ia_records')
+      .from('profiles')
       .select('*')
-      .order('id', { ascending: true });
+      .order('full_name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching profiles:', error);
+    return [];
+  }
+};
+
+export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?: string): Promise<IARecord[]> => {
+  try {
+    console.log('🔍 Buscando registros no Supabase...', { userId, isAdmin, userSector });
+    let query = supabase
+      .from('ia_records')
+      .select('*');
+
+    if (!isAdmin && userId) {
+      console.log('🛡️ Aplicando filtros de segurança para usuário comum');
+      // Filtrando apenas por setor se o usuário não for admin
+      if (userSector) {
+        const escapedSector = `"${userSector}"`;
+        query = query.eq('unidade_setor', userSector);
+      }
+    }
+
+    const { data, error, status } = await query.order('id', { ascending: true });
 
     if (error) {
-      console.error('❌ Erro ao buscar no Supabase:', error);
+      console.error('❌ Erro ao buscar no Supabase:', error, 'Status:', status);
       throw error;
     }
 
     if (data && data.length > 0) {
       console.log(`✅ ${data.length} registros encontrados no Supabase.`);
-      // Prioritize data from the 'data' JSONB column, but fallback to individual columns if necessary
       const mappedData = data.map(item => {
+        let record: IARecord;
+        
         if (item.data) {
-          const record = item.data as IARecord;
-          // Ensure ID is synced from column if mismatch
-          record.id = item.id;
-          return record;
+          record = item.data as IARecord;
+          record.id = item.id; // Sync ID
+        } else {
+          record = {
+            id: item.id,
+            unidadeSetor: item.unidade_setor || '',
+            responsavelPreenchimento: item.responsavel_preenchimento || '',
+            cargo: item.cargo || '',
+            dataRegistro: item.data_registro || new Date().toISOString().split('T')[0],
+            utilizaIA: item.utiliza_ia || 'Sim',
+            nomeFerramenta: item.nome_ferramenta || 'IA sem nome',
+            fornecedor: item.fornecedor || 'Desconhecido',
+            statusUso: (item.status_uso as StatusUso) || StatusUso.EM_AVALIACAO,
+            createdAt: item.created_at || new Date().toISOString(),
+            updatedAt: item.updated_at || new Date().toISOString(),
+            historico: []
+          } as any as IARecord;
         }
-        // Fallback reconstruction
-        return {
-          id: item.id,
-          unidadeSetor: item.unidade_setor || '',
-          responsavelPreenchimento: item.responsavel_preenchimento || '',
-          cargo: item.cargo || '',
-          dataRegistro: item.data_registro || new Date().toISOString().split('T')[0],
-          utilizaIA: item.utiliza_ia || '',
-          nomeFerramenta: item.nome_ferramenta || '',
-          fornecedor: item.fornecedor || '',
-          statusUso: (item.status_uso as StatusUso) || StatusUso.EM_AVALIACAO,
-          classificacaoRiscoManual: (item.classificacao_risco as ClassificacaoRisco) || ClassificacaoRisco.BAIXO,
-          createdAt: item.created_at || new Date().toISOString(),
-          updatedAt: item.updated_at || new Date().toISOString(),
-          historico: []
-        } as any as IARecord;
+
+        // Ensure statusAuditoria is never undefined for filtering purposes
+        if (!record.statusAuditoria) {
+          record.statusAuditoria = StatusAuditoria.PENDENTE;
+        }
+
+        return record;
       });
 
-      // Sync local storage with what's in the cloud
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedData));
       return mappedData;
     }
 
-    console.log('ℹ️ Supabase retornou 0 registros.');
+    console.log('ℹ️ Supabase retornou 0 registros. Verificando fallback...');
 
-    // Supabase is empty. Let's see if we have local data to push.
     const localDataStr = localStorage.getItem(STORAGE_KEY);
     if (localDataStr) {
-      try {
-        const localRecords: IARecord[] = JSON.parse(localDataStr);
-        if (localRecords.length > 0) {
-          console.log('☁️ Enviando dados locais para o Supabase que está vazio...');
-          // Push local records to Supabase in background
-          saveRecordsToSupabase(localRecords).catch(err => console.error('Initial cloud sync failed:', err));
-          return localRecords;
+      const localRecords: IARecord[] = JSON.parse(localDataStr);
+      if (localRecords.length > 0) {
+        console.log('📦 Carregando do LocalStorage:', localRecords.length);
+        
+        // Aplicar filtro de setor no fallback local também
+        if (!isAdmin && userId && userSector) {
+          return localRecords.filter(r => r.unidadeSetor === userSector);
         }
-      } catch (e) {
-        console.error('Failed to parse local records for cloud sync:', e);
+        
+        return localRecords;
       }
     }
 
-    console.log('💡 Utilizando registros de exemplo (tudo vazio).');
-    // Completely empty everywhere? Use examples.
+    console.log('💡 Carregando registros padrão/exemplo.');
     const examples = getExampleRecords();
-    await saveRecordsToSupabase(examples).catch(err => console.error('Failed to save examples to cloud:', err));
+    
+    // Aplicar filtro de setor nos exemplos também
+    if (!isAdmin && userId && userSector) {
+      return examples.filter(r => r.unidadeSetor === userSector);
+    }
+    
     return examples;
   } catch (error) {
-    console.error('Error fetching from Supabase:', error);
+    console.error('💥 Erro crítico no getRecords:', error);
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : getExampleRecords();
+    try {
+      if (data) return JSON.parse(data);
+    } catch (e) {}
+    return getExampleRecords();
   }
 };
 
-export const addRecord = async (record: IARecord) => {
+export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boolean) => {
   try {
     console.log('☁️ Tentando salvar registro no Supabase:', record.id);
+    
+    // Determinando o status final: 
+    // Pendente, Aprovado ou Negado
+    const finalStatus = record.statusAuditoria || (isAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
+    const recordWithStatus = { ...record, statusAuditoria: finalStatus };
+
     const { error } = await supabase
       .from('ia_records')
       .upsert({ 
         id: record.id, 
-        data: record,
+        data: recordWithStatus,
         updated_at: new Date().toISOString(),
         unidade_setor: record.unidadeSetor,
         responsavel_preenchimento: record.responsavelPreenchimento,
-        cargo: record.cargo,
-        data_registro: record.dataRegistro,
-        utiliza_ia: record.utilizaIA,
-        nome_ferramenta: record.nomeFerramenta,
-        fornecedor: record.fornecedor,
-        status_uso: record.statusUso,
-        classificacao_risco: record.classificacaoRiscoManual
+        nome_ferramenta: record.nomeFerramenta
       });
     
     if (error) {
@@ -125,32 +162,35 @@ export const addRecord = async (record: IARecord) => {
     throw error; 
   }
   
-  // Local fallback (Simples, sem chamar getRecords para evitar círculo)
+  // Local fallback
   try {
     const localData = localStorage.getItem(STORAGE_KEY);
     const records: IARecord[] = localData ? JSON.parse(localData) : [];
     const index = records.findIndex(r => r.id === record.id);
-    if (index === -1) records.push(record);
-    else records[index] = record;
+    const finalStatus = record.statusAuditoria || (isAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
+    const recordWithStatus = { ...record, statusAuditoria: finalStatus };
+    
+    if (index === -1) records.push(recordWithStatus);
+    else records[index] = recordWithStatus;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch (e) {
     console.error('Local sync failed:', e);
   }
 };
 
-export const saveRecordsToSupabase = async (records: IARecord[]) => {
+export const saveRecordsToSupabase = async (records: IARecord[], userId?: string, isAdmin?: boolean) => {
   console.log(`Syncing ${records.length} records to Supabase...`);
   for (const record of records) {
-    await addRecord(record);
+    await addRecord(record, userId, isAdmin);
   }
 };
 
-export const updateRecord = async (record: IARecord) => {
-  return addRecord(record); // Upsert handles update
+export const updateRecord = async (record: IARecord, userId?: string, isAdmin?: boolean) => {
+  return addRecord(record, userId, isAdmin); // Upsert handles update
 };
 
-export const addOrUpdateRecord = async (record: IARecord) => {
-  return addRecord(record);
+export const addOrUpdateRecord = async (record: IARecord, userId?: string, isAdmin?: boolean) => {
+  return addRecord(record, userId, isAdmin);
 };
 
 export const deleteRecord = async (id: string) => {
@@ -191,8 +231,17 @@ export const checkSupabaseStatus = async (): Promise<boolean> => {
   }
 };
 
-export const generateId = (count: number): string => {
-  return `IA-CEDRO-${(count + 1).toString().padStart(4, "0")}`;
+export const generateId = (records: IARecord[]): string => {
+  if (records.length === 0) return "IA-CEDRO-0001";
+  
+  // Extrair números dos IDs existentes e pegar o maior
+  const ids = records.map(r => {
+    const match = r.id.match(/\d+$/);
+    return match ? parseInt(match[0], 10) : 0;
+  });
+  
+  const maxId = Math.max(...ids);
+  return `IA-CEDRO-${(maxId + 1).toString().padStart(4, "0")}`;
 };
 
 function getExampleRecords(): IARecord[] {
@@ -260,6 +309,7 @@ function getExampleRecords(): IARecord[] {
       parecerTecnico: "Solução segura com baixo impacto técnico.",
       observacoesGerais: "Iniciado em Janeiro de 2024.",
       anexos: "Link para documentação técnica interna.",
+      statusAuditoria: StatusAuditoria.APROVADO,
       historico: [{ date: now, action: "Criação do registro" }]
     },
     {
@@ -325,6 +375,7 @@ function getExampleRecords(): IARecord[] {
       parecerTecnico: "Aprovado sob condição de revisão 100% humana.",
       observacoesGerais: "Projeto piloto estendido.",
       anexos: "Termo de responsabilidade técnica assinado.",
+      statusAuditoria: StatusAuditoria.APROVADO,
       historico: [{ date: now, action: "Criação do registro" }]
     },
     {
@@ -383,13 +434,198 @@ function getExampleRecords(): IARecord[] {
       classificacaoRiscoManual: ClassificacaoRisco.CRITICO,
       areaAvaliadora: ["Qualidade", "Direção Técnica"],
       statusUso: StatusUso.NAO_APROVADO,
+      statusAuditoria: StatusAuditoria.NEGADO,
       necessitaPlanoAcao: "Sim",
-      descricaoPlanoAcao: "Contratação de consultoria para validação de software e treinamento.",
-      responsavelPlanoAcao: "Direção Técnica",
-      prazoPlanoAcao: dateStr,
       parecerTecnico: "Risco inaceitável sem validação humana e controles de acesso.",
       observacoesGerais: "Suspenso temporariamente.",
       anexos: "Relatório de incidentes anexo.",
+      historico: [{ date: now, action: "Criação do registro" }]
+    },
+    {
+      id: "IA-CEDRO-0004",
+      createdAt: now,
+      updatedAt: now,
+      unidadeSetor: "NIT",
+      responsavelPreenchimento: "Alice Tech",
+      cargo: "Analista de Inovação",
+      dataRegistro: dateStr,
+      utilizaIA: "Sim",
+      nomeFerramenta: "Generative Code Helper",
+      fornecedor: "CodeLabs Inc",
+      versao: "Beta 2.0",
+      tipoIA: [TiposIA.IA_GENERATIVA],
+      descricaoAtividade: "Assistente de geração de código para acelerar o desenvolvimento de ferramentas internas.",
+      objetivos: [ObjetivosIA.PRODUTIVIDADE, ObjetivosIA.AUTOMACAO],
+      etapaProcesso: EtapaProcesso.OUTRO,
+      beneficiosEsperados: "Redução de 30% no tempo de codificação.",
+      usaDadosPessoais: "Não",
+      usaDadosSensiveis: "Não",
+      quaisDados: "Snippets de código genéricos",
+      dadosAnonimizados: "Sim",
+      envioFornecedorExterno: "Sim",
+      dadosTreinamentoModelo: "Não",
+      obsProtecaoDados: "Nenhum dado sensível é enviado.",
+      integradaSistemaInterno: "Não",
+      impactoResultadosLaboratoriais: "Não",
+      validacaoHumana: "Sim",
+      quemValida: "Desenvolvedor responsável",
+      registroLogDecisao: "Não",
+      ambienteHomologacao: "Sim",
+      riscosIdentificados: "Sim",
+      quaisRiscos: "Geração de código com vulnerabilidades ou bugs.",
+      controlesImplementados: "Sim",
+      quaisControles: ["Revisão humana obrigatória", "Testes unitários"],
+      riscoResidual: RiscoResidual.BAIXO,
+      responsavelRisco: "Alice Tech",
+      frequenciaReavaliacao: "Semestral",
+      obsRiscosControles: "Código sempre revisado por um sênior.",
+      alinhadoLGPD: "Sim",
+      politicaInterna: "Sim",
+      treinamentoColaboradores: "Sim",
+      documentacaoTecnica: "Sim",
+      contratoProtecaoDados: "Sim",
+      controleAcessoPerfil: "Sim",
+      trilhaAuditoria: "Não",
+      procedimentoIncidente: "Sim",
+      criticidade: Criticidade.BAIXA,
+      naturezaUso: NaturezaUso.TECNICO,
+      grauAutonomia: GrauAutonomia.MEDIO,
+      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
+      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
+      areaAvaliadora: ["TI"],
+      statusUso: StatusUso.EM_AVALIACAO,
+      statusAuditoria: StatusAuditoria.PENDENTE,
+      obsIntegracao: "N/A",
+      obsConformidade: "N/A",
+      necessitaPlanoAcao: "Não",
+      parecerTecnico: "Aguardando análise da TI.",
+      observacoesGerais: "",
+      anexos: "",
+      historico: [{ date: now, action: "Criação do registro" }]
+    },
+    {
+      id: "IA-CEDRO-0005",
+      createdAt: now,
+      updatedAt: now,
+      unidadeSetor: "Marketing",
+      responsavelPreenchimento: "Roberto Ads",
+      cargo: "Coordenador de Marketing",
+      dataRegistro: dateStr,
+      utilizaIA: "Sim",
+      nomeFerramenta: "Social Media Auto-Designer",
+      fornecedor: "VisualAI Ltd",
+      versao: "Full Access",
+      tipoIA: [TiposIA.IA_GENERATIVA, TiposIA.ANALISE_IMAGENS],
+      descricaoAtividade: "Criação de artes para redes sociais e análise de engajamento baseada em tendências.",
+      objetivos: [ObjetivosIA.PRODUTIVIDADE],
+      etapaProcesso: EtapaProcesso.OUTRO,
+      beneficiosEsperados: "Padronização visual e rapidez nas postagens.",
+      usaDadosPessoais: "Não",
+      usaDadosSensiveis: "Não",
+      quaisDados: "Imagens de banco de dados e textos publicitários.",
+      dadosAnonimizados: "Sim",
+      envioFornecedorExterno: "Sim",
+      dadosTreinamentoModelo: "Sim",
+      obsProtecaoDados: "Uso de prompts sem referências internas.",
+      integradaSistemaInterno: "Não",
+      impactoResultadosLaboratoriais: "Não",
+      validacaoHumana: "Sim",
+      quemValida: "Equipe criativa",
+      registroLogDecisao: "Não",
+      ambienteHomologacao: "Sim",
+      riscosIdentificados: "Não",
+      quaisRiscos: "Não identificado",
+      controlesImplementados: "Sim",
+      quaisControles: ["Revisão humana obrigatória"],
+      riscoResidual: RiscoResidual.BAIXO,
+      responsavelRisco: "Roberto Ads",
+      frequenciaReavaliacao: "Anual",
+      obsRiscosControles: "Validação da estética e direitos autorais.",
+      alinhadoLGPD: "Sim",
+      politicaInterna: "Sim",
+      treinamentoColaboradores: "Sim",
+      documentacaoTecnica: "Sim",
+      contratoProtecaoDados: "Sim",
+      controleAcessoPerfil: "Sim",
+      trilhaAuditoria: "Não",
+      procedimentoIncidente: "Não",
+      criticidade: Criticidade.BAIXA,
+      naturezaUso: NaturezaUso.ADMINISTRATIVO,
+      grauAutonomia: GrauAutonomia.MEDIO,
+      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
+      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
+      areaAvaliadora: ["NIT"],
+      statusUso: StatusUso.EM_TESTE_PILOTO,
+      statusAuditoria: StatusAuditoria.PENDENTE,
+      obsIntegracao: "N/A",
+      obsConformidade: "N/A",
+      necessitaPlanoAcao: "Não",
+      parecerTecnico: "Aguardando análise do NIT.",
+      observacoesGerais: "",
+      anexos: "",
+      historico: [{ date: now, action: "Criação do registro" }]
+    },
+    {
+      id: "IA-CEDRO-0006",
+      createdAt: now,
+      updatedAt: now,
+      unidadeSetor: "NIT",
+      responsavelPreenchimento: "Admin Experimento",
+      cargo: "Auditor AI",
+      dataRegistro: dateStr,
+      utilizaIA: "Sim",
+      nomeFerramenta: "Data Science Optimizer",
+      fornecedor: "Experimento Lab",
+      versao: "v1",
+      tipoIA: [TiposIA.MACHINE_LEARNING],
+      descricaoAtividade: "Otimização de pipelines de dados sensíveis para pesquisa laboratorial.",
+      objetivos: [ObjetivosIA.PRODUTIVIDADE, ObjetivosIA.REDUCAO_ERROS],
+      etapaProcesso: EtapaProcesso.TI,
+      beneficiosEsperados: "Aceleração de 50% no processamento de lotes de dados.",
+      usaDadosPessoais: "Sim",
+      usaDadosSensiveis: "Sim",
+      quaisDados: "Metadados de exames, logs de processamento",
+      dadosAnonimizados: "Sim",
+      envioFornecedorExterno: "Não",
+      dadosTreinamentoModelo: "Não",
+      obsProtecaoDados: "Processamento local isolado.",
+      integradaSistemaInterno: "Sim",
+      qualSistema: "Data Lake Interno",
+      impactoResultadosLaboratoriais: "Não",
+      validacaoHumana: "Sim",
+      quemValida: "Cientista de Dados",
+      registroLogDecisao: "Sim",
+      ambienteHomologacao: "Sim",
+      obsIntegracao: "Conexão via gRPC.",
+      riscosIdentificados: "Sim",
+      quaisRiscos: "Possível overfitting em conjuntos pequenos.",
+      controlesImplementados: "Sim",
+      quaisControles: ["Validação cruzada", "Monitoramento de métricas"],
+      riscoResidual: RiscoResidual.BAIXO,
+      responsavelRisco: "Admin Experimento",
+      frequenciaReavaliacao: "Mensal",
+      obsRiscosControles: "Ambiente controlado.",
+      alinhadoLGPD: "Sim",
+      politicaInterna: "Sim",
+      treinamentoColaboradores: "Sim",
+      documentacaoTecnica: "Sim",
+      contratoProtecaoDados: "Sim",
+      controleAcessoPerfil: "Sim",
+      trilhaAuditoria: "Sim",
+      procedimentoIncidente: "Sim",
+      obsConformidade: "OK",
+      criticidade: Criticidade.BAIXA,
+      naturezaUso: NaturezaUso.TECNICO,
+      grauAutonomia: GrauAutonomia.MEDIO,
+      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
+      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
+      areaAvaliadora: ["NIT", "TI"],
+      statusUso: StatusUso.EM_TESTE_PILOTO,
+      necessitaPlanoAcao: "Não",
+      parecerTecnico: "Aprovado para testes.",
+      observacoesGerais: "Experimento de multi-IA.",
+      anexos: "",
+      statusAuditoria: StatusAuditoria.PENDENTE,
       historico: [{ date: now, action: "Criação do registro" }]
     }
   ];

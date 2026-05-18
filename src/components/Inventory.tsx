@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Search, Filter, Eye, Edit, Trash2, FileOutput, ArrowUpDown, AlertCircle, CheckCircle2, AlertTriangle, XCircle, Download, ClipboardList, PlusCircle, Database, FileSpreadsheet } from "lucide-react";
-import { IARecord, StatusUso, Criticidade, ClassificacaoRisco } from "../types";
+import { IARecord, StatusUso, Criticidade, ClassificacaoRisco, StatusAuditoria } from "../types";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -16,19 +16,24 @@ interface InventoryProps {
   onDelete: (id: string) => void;
   onAdd: () => void;
   onRefresh: () => void;
+  isAdmin?: boolean;
 }
 
-export default function Inventory({ records, onEdit, onView, onDelete, onAdd, onRefresh }: InventoryProps) {
+export default function Inventory({ records, onEdit, onView, onDelete, onAdd, onRefresh, isAdmin }: InventoryProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSetor, setFilterSetor] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterRisco, setFilterRisco] = useState("");
+  const [filterApproval, setFilterApproval] = useState("");
   const [filterDadosSensiveis, setFilterDadosSensiveis] = useState("");
   const [sortField, setSortField] = useState<keyof IARecord | "">("");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Get unique sectors for filter
-  const sectors = useMemo(() => Array.from(new Set(records.map(r => r.unidadeSetor))), [records]);
+  const sectors = useMemo(() => {
+    const allSectors = Array.from(new Set(records.map(r => r.unidadeSetor)));
+    return allSectors;
+  }, [records]);
 
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
@@ -41,8 +46,9 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
       const matchesStatus = !filterStatus || r.statusUso === filterStatus;
       const matchesRisco = !filterRisco || r.classificacaoRiscoManual === filterRisco;
       const matchesSensiveis = !filterDadosSensiveis || r.usaDadosSensiveis === filterDadosSensiveis;
+      const matchesApproval = !filterApproval || r.statusAuditoria === filterApproval;
 
-      return matchesSearch && matchesSetor && matchesStatus && matchesRisco && matchesSensiveis;
+      return matchesSearch && matchesSetor && matchesStatus && matchesRisco && matchesSensiveis && matchesApproval;
     }).sort((a, b) => {
       if (!sortField) return 0;
       const valA = a[sortField];
@@ -222,34 +228,36 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
   return (
     <div className="space-y-8 pb-10">
       {/* Search and Filters */}
-      <div className="glass rounded-[2rem] p-8 space-y-8 border border-[var(--border-lab)] relative overflow-hidden group">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-lab-cyan/20 to-transparent"></div>
+      <div className="bg-emerald-900 dark:bg-emerald-950 rounded-[3rem] p-8 space-y-8 border border-emerald-800/50 relative overflow-hidden group shadow-2xl shadow-emerald-500/10 transition-all">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-green/30 to-transparent"></div>
         <div className="flex flex-col xl:flex-row gap-6 justify-between items-stretch lg:items-center">
           <div className="relative flex-1 group">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] group-focus-within:text-lab-cyan transition-all transform group-focus-within:scale-110" size={20} />
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-400 dark:text-emerald-500 group-focus-within:text-brand-green transition-all transform group-focus-within:scale-110" size={20} />
             <input 
               type="text" 
               placeholder="Pesquisar por nome, fornecedor ou ID..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-2xl focus:ring-2 focus:ring-lab-cyan/20 focus:border-lab-cyan text-[var(--text-bright)] placeholder:text-[var(--text-muted)] transition-all outline-none font-semibold text-sm tracking-tight"
+              className="w-full pl-14 pr-6 py-4 bg-black/20 dark:bg-black/40 border border-emerald-800/50 rounded-2xl focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green text-white placeholder:text-emerald-400 dark:placeholder:text-emerald-600 transition-all outline-none font-semibold text-sm tracking-tight"
             />
           </div>
           <div className="flex flex-wrap gap-3">
             <button 
               onClick={exportExcel}
-              className="px-6 py-4 bg-white/5 dark:bg-white/10 hover:bg-lab-cyan/10 text-[var(--text-bright)] font-bold rounded-2xl transition-all border border-[var(--border-lab)] active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase group/btn"
+              className="px-6 py-4 bg-white/5 dark:bg-white/10 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/10 active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase group/btn"
             >
-              <FileSpreadsheet size={14} className="text-lab-cyan group-hover/btn:scale-110 transition-transform" />
+              <FileSpreadsheet size={14} className="text-brand-green group-hover/btn:scale-110 transition-transform" />
               Exportar Inventário
             </button>
-            <button 
-              onClick={onAdd}
-              className="px-8 py-4 bg-brand-green hover:bg-brand-green/80 text-black font-bold rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase"
-            >
-              <PlusCircle size={16} />
-              Novo Registro
-            </button>
+            {isAdmin && (
+              <button 
+                onClick={onAdd}
+                className="px-8 py-4 bg-brand-green hover:bg-brand-green/80 text-black font-bold rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase"
+              >
+                <PlusCircle size={16} />
+                Novo Registro
+              </button>
+            )}
           </div>
         </div>
 
@@ -257,24 +265,25 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
           {[
             { label: "Setor Responsável", value: filterSetor, onChange: setFilterSetor, options: sectors },
             { label: "Status de Uso", value: filterStatus, onChange: setFilterStatus, options: Object.values(StatusUso) },
-            { label: "Classificação de Risco", value: filterRisco, onChange: setFilterRisco, options: Object.values(ClassificacaoRisco) },
+            { label: "Auditoria Admin", value: filterApproval, onChange: setFilterApproval, options: Object.values(StatusAuditoria) },
+            { label: "Classificacao de Risco", value: filterRisco, onChange: setFilterRisco, options: Object.values(ClassificacaoRisco) },
             { label: "Dados Sensíveis", value: filterDadosSensiveis, onChange: setFilterDadosSensiveis, options: ["Sim", "Não"], isSensitive: true }
           ].map((filter, i) => (
             <div key={i} className="space-y-3">
-              <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-tight pl-1 flex items-center gap-2">
-                <div className="size-1 rounded-full bg-lab-cyan/50"></div> {filter.label}
+              <label className="text-xs font-black text-emerald-100/70 uppercase tracking-widest pl-1 flex items-center gap-2">
+                <div className="size-1.5 rounded-full bg-brand-green shadow-[0_0_8px_rgba(0,255,101,0.5)]"></div> {filter.label}
               </label>
               <div className="relative group">
                 <select 
-                   className="w-full p-4 bg-black/5 dark:bg-white/[0.03] border border-[var(--border-lab)] rounded-xl text-xs font-bold text-[var(--text-main)] outline-none appearance-none cursor-pointer hover:border-[var(--text-muted)] focus:border-lab-cyan/50 transition-all"
+                   className="w-full p-4 bg-black/20 dark:bg-black/40 border border-emerald-800/50 rounded-xl text-xs font-black text-white outline-none appearance-none cursor-pointer hover:border-brand-green/50 focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 transition-all shadow-inner"
                   value={filter.value}
                   onChange={(e) => filter.onChange(e.target.value)}
                 >
-                  <option value="" className="bg-[var(--bg-sidebar)]">Todos os Registros</option>
-                  {filter.options.map(opt => <option key={opt} value={opt} className="bg-[var(--bg-sidebar)]">{opt}</option>)}
+                  <option value="" className="bg-white dark:bg-slate-900 text-slate-900">Todos os Registros</option>
+                  {filter.options.map(opt => <option key={opt} value={opt} className="bg-white dark:bg-slate-900 text-slate-900">{opt}</option>)}
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)] transition-transform group-hover:translate-y-[-40%]">
-                  <ArrowUpDown size={12} />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-400 transition-transform group-hover:translate-y-[-40%]">
+                  <ArrowUpDown size={12} className="group-hover:text-brand-green transition-colors" />
                 </div>
               </div>
             </div>
@@ -298,7 +307,8 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                   <div className="flex items-center gap-2 group">Setor Responsável <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
                 </th>
                 <th className="px-8 py-6 font-bold tracking-tight">Risco</th>
-                <th className="px-8 py-6 font-bold tracking-tight">Status</th>
+                <th className="px-8 py-6 font-bold tracking-tight">Status Uso</th>
+                <th className="px-8 py-6 font-bold tracking-tight">Auditoria</th>
                 <th className="px-8 py-6 font-bold tracking-tight text-right">Ações</th>
               </tr>
             </thead>
@@ -308,19 +318,17 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                   key={record.id} 
                   className={`border-b border-[var(--border-lab)] hover:bg-black/5 dark:hover:bg-white/[0.03] transition-all group duration-300 cursor-default`}
                 >
-                  <td className="px-8 py-6">
-                    <span className="font-mono text-[10px] text-[var(--text-muted)] bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-lg group-hover:text-lab-cyan group-hover:bg-lab-cyan/10 transition-all border border-transparent group-hover:border-lab-cyan/20">{record.id}</span>
+                  <td className="px-8 py-6 whitespace-nowrap min-w-[180px]">
+                    <span className="font-mono text-[10px] text-emerald-800 dark:text-brand-green bg-brand-green/20 px-3 py-1.5 rounded-lg group-hover:bg-brand-green/30 transition-all border border-brand-green/20 uppercase tracking-tight inline-block">{record.id}</span>
                   </td>
                   <td className="px-8 py-6">
-                    <div className="font-bold text-[var(--text-bright)] group-hover:text-brand-green transition-colors uppercase tracking-tight">{record.nomeFerramenta}</div>
-                    <div className="text-[9px] text-[var(--text-muted)] uppercase font-black tracking-[0.1em] mt-1 transition-colors flex items-center gap-2">
-                       <Database size={10} className="opacity-40" /> {record.fornecedor}
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[var(--text-bright)] group-hover:text-brand-green transition-colors uppercase tracking-tight">{record.nomeFerramenta}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                         <div className="size-1.5 rounded-full bg-lab-cyan"></div>
+                         <span className="text-[10px] font-black text-lab-cyan uppercase tracking-widest leading-none">{record.unidadeSetor}</span>
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-8 py-6">
-                     <div className="px-3 py-1.5 bg-black/5 dark:bg-white/5 rounded-full inline-block group-hover:bg-black/10 dark:group-hover:bg-white/10 transition-all border border-[var(--border-lab)]">
-                       <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-wide group-hover:text-[var(--text-main)] transition-colors">{record.unidadeSetor}</span>
-                     </div>
                   </td>
                   <td className="px-8 py-6">
                      <span className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest border transition-all ${
@@ -332,13 +340,52 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                      </span>
                   </td>
                   <td className="px-8 py-6">
-                    <div className="flex items-center gap-2">
-                      <div className={`size-1.5 rounded-full ${record.statusUso === StatusUso.APROVADO ? "bg-brand-green" : "bg-slate-400 dark:bg-slate-600"}`}></div>
-                      <span className="font-bold text-[var(--text-muted)] text-[10px] uppercase tracking-widest group-hover:text-[var(--text-main)] transition-colors">{record.statusUso}</span>
+                     <div className="flex items-center gap-2">
+                       <div className={`size-1.5 rounded-full ${record.statusUso === StatusUso.APROVADO ? "bg-brand-green" : "bg-brand-orange"}`}></div>
+                       <span className="text-[11px] font-bold tracking-tight text-[var(--text-main)] uppercase leading-none">{record.statusUso}</span>
+                     </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col gap-2">
+                       <span className={`text-[9px] px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full font-black uppercase tracking-widest border w-fit ${
+                          record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-green-500/10 text-green-500 border-green-500/20" :
+                          record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                          "bg-yellow-500/10 text-yellow-500 border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.1)]"
+                       }`}>
+                         {record.statusAuditoria || StatusAuditoria.PENDENTE}
+                       </span>
                     </div>
                   </td>
                     <td className="px-8 py-6 text-right">
                       <div className="flex items-center justify-end gap-3 transition-all">
+                        {isAdmin && record.statusAuditoria === StatusAuditoria.PENDENTE && (
+                          <>
+                            <button 
+                              onClick={(e) => { 
+                                e.preventDefault();
+                                e.stopPropagation(); 
+                                onEdit({ ...record, statusAuditoria: StatusAuditoria.APROVADO }); 
+                                setTimeout(() => onRefresh(), 500);
+                              }} 
+                              title="Aprovar Auditoria"
+                              className="flex items-center justify-center size-10 bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white rounded-xl transition-all active:scale-95 border border-green-500/20"
+                            >
+                              <CheckCircle2 size={18} />
+                            </button>
+                            <button 
+                              onClick={(e) => { 
+                                e.preventDefault();
+                                e.stopPropagation(); 
+                                onEdit({ ...record, statusAuditoria: StatusAuditoria.NEGADO }); 
+                                setTimeout(() => onRefresh(), 500);
+                              }} 
+                              title="Negar Auditoria"
+                              className="flex items-center justify-center size-10 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all active:scale-95 border border-red-500/20"
+                            >
+                              <XCircle size={18} />
+                            </button>
+                          </>
+                        )}
                         <button 
                           onClick={(e) => { 
                             e.preventDefault();

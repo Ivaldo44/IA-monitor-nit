@@ -17,8 +17,27 @@ create table if not exists profiles (
   avatar_url text,
   cargo text,
   setor text,
-  contato text
+  contato text,
+  role text default 'user'
 );
+
+-- COMO CRIAR UM ADMINISTRADOR VIA SQL EDITOR:
+-- 1. Primeiro, o usuário deve se cadastrar no app ou no dashboard do Supabase (Auth).
+-- 2. No SQL Editor, execute o comando abaixo substituindo 'EMAIL_DO_USUARIO' pelo e-mail desejado:
+
+-- DO $$ 
+-- DECLARE 
+--   user_id UUID;
+-- BEGIN
+--   SELECT id INTO user_id FROM auth.users WHERE email = 'EMAIL_DO_USUARIO';
+--   
+--   IF user_id IS NOT NULL THEN
+--     UPDATE public.profiles SET role = 'admin' WHERE id = user_id;
+--     RAISE NOTICE 'Usuário % promovido a admin com sucesso!', 'EMAIL_DO_USUARIO';
+--   ELSE
+--     RAISE EXCEPTION 'Usuário com e-mail % não encontrado.', 'EMAIL_DO_USUARIO';
+--   END IF;
+-- END $$;
 
 -- 2. Tabela de Mensagens (Chat) com Cascade Delete
 create table if not exists messages (
@@ -48,6 +67,10 @@ create table if not exists ia_records (
   id text primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  owner_id uuid references profiles(id) on delete set null,
+  status text default 'Pendente',
+  authorized_by uuid references profiles(id),
+  authorized_at timestamp with time zone,
   data jsonb,
   unidade_setor text,
   responsavel_preenchimento text,

@@ -85,7 +85,14 @@ export enum StatusUso {
   EM_TESTE_PILOTO = "Em teste/piloto"
 }
 
+export enum StatusAuditoria {
+  PENDENTE = "Pendente",
+  APROVADO = "Aprovado",
+  NEGADO = "Negado"
+}
+
 export interface IARecord {
+  statusAuditoria?: StatusAuditoria;
   id: string; // Generated automatically like IA-CEDRO-0001
   createdAt: string;
   updatedAt: string;
@@ -176,7 +183,7 @@ export interface IARecord {
   // 10. OBSERVAÇÕES
   observacoesGerais: string;
   anexos: string;
-  historico: Array<{ date: string; action: string }>;
+  historico: Array<{ date: string; action: string; user?: string; message?: string }>;
 }
 
 export interface UserProfile {
@@ -186,6 +193,10 @@ export interface UserProfile {
   cargo?: string;
   setor?: string;
   contato?: string;
+  role?: "admin" | "user";
+  status: "Pendente" | "Autorizado" | "Rejeitado";
+  authorized_by?: string;
+  authorized_at?: string;
   updated_at?: string;
 }
 

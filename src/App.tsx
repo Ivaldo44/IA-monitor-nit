@@ -6,10 +6,12 @@
 import React, { useState, useEffect } from "react";
 import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, Sun, Moon, MessageSquare, UserCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { IARecord, StatusUso } from "./types";
-import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase } from "./storage";
+import { IARecord, StatusUso, UserProfile, StatusAuditoria } from "./types";
+import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles } from "./storage";
 import Dashboard from "./components/Dashboard";
 import Inventory from "./components/Inventory";
+import SectorMap from "./components/SectorMap";
+import AdminPanel from "./components/AdminPanel";
 import RegistrationForm from "./components/RegistrationForm";
 import ReportView from "./components/ReportView";
 import LabBackground from "./components/LabBackground";
@@ -20,8 +22,9 @@ import { useAuth } from "./contexts/AuthContext";
 
 export default function App() {
   const { user, profile, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin">("dashboard");
   const [records, setRecords] = useState<IARecord[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<"online" | "offline" | "checking">("checking");
   const [selectedRecord, setSelectedRecord] = useState<IARecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -49,8 +52,14 @@ export default function App() {
       const isOnline = await checkSupabaseStatus();
       setSupabaseStatus(isOnline ? "online" : "offline");
       
-      const data = await getRecords();
+      const isAdmin = profile?.role === "admin";
+      const data = await getRecords(user?.id, isAdmin, profile?.setor);
       setRecords(data);
+      
+      if (isAdmin) {
+        const usersData = await getProfiles();
+        setProfiles(usersData);
+      }
     } catch (error) {
       console.error("Erro ao atualizar registros:", error);
     } finally {
@@ -59,8 +68,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    refreshRecords();
+    if (user && profile) refreshRecords();
+  }, [user, profile]);
 
+  useEffect(() => {
     const interval = setInterval(async () => {
       const isOnline = await checkSupabaseStatus();
       setSupabaseStatus(isOnline ? "online" : "offline");
@@ -78,7 +89,8 @@ export default function App() {
     setIsSyncing(true);
     try {
       console.log("Forçando sincronização manual...");
-      await saveRecordsToSupabase(records);
+      const isAdmin = profile?.role === "admin";
+      await saveRecordsToSupabase(records, user?.id, isAdmin);
       await refreshRecords();
       alert("✅ Sincronização concluída com sucesso!");
     } catch (error: any) {
@@ -129,24 +141,64 @@ export default function App() {
 
   const handleSave = async (record: IARecord) => {
     const isNew = !records.find(r => r.id === record.id);
-    if (isNew) {
-      await addRecord(record);
-    } else {
-      await updateRecord(record);
+    const isAdmin = profile?.role === "admin";
+    
+    try {
+      if (isNew) {
+        await addRecord(record, user?.id, isAdmin);
+      } else {
+        await updateRecord(record, user?.id, isAdmin);
+      }
+      await refreshRecords();
+      setActiveTab("inventory");
+      setSelectedRecord(null);
+    } catch (error: any) {
+      console.error("Erro ao salvar registro:", error);
+      alert(`⚠️ Erro ao salvar: ${error.message || "Erro desconhecido"}. Verifique o console ou a estrutura do banco.`);
     }
-    await refreshRecords();
-    setActiveTab("inventory");
-    setSelectedRecord(null);
+  };
+
+  const handleUpdateStatus = async (recordId: string, status: any, comment?: string) => {
+    const record = records.find(r => r.id === recordId);
+    if (!record) return;
+
+    const isAdmin = profile?.role === "admin";
+    const historyEntry = {
+      date: new Date().toISOString(),
+      user: profile?.full_name || "Admin",
+      action: status === StatusAuditoria.APROVADO ? "Aprovação Técnica" : status === StatusAuditoria.NEGADO ? "Reprovação/Bloqueio" : "Reversão de Status",
+      message: comment || `Status de auditoria atualizado para ${status}`
+    };
+
+    const updatedRecord = { 
+      ...record, 
+      statusAuditoria: status,
+      historico: [historyEntry, ...(record.historico || [])]
+    };
+    
+    // Optimistic update
+    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+    
+    try {
+      await updateRecord(updatedRecord, user?.id, isAdmin);
+      await refreshRecords();
+    } catch (error) {
+      console.error("Erro ao atualizar status:", error);
+      alert("Erro ao atualizar o status da auditoria.");
+      await refreshRecords();
+    }
   };
 
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "inventory", label: "Inventário de IA", icon: ClipboardList },
-    { id: "new", label: "Novo Cadastro", icon: PlusCircle },
+    { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
+    { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: true },
+    { id: "new", label: "Novo Cadastro", icon: PlusCircle, adminOnly: true },
     { id: "report", label: "Relatórios", icon: FileText },
     { id: "chat", label: "Colaboração Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
-  ];
+  ].filter(item => !item.adminOnly || profile?.role === "admin");
 
   if (authLoading) {
     return (
@@ -165,7 +217,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col md:flex-row font-sans selection:bg-brand-green selection:text-black transition-colors duration-300 ${isDarkMode ? "dark" : ""}`}>
+      <div className={`min-h-screen flex flex-col md:flex-row font-sans selection:bg-brand-green selection:text-black transition-colors duration-300 bg-[var(--bg-main)] ${isDarkMode ? "dark" : ""}`}>
       <LabBackground />
       {/* Mobile Header */}
       <div className="md:hidden bg-[var(--bg-sidebar)] backdrop-blur-md p-4 flex justify-between items-center border-b border-[var(--border-lab)] sticky top-0 z-50">
@@ -248,10 +300,15 @@ export default function App() {
             </h2>
           </div>
           <div className="flex items-center gap-6">
-             <div className="hidden sm:flex items-center gap-3 mr-4">
+              <div className="hidden sm:flex items-center gap-3 mr-4">
                 <div className="text-right">
-                   <p className="text-[11px] font-bold text-[var(--text-bright)] leading-tight">{profile?.full_name || "Usuário"}</p>
-                   <p className="text-[9px] text-[var(--text-muted)] font-medium uppercase tracking-wider">{profile?.cargo || "Colaborador"}</p>
+                  <div className="flex items-center gap-2 justify-end">
+                    {profile?.role === "admin" && (
+                      <span className="text-[9px] font-black bg-brand-green/20 text-brand-green px-1.5 py-0.5 rounded border border-brand-green/30">ADMIN</span>
+                    )}
+                    <p className="text-[11px] font-bold text-[var(--text-bright)] leading-tight">{profile?.full_name || "Usuário"}</p>
+                  </div>
+                  <p className="text-[9px] text-[var(--text-muted)] font-medium uppercase tracking-wider">{profile?.cargo || "Colaborador"}</p>
                 </div>
                 <button 
                   onClick={() => setActiveTab("profile")}
@@ -315,10 +372,10 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="max-w-7xl mx-auto"
+              className="max-w-[90rem] mx-auto"
             >
               {activeTab === "dashboard" && (
-                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} />
+                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={profile?.role === "admin"} />
               )}
               {activeTab === "inventory" && (
                 <Inventory 
@@ -331,6 +388,18 @@ export default function App() {
                     setActiveTab("new");
                   }}
                   onRefresh={refreshRecords}
+                  isAdmin={profile?.role === "admin"}
+                />
+              )}
+              {activeTab === "sectors" && (
+                <SectorMap records={records} profiles={profiles} />
+              )}
+              {activeTab === "admin" && profile?.role === "admin" && (
+                <AdminPanel 
+                  records={records} 
+                  profiles={profiles}
+                  onUpdateStatus={handleUpdateStatus} 
+                  onViewRecord={handleView} 
                 />
               )}
               {activeTab === "chat" && (
@@ -344,6 +413,7 @@ export default function App() {
                   initialData={selectedRecord} 
                   onSave={handleSave} 
                   onCancel={() => setActiveTab("inventory")} 
+                  isAdmin={profile?.role === "admin"}
                 />
               )}
               {activeTab === "report" && (
@@ -359,26 +429,16 @@ export default function App() {
                   <div className="space-y-8 pb-20">
                     <div className="glass p-12 rounded-[2.5rem] border border-[var(--border-lab)] relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-64 h-64 bg-lab-blue/5 blur-3xl rounded-full pointer-events-none"></div>
-                      <div className="flex items-center gap-6 mb-12">
-                        <div className="p-4 bg-lab-blue/10 border border-lab-blue/30 rounded-2xl shadow-sm">
-                          <FileText className="text-lab-blue" size={28} />
-                        </div>
-                        <div>
-                          <h3 className="text-2xl font-bold text-[var(--text-bright)] tracking-tight">Módulo Central de Auditoria</h3>
-                          <p className="text-sm text-[var(--text-muted)] mt-1">Selecione um registro para visualizar o relatório completo de conformidade e governança.</p>
-                        </div>
-                      </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {records.map(record => (
-                          <button
-                            key={record.id}
-                            onClick={() => setSelectedRecord(record)}
-                            className="group flex flex-col p-6 bg-white/[0.02] border border-[var(--border-lab)] rounded-3xl hover:bg-black/5 dark:hover:bg-white/[0.04] hover:border-lab-cyan/30 transition-all text-left relative overflow-hidden"
-                          >
+                            <button
+                              key={record.id}
+                              onClick={() => setSelectedRecord(record)}
+                              className="group flex flex-col p-6 bg-white/[0.02] border border-brand-green/20 rounded-3xl hover:bg-black/5 dark:hover:bg-white/5 hover:border-brand-green/50 transition-all text-left relative overflow-hidden shadow-lg shadow-brand-green/5"
+                            >
                             <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-lab-cyan/50 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500"></div>
                             <div className="flex justify-between items-start mb-6">
-                              <span className="text-[10px] font-mono font-bold text-brand-green bg-brand-green/10 px-2 py-1 rounded border border-brand-green/20 uppercase tracking-tight">{record.id}</span>
+                              <span className="text-[10px] font-mono font-bold text-emerald-800 dark:text-brand-green bg-brand-green/20 px-2 py-1 rounded border border-brand-green/40 uppercase tracking-tight">{record.id}</span>
                               <div className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-slate-500 group-hover:text-lab-cyan group-hover:bg-lab-cyan/10 transition-all border border-transparent group-hover:border-lab-cyan/20">
                                 <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
                               </div>

@@ -7,18 +7,22 @@ import React, { useState, useEffect } from "react";
 import { Save, X, Info, AlertTriangle, ShieldCheck, Zap, Database, Share2, ClipboardCheck, Scale, FileText, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { 
+  StatusAuditoria,
   IARecord, TiposIA, ObjetivosIA, EtapaProcesso, RiscoResidual, 
   Criticidade, NaturezaUso, GrauAutonomia, ClassificacaoRisco, StatusUso 
 } from "../types";
 import { generateId, getRecords } from "../storage";
 
+import { useAuth } from "../contexts/AuthContext";
+
 interface RegistrationFormProps {
   initialData?: IARecord | null;
   onSave: (record: IARecord) => void;
   onCancel: () => void;
+  isAdmin?: boolean;
 }
 
-// Helper components defined outside to prevent re-mounting focus loss issues
+// ... helper components defined outside to prevent re-mounting focus loss issues ...
 const InputGroup = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
   <div className="space-y-1.5 w-full group">
     <label className="text-xs font-bold text-[var(--text-muted)] flex items-center gap-2 uppercase tracking-tight group-focus-within:text-brand-green transition-colors">
@@ -123,7 +127,8 @@ const TextArea = ({
   </InputGroup>
 );
 
-export default function RegistrationForm({ initialData, onSave, onCancel }: RegistrationFormProps) {
+export default function RegistrationForm({ initialData, onSave, onCancel, isAdmin }: RegistrationFormProps) {
+  const { profile } = useAuth();
   const [formData, setFormData] = useState<Partial<IARecord>>({
     id: "",
     unidadeSetor: "",
@@ -158,6 +163,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel }: Regi
     documentacaoTecnica: "Não se aplica",
     contratoProtecaoDados: "Não se aplica",
     statusUso: StatusUso.EM_AVALIACAO,
+    statusAuditoria: StatusAuditoria.PENDENTE,
     necessitaPlanoAcao: "Não",
     areaAvaliadora: ["NIT"]
   });
@@ -170,11 +176,17 @@ export default function RegistrationForm({ initialData, onSave, onCancel }: Regi
     } else {
       const fetchAndSetId = async () => {
         const records = await getRecords();
-        setFormData(prev => ({ ...prev, id: generateId(records.length) }));
+        setFormData(prev => ({ 
+          ...prev, 
+          id: generateId(records),
+          unidadeSetor: (profile && profile.role !== "admin") ? profile.setor : prev.unidadeSetor,
+          responsavelPreenchimento: (profile && profile.role !== "admin") ? profile.full_name : prev.responsavelPreenchimento,
+          cargo: (profile && profile.role !== "admin") ? profile.cargo : prev.cargo
+        }));
       };
       fetchAndSetId();
     }
-  }, [initialData]);
+  }, [initialData, profile]);
 
   const updateField = (field: keyof IARecord, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -314,7 +326,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel }: Regi
                   {sections[activeSection].label}
                 </h2>
              </div>
-             <div className="px-6 py-3 glass rounded-2xl font-mono text-xs font-bold text-brand-green border border-brand-green/20">
+             <div className="px-6 py-3 glass rounded-2xl font-mono text-xs font-bold text-slate-900 dark:text-white border border-brand-green/20">
                Protocolo: {formData.id}
              </div>
           </div>
@@ -324,12 +336,28 @@ export default function RegistrationForm({ initialData, onSave, onCancel }: Regi
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <InputGroup label="Unidade ou Setor" required>
                   <input 
-                    className={sharedInputClass}
+                    className={`${sharedInputClass} ${(profile?.role !== "admin" && !isAdmin) ? "opacity-70 cursor-not-allowed bg-black/10" : ""}`}
                     value={formData.unidadeSetor || ""}
                     onChange={(e) => updateField("unidadeSetor", e.target.value)}
-                    placeholder="Ex: Hematologia, TI, Administrativo..."
+                    placeholder="Ex: NIT, TI, Marketing, Hematologia..."
+                    list="setores-list"
                     required
+                    disabled={profile?.role !== "admin" && !isAdmin}
                   />
+                  {(profile?.role === "admin" || isAdmin) && (
+                    <datalist id="setores-list">
+                      <option value="NIT" />
+                      <option value="TI" />
+                      <option value="Marketing" />
+                      <option value="Administrativo" />
+                      <option value="Jurídico" />
+                      <option value="Direção Técnica" />
+                      <option value="Qualidade" />
+                      <option value="Atendimento / Recepção" />
+                      <option value="Laboratório de Patologia" />
+                      <option value="Laboratório Central" />
+                    </datalist>
+                  )}
                 </InputGroup>
                 <InputGroup label="Responsável pelo Preenchimento" required>
                   <input 
@@ -741,6 +769,13 @@ export default function RegistrationForm({ initialData, onSave, onCancel }: Regi
                       {Object.values(StatusUso).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </InputGroup>
+                  {isAdmin && (
+                    <InputGroup label="Auditoria / Aprovação Admin" required>
+                      <select className={`${sharedInputClass} !border-brand-green/30 !bg-brand-green/5 text-brand-green`} value={formData.statusAuditoria} onChange={(e) => updateField("statusAuditoria", e.target.value)}>
+                        {Object.values(StatusAuditoria).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </InputGroup>
+                  )}
                   <RadioGroup 
                     label="Necessita Plano de Ação?" 
                     options={["Sim", "Não"]} 

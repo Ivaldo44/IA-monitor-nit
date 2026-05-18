@@ -73,7 +73,7 @@ export default function ReportView({ record, onBack }: ReportViewProps) {
                 <div className="flex items-center gap-3">
                   <div className="px-3 py-1 bg-brand-green text-black text-[10px] font-bold tracking-tight uppercase rounded-full">Relatório de Auditoria Central</div>
                   <div className="h-px w-8 bg-brand-green/20"></div>
-                  <span className="text-[10px] font-mono font-bold opacity-60 text-[var(--text-main)]">REF: {record.id}</span>
+                  <span className="text-[10px] font-mono font-bold text-emerald-800 dark:text-brand-green bg-brand-green/20 px-2 py-1 rounded border border-brand-green/40 whitespace-nowrap">REF: {record.id}</span>
                 </div>
                 <h1 className="text-5xl font-bold tracking-tight uppercase leading-[0.9] text-[var(--text-bright)]">{record.nomeFerramenta}</h1>
                 <div className="flex items-center gap-6 text-[var(--text-muted)] font-bold text-xs tracking-tight uppercase">
