@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { motion } from "motion/react";
-import { User, Mail, Briefcase, Building, Phone, Save, Loader2, Camera, LogOut } from "lucide-react";
+import { User, Mail, Briefcase, Building, Phone, Save, Loader2, Camera, LogOut, ShieldCheck } from "lucide-react";
 
 export const UserProfileView: React.FC = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -141,6 +141,13 @@ export const UserProfileView: React.FC = () => {
             <h2 className="text-xl font-bold text-[var(--text-bright)] mb-1">
               {formData.full_name || "Nome não definido"}
             </h2>
+            {profile?.role === "admin" && (
+              <div className="flex justify-center mb-3">
+                <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                  <ShieldCheck size={12} /> Administrador
+                </span>
+              </div>
+            )}
             <p className="text-lab-cyan font-medium text-sm mb-4">
               {formData.cargo || "Cargo não definido"}
             </p>
@@ -182,7 +189,7 @@ export const UserProfileView: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1">Cargo / Função</label>
+                  <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1">Cargo</label>
                   <div className="relative">
                     <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
                     <input
@@ -196,7 +203,7 @@ export const UserProfileView: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1">Setor / Unidade</label>
+                  <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1">Setor</label>
                   <div className="relative">
                     <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
                     <input

@@ -103,7 +103,7 @@ export default function ReportView({ record, onBack }: ReportViewProps) {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 bg-black/30 backdrop-blur-xl p-8 rounded-3xl border border-white/10 mt-8 shadow-2xl">
                {[
-                 { label: "Unidade / Setor", value: record.unidadeSetor },
+                 { label: "Setor", value: record.unidadeSetor },
                  { label: "Risco Final", value: record.classificacaoRiscoManual },
                  { label: "Fornecedor", value: record.fornecedor },
                  { label: "Responsável", value: record.responsavelPreenchimento }

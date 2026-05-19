@@ -39,9 +39,17 @@ export const getProfiles = async (): Promise<UserProfile[]> => {
 export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?: string): Promise<IARecord[]> => {
   try {
     console.log('🔍 Buscando registros no Supabase...', { userId, isAdmin, userSector });
+
     let query = supabase
       .from('ia_records')
       .select('*');
+
+    if (!isAdmin && userId) {
+      console.log('🛡️ Aplicando filtros de segurança para usuário comum');
+      if (userSector) {
+        query = query.eq('unidade_setor', userSector);
+      }
+    }
 
     const { data, error, status } = await query.order('id', { ascending: true });
 
@@ -209,6 +217,38 @@ export const checkSupabaseStatus = async (): Promise<boolean> => {
     return !error;
   } catch (e) {
     return false;
+  }
+};
+
+export const updateUserProfile = async (profileId: string, updates: Partial<UserProfile>): Promise<UserProfile | null> => {
+  try {
+    console.log(`📡 Enviando atualização para perfil ${profileId}:`, updates);
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', profileId)
+      .select();
+
+    if (error) {
+      // Ignore schema cache errors for last_seen specifically for a smoother onboarding
+      if (error.code === 'PGRST204' && updates.hasOwnProperty('last_seen')) {
+        console.warn('⚠️ Coluna "last_seen" não encontrada. Execute o SQL em SUPABASE_SETUP.md para habilitar status online.');
+        return null;
+      }
+      console.error('❌ Erro Supabase ao atualizar perfil:', error);
+      throw error;
+    }
+    
+    if (!data || data.length === 0) {
+      console.warn('⚠️ Nenhuma linha foi atualizada. Verifique se o ID existe e se você tem permissão RLS.');
+      return null;
+    }
+
+    console.log('✅ Perfil atualizado com sucesso:', data[0]);
+    return data[0] as UserProfile;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw error;
   }
 };
 

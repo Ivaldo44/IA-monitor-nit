@@ -18,8 +18,85 @@ create table if not exists profiles (
   cargo text,
   setor text,
   contato text,
-  role text default 'user'
+  role text default 'user',
+  last_seen timestamp with time zone
 );
+
+-- RECOMENDAÇÃO: Configurar exclusão em cascata para evitar erros ao apagar contas
+-- Se você enfrentar erros como "Database error deleting user", execute os comandos abaixo:
+
+-- 1. Cascade no Perfil (Auth -> Profile)
+ALTER TABLE IF EXISTS public.profiles 
+DROP CONSTRAINT IF EXISTS profiles_id_fkey,
+ADD CONSTRAINT profiles_id_fkey 
+FOREIGN KEY (id) REFERENCES auth.users (id) 
+ON DELETE CASCADE;
+
+-- 2. Cascade nas Mensagens (Profile -> Messages)
+ALTER TABLE IF EXISTS public.messages
+DROP CONSTRAINT IF EXISTS messages_sender_id_fkey,
+ADD CONSTRAINT messages_sender_id_fkey 
+FOREIGN KEY (sender_id) REFERENCES public.profiles (id) 
+ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS public.messages
+DROP CONSTRAINT IF EXISTS messages_recipient_id_fkey,
+ADD CONSTRAINT messages_recipient_id_fkey 
+FOREIGN KEY (recipient_id) REFERENCES public.profiles (id) 
+ON DELETE CASCADE;
+
+-- 3. Set Null no Inventário (Profile -> IA Records)
+ALTER TABLE IF EXISTS public.ia_records
+DROP CONSTRAINT IF EXISTS ia_records_owner_id_fkey,
+ADD CONSTRAINT ia_records_owner_id_fkey 
+FOREIGN KEY (owner_id) REFERENCES public.profiles (id) 
+ON DELETE SET NULL;
+
+ALTER TABLE IF EXISTS public.ia_records
+DROP CONSTRAINT IF EXISTS ia_records_authorized_by_fkey,
+ADD CONSTRAINT ia_records_authorized_by_fkey 
+FOREIGN KEY (authorized_by) REFERENCES public.profiles (id) 
+ON DELETE SET NULL;
+
+-- SE O ERRO PERSISTIR: Função SQL para limpeza profunda e exclusão
+-- Esta função deve ser executada no SQL Editor. Ela apaga todas as referências antes de apagar o usuário no Auth.
+-- Você pode chamá-la com: SELECT delete_user_and_cleanup('O_ID_DO_USUARIO_AQUI');
+
+CREATE OR REPLACE FUNCTION delete_user_and_cleanup(target_user_id UUID)
+RETURNS void AS $$
+BEGIN
+    -- 1. Mensagens
+    DELETE FROM public.messages WHERE sender_id = target_user_id OR recipient_id = target_user_id;
+    
+    -- 2. Inventário
+    UPDATE public.ia_records SET owner_id = NULL WHERE owner_id = target_user_id;
+    UPDATE public.ia_records SET authorized_by = NULL WHERE authorized_by = target_user_id;
+    
+    -- 3. Referências em perfis
+    UPDATE public.profiles SET authorized_by = NULL WHERE authorized_by = target_user_id;
+    
+    -- 4. Perfil
+    DELETE FROM public.profiles WHERE id = target_user_id;
+    
+    -- 5. Storage (se houver)
+    -- DELETE FROM storage.objects WHERE owner = target_user_id; 
+    
+    -- 6. O usuário no Auth (O próprio Supabase admin API chamará isso, mas aqui limpamos o que bloqueia)
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Habilitar Realtime para Perfis para ver status online em tempo real
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' 
+    and schemaname = 'public' 
+    and tablename = 'profiles'
+  ) then
+    alter publication supabase_realtime add table profiles;
+  end if;
+end $$;
 
 -- COMO CRIAR UM ADMINISTRADOR VIA SQL EDITOR:
 -- 1. Primeiro, o usuário deve se cadastrar no app ou no dashboard do Supabase (Auth).

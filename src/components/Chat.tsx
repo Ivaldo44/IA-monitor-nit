@@ -95,20 +95,26 @@ export const Chat: React.FC = () => {
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const isOnline = (lastSeen?: string) => {
+    if (!lastSeen) return false;
+    const lastSeenDate = new Date(lastSeen);
+    const now = new Date();
+    // Consider online if seen in last 3 minutes
+    return now.getTime() - lastSeenDate.getTime() < 180000;
+  };
+
   useEffect(() => {
     cleanupOldMessages();
     fetchInitialData();
     
-    // Real-time subscription - Escuta todas as mensagens relevantes
-    const channel = supabase
+    // Real-time for messages
+    const messageChannel = supabase
       .channel("cedro-chat-room")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         async (payload) => {
           const newMessage = payload.new as ChatMessage;
-          
-          // Logica para decidir se a mensagem deve aparecer na tela atual
           const isRelevant = 
             (!newMessage.is_private && activeTab === "public") || 
             (newMessage.is_private && activeTab === "private" && 
@@ -118,29 +124,78 @@ export const Chat: React.FC = () => {
           if (!isRelevant) return;
 
           setMessages(prev => {
+            // Check if we already have this message (by real ID)
             if (prev.some(m => m.id === newMessage.id)) return prev;
             
+            // Check if this is a response to our own optimistic message
+            // If the message is from us, we might have an optimistic version with a temporary ID
+            const isFromMe = newMessage.sender_id === user?.id;
+            let updated = [...prev];
+            
+            if (isFromMe) {
+              // Look for a message with the same content sent in the last 10 seconds that has a non-UUID ID (temporary)
+              const optimisticIdx = updated.findIndex(m => 
+                m.sender_id === user?.id && 
+                m.content === newMessage.content && 
+                m.id.length < 20 // temporaryId is short
+              );
+              
+              if (optimisticIdx !== -1) {
+                updated[optimisticIdx] = { ...newMessage, sender_profile: profile || undefined };
+                return updated.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              }
+            }
+
+            // Normal processing for others or if no matching optimistic found
+            const combined = [...updated, newMessage].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+
             const knownSender = prev.find(m => m.sender_id === newMessage.sender_id)?.sender_profile;
             if (knownSender) {
-              return [...prev, { ...newMessage, sender_profile: knownSender }];
+              return combined.map(m => m.id === newMessage.id ? { ...m, sender_profile: knownSender } : m);
             }
 
             fetchSenderProfile(newMessage.sender_id).then(profileData => {
               if (profileData) {
                 setMessages(current => 
-                  current.map(m => m.id === newMessage.id ? { ...m, sender_profile: profileData } : m)
+                  current.map(m => m.sender_id === newMessage.sender_id ? { ...m, sender_profile: profileData } : m)
                 );
               }
             });
-
-            return [...prev, newMessage];
+            return combined;
           });
         }
       )
       .subscribe();
 
+    // Real-time for user presence
+    const userChannel = supabase
+      .channel("presence-room")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload) => {
+          const updatedProfile = payload.new as UserProfile;
+          if (updatedProfile) {
+            setUsers(prev => prev.map(u => u.id === updatedProfile.id ? updatedProfile : u));
+            if (selectedRecipient?.id === updatedProfile.id) {
+              setSelectedRecipient(updatedProfile);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Update time every minute to refresh "isOnline" badges
+    const statusInterval = setInterval(() => {
+      setUsers(prev => [...prev]);
+    }, 60000);
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(messageChannel);
+      supabase.removeChannel(userChannel);
+      clearInterval(statusInterval);
     };
   }, [activeTab, selectedRecipient, user?.id]);
 
@@ -156,6 +211,11 @@ export const Chat: React.FC = () => {
       .select("*")
       .neq("id", user?.id || "");
     
+    // Privacidade Total: Usuários comuns veem apenas membros do seu próprio setor
+    if (profile?.role !== "admin" && profile?.setor) {
+      query = query.eq("setor", profile.setor);
+    }
+
     const { data } = await query;
     setUsers(data || []);
   };
@@ -245,10 +305,12 @@ export const Chat: React.FC = () => {
         .single();
 
       if (error) throw error;
-      if (data) {
-        setMessages(prev => prev.map(m => m.id === temporaryId ? { ...data, sender_profile: profile || undefined } : m));
-      }
+      // Note: We don't necessarily need to manually update state here anymore 
+      // because the Realtime subscription will handle the replacement of the temporary ID
+      // by matching content and sender_id. This prevents the "double message" flicker.
     } catch (err) {
+      console.error("Erro ao enviar mensagem:", err);
+      // Remove optimistic message if insert failed
       setMessages(prev => prev.filter(m => m.id !== temporaryId));
       setNewMessage(messageContent);
     }
@@ -304,10 +366,17 @@ export const Chat: React.FC = () => {
                     }`}>
                       {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" /> : <User size={18} className="text-emerald-400" />}
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-brand-green rounded-full border-4 border-emerald-950" />
+                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-emerald-950 ${isOnline(u.last_seen) ? "bg-brand-green" : "bg-slate-600"}`} />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <p className={`text-xs font-black truncate uppercase ${selectedRecipient?.id === u.id ? "text-white" : "text-emerald-50 dark:text-white"}`}>{u.full_name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className={`text-xs font-black truncate uppercase ${selectedRecipient?.id === u.id ? "text-white" : "text-emerald-50 dark:text-white"}`}>{u.full_name}</p>
+                      {u.role === "admin" && (
+                        <span className="p-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[7px] font-black text-amber-500 uppercase tracking-tight shrink-0">
+                          ADM
+                        </span>
+                      )}
+                    </div>
                     <p className={`text-[9px] font-bold truncate opacity-60 uppercase tracking-tighter ${selectedRecipient?.id === u.id ? "text-emerald-100" : "text-emerald-300 dark:text-emerald-400"}`}>{u.setor || "NIT"}</p>
                   </div>
                 </button>
@@ -342,12 +411,21 @@ export const Chat: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-black text-emerald-900 dark:text-white uppercase tracking-tight">
-                  {activeTab === "public" ? "GERAL" : `${selectedRecipient?.full_name}`}
-                </h2>
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-brand-green/10 rounded-full">
-                  <span className="w-1.5 h-1.5 bg-brand-green rounded-full animate-pulse" />
-                  <span className="text-[10px] font-black text-brand-green uppercase tracking-widest">Ativo</span>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-black text-emerald-900 dark:text-white uppercase tracking-tight">
+                    {activeTab === "public" ? "GERAL" : `${selectedRecipient?.full_name}`}
+                  </h2>
+                  {activeTab !== "public" && selectedRecipient?.role === "admin" && (
+                    <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1">
+                      <ShieldCheck size={10} /> Admin
+                    </span>
+                  )}
+                </div>
+                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) ? "bg-brand-green/10" : "bg-slate-500/10"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) ? "bg-brand-green animate-pulse" : "bg-slate-500"}`} />
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) ? "text-brand-green" : "text-slate-500"}`}>
+                    {isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) || activeTab === "public" ? "Ativo" : "Offline"}
+                  </span>
                 </div>
               </div>
               <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-black uppercase tracking-[0.2em] mt-1">
@@ -412,10 +490,17 @@ export const Chat: React.FC = () => {
                   
                   <div className={`max-w-[70%] space-y-1.5 ${isOwn ? "items-end" : "items-start"}`}>
                     {showAvatar && (
-                      <div className={`flex items-center gap-3 px-1 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                        <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-200 uppercase tracking-tight">
-                          {msg.sender_profile?.full_name || "Membro Cedro"}
-                        </span>
+                      <div className={`flex items-center gap-2 px-1 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+                        <div className={`flex items-center gap-1.5 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
+                          <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-200 uppercase tracking-tight">
+                            {msg.sender_profile?.full_name || "Membro Cedro"}
+                          </span>
+                          {msg.sender_profile?.role === "admin" && (
+                            <span className="px-1 py-0.2 bg-amber-500/20 border border-amber-500/30 rounded-[4px] text-[7px] font-black text-amber-500 uppercase tracking-tighter shrink-0 flex items-center gap-0.5">
+                              <ShieldCheck size={7} /> ADM
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[8px] font-black text-emerald-400 uppercase opacity-60">
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>

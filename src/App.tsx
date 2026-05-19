@@ -7,7 +7,8 @@ import React, { useState, useEffect } from "react";
 import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, Sun, Moon, MessageSquare, UserCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusUso, UserProfile, StatusAuditoria } from "./types";
-import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles } from "./storage";
+import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles, updateUserProfile } from "./storage";
+import { supabase } from "./lib/supabase";
 import Dashboard from "./components/Dashboard";
 import Inventory from "./components/Inventory";
 import SectorMap from "./components/SectorMap";
@@ -69,6 +70,25 @@ export default function App() {
 
   useEffect(() => {
     if (user && profile) refreshRecords();
+
+    // Heartbeat for last_seen status
+    let interval: any;
+    if (user && profile) {
+      const updatePresence = async () => {
+        try {
+          await updateUserProfile(user.id, { last_seen: new Date().toISOString() });
+        } catch (e) {
+          console.warn("Falha no heartbeat de presença:", e);
+        }
+      };
+      
+      updatePresence(); // Initial call
+      interval = setInterval(updatePresence, 60000); // Every 1 minute
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [user, profile]);
 
   useEffect(() => {
@@ -112,19 +132,9 @@ export default function App() {
   };
 
   const handleDelete = async (id: string) => {
-    console.log("App: Triggering delete confirmation for id:", id);
-    setRecordToDelete(id);
-  };
-
-  const confirmDelete = async () => {
-    if (!recordToDelete) return;
-    
-    const id = recordToDelete;
-    console.log("App: Proceeding with deletion of id:", id);
-    
     // Optimistic update
+    const previousRecords = [...records];
     setRecords(prev => prev.filter(r => r.id !== id));
-    setRecordToDelete(null);
     
     try {
       await deleteRecord(id);
@@ -134,8 +144,9 @@ export default function App() {
       }
     } catch (error) {
       console.error("Erro ao excluir:", error);
+      setRecords(previousRecords);
       alert("Houve um erro ao excluir o registro. Por favor, tente novamente.");
-      await refreshRecords(); // Rollback to actual state
+      await refreshRecords();
     }
   };
 
@@ -189,16 +200,99 @@ export default function App() {
     }
   };
 
+  const handleUpdateUserRole = async (userId: string, newRole: "admin" | "user") => {
+    // Check if it's a real GUID/UUID (Fallback names are not UUIDs)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    
+    if (!isUuid) {
+      alert(`⚠️ Não foi possível atualizar: Este usuário ainda não possui uma conta de acesso ao sistema (perfil incompleto). Apenas usuários que já fizeram login pelo menos uma vez podem ser tornados administradores.`);
+      return;
+    }
+
+    // Guard against self-demotion to avoid losing access to admin panel accidentally
+    if (userId === user?.id && newRole === "user") {
+      const confirmSelf = window.confirm("⚠️ Você está prestes a remover seus próprios privilégios de administrador. Você perderá acesso a este painel. Deseja continuar?");
+      if (!confirmSelf) return;
+    }
+
+    // Optimistic update
+    const previousProfiles = [...profiles];
+    setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole } : p));
+
+    try {
+      console.log(`🚀 Solicitando alteração de cargo para usuário ${userId} para: ${newRole}`);
+      
+      // Get the session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch("/api/admin/update-role", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ userId, newRole })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Falha na comunicação com o servidor");
+      }
+      
+      if (result.success && result.profile) {
+        console.log(`✅ Alteração persistida via API para ${userId}`);
+        setProfiles(prev => prev.map(p => p.id === userId ? result.profile : p));
+      } else {
+        throw new Error("Resposta inesperada do servidor.");
+      }
+      
+      // Full refresh to ensure consistency across all data
+      await refreshRecords();
+      alert(`✅ Sucesso! O usuário agora tem acesso de ${newRole === "admin" ? "ADMINISTRADOR" : "USUÁRIO COMUM"}.`);
+    } catch (error: any) {
+      console.error("❌ Erro fatal ao atualizar role do usuário:", error);
+      // Rollback
+      setProfiles(previousProfiles);
+      alert(`Erro: ${error.message || "Erro desconhecido ao atualizar permissões"}`);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch("/api/admin/delete-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ userId })
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || "Falha ao apagar usuário");
+      }
+
+      setProfiles(prev => prev.filter(p => p.id !== userId));
+      alert("✅ Usuário apagado com sucesso.");
+    } catch (error: any) {
+      console.error("Erro ao apagar usuário:", error);
+      alert(`⚠️ Erro ao apagar: ${error.message}`);
+    }
+  };
+
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "inventory", label: "Inventário de IA", icon: ClipboardList },
-    { id: "sectors", label: "Mapa de IAs", icon: Users },
-    { id: "admin", label: "Gestão Admin", icon: ShieldAlert },
+    { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
+    { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: true },
     { id: "new", label: "Novo Cadastro", icon: PlusCircle },
     { id: "report", label: "Relatórios", icon: FileText },
-    { id: "chat", label: "Colaboração Chat", icon: MessageSquare },
+    { id: "chat", label: "Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
-  ];
+  ].filter(item => !item.adminOnly || profile?.role === "admin");
 
   if (authLoading) {
     return (
@@ -394,12 +488,14 @@ export default function App() {
               {activeTab === "sectors" && (
                 <SectorMap records={records} profiles={profiles} />
               )}
-              {activeTab === "admin" && (
+              {activeTab === "admin" && profile?.role === "admin" && (
                 <AdminPanel 
                   records={records} 
                   profiles={profiles}
                   onUpdateStatus={handleUpdateStatus} 
                   onViewRecord={handleView} 
+                  onUpdateUserRole={handleUpdateUserRole}
+                  onDeleteUser={handleDeleteUser}
                 />
               )}
               {activeTab === "chat" && (
@@ -486,48 +582,7 @@ export default function App() {
 
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
-        {recordToDelete && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setRecordToDelete(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md glass p-8 rounded-[2rem] border border-lab-red/30 shadow-2xl overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-1 bg-lab-red"></div>
-              <div className="flex flex-col items-center text-center space-y-6">
-                <div className="p-4 bg-lab-red/10 border border-lab-red/20 rounded-2xl text-lab-red">
-                  <AlertTriangle size={32} />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-bold text-[var(--text-bright)] uppercase tracking-tight">Confirmar Exclusão</h3>
-                  <p className="text-sm text-[var(--text-muted)]">Você está prestes a excluir permanentemente este registro de IA. Esta ação não pode ser desfeita.</p>
-                </div>
-                <div className="flex gap-4 w-full pt-4">
-                  <button 
-                    onClick={() => setRecordToDelete(null)}
-                    className="flex-1 px-6 py-4 glass hover:bg-black/5 dark:hover:bg-white/10 text-[var(--text-bright)] font-bold rounded-xl transition-all border border-[var(--border-lab)] uppercase text-xs tracking-widest"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    onClick={confirmDelete}
-                    className="flex-1 px-6 py-4 bg-lab-red hover:bg-lab-red/80 text-white font-bold rounded-xl transition-all shadow-lg shadow-lab-red/20 uppercase text-xs tracking-widest"
-                  >
-                    Excluir IA
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        {/* Removed redundant delete modal as it's handled by components */}
       </AnimatePresence>
     </div>
   );

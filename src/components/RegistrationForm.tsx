@@ -334,27 +334,29 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {activeSection === 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <InputGroup label="Unidade ou Setor" required>
+                <InputGroup label="Setor" required>
                   <input 
-                    className={sharedInputClass}
+                    className={`${sharedInputClass} ${(profile?.role !== "admin" && !isAdmin) ? "opacity-70 cursor-not-allowed bg-black/10" : ""}`}
                     value={formData.unidadeSetor || ""}
                     onChange={(e) => updateField("unidadeSetor", e.target.value)}
                     placeholder="Ex: NIT, TI, Marketing, Hematologia..."
-                    list="setores-list"
                     required
+                    disabled={profile?.role !== "admin" && !isAdmin}
                   />
-                  <datalist id="setores-list">
-                    <option value="NIT" />
-                    <option value="TI" />
-                    <option value="Marketing" />
-                    <option value="Administrativo" />
-                    <option value="Jurídico" />
-                    <option value="Direção Técnica" />
-                    <option value="Qualidade" />
-                    <option value="Atendimento / Recepção" />
-                    <option value="Laboratório de Patologia" />
-                    <option value="Laboratório Central" />
-                  </datalist>
+                  {(profile?.role === "admin" || isAdmin) && (
+                    <datalist id="setores-list">
+                      <option value="NIT" />
+                      <option value="TI" />
+                      <option value="Marketing" />
+                      <option value="Administrativo" />
+                      <option value="Jurídico" />
+                      <option value="Direção Técnica" />
+                      <option value="Qualidade" />
+                      <option value="Atendimento / Recepção" />
+                      <option value="Laboratório de Patologia" />
+                      <option value="Laboratório Central" />
+                    </datalist>
+                  )}
                 </InputGroup>
                 <InputGroup label="Responsável pelo Preenchimento" required>
                   <input 
@@ -365,12 +367,12 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     required
                   />
                 </InputGroup>
-                <InputGroup label="Cargo ou Função" required>
+                <InputGroup label="Cargo" required>
                   <input 
                     className={sharedInputClass}
                     value={formData.cargo || ""}
                     onChange={(e) => updateField("cargo", e.target.value)}
-                    placeholder="Sua função atual"
+                    placeholder="Seu cargo atual"
                     required
                   />
                 </InputGroup>

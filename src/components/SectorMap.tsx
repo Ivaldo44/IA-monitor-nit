@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Users, Layout, ChevronRight, User, ShieldCheck, Clock, Layers, X, Info, Shield, Zap, Globe, Cpu, Database, Plus } from "lucide-react";
+import { Users, Layout, ChevronRight, User, ShieldCheck, Clock, Layers, X, Plus } from "lucide-react";
 import { IARecord, UserProfile } from "../types";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -15,7 +15,6 @@ interface SectorMapProps {
 
 export default function SectorMap({ records, profiles }: SectorMapProps) {
   const [selectedIA, setSelectedIA] = useState<IARecord | null>(null);
-  const [showTechnicalReport, setShowTechnicalReport] = useState<IARecord | null>(null);
   const [expandedSectors, setExpandedSectors] = useState<Set<string>>(new Set());
 
   const toggleSector = (sector: string) => {
@@ -78,17 +77,7 @@ export default function SectorMap({ records, profiles }: SectorMapProps) {
 
   return (
     <div className="space-y-8 pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-2">
-        <div className="space-y-2">
-          <h2 className="text-3xl font-black text-[var(--text-bright)] tracking-tight flex items-center gap-3">
-            <Layers className="text-lab-cyan" size={32} />
-            Mapa de IAs
-          </h2>
-          <p className="text-[var(--text-muted)] font-medium max-w-2xl">
-            Visualização estratégica da distribuição de Inteligência Artificial entre os departamentos e usuários do laboratório.
-          </p>
-        </div>
-        
+      <div className="flex flex-col md:flex-row md:items-end justify-end gap-4 px-2">
         <div className="flex gap-4">
            <div className="glass px-4 py-2 rounded-xl border border-[var(--border-lab)]">
              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest block">Total Setores</span>
@@ -217,8 +206,15 @@ export default function SectorMap({ records, profiles }: SectorMapProps) {
                               </div>
                               <div>
                                 <div className="font-bold text-sm text-[var(--text-bright)] group-hover/ia:text-lab-cyan transition-colors uppercase">{r.nomeFerramenta}</div>
-                                <div className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                                   <User size={10} /> {r.responsavelPreenchimento}
+                                <div className="text-[10px] text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
+                                   <div className="flex items-center gap-1 truncate">
+                                     <User size={10} /> {r.responsavelPreenchimento}
+                                     {profiles.find(p => p.full_name === r.responsavelPreenchimento)?.role === "admin" && (
+                                       <span className="p-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[7px] font-black text-amber-500 uppercase tracking-tighter shrink-0 flex items-center gap-0.5 ml-1">
+                                         <ShieldCheck size={7} /> ADM
+                                       </span>
+                                     )}
+                                   </div>
                                    {profiles.find(p => p.id === r.owner_id || p.full_name === r.responsavelPreenchimento)?.avatar_url && (
                                      <img 
                                        src={profiles.find(p => p.id === r.owner_id || p.full_name === r.responsavelPreenchimento)?.avatar_url} 
@@ -272,309 +268,102 @@ export default function SectorMap({ records, profiles }: SectorMapProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedIA(null)}
-              className="absolute inset-0 bg-white/60 backdrop-blur-md"
+              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-md"
             />
             
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden"
+              className="relative w-full max-w-3xl bg-white dark:bg-emerald-950 border border-emerald-100 dark:border-white/10 rounded-[3rem] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] overflow-hidden"
             >
-              {/* Header do Modal */}
-              <div className="relative h-32 bg-gradient-to-r from-lab-cyan/10 to-lab-blue/10 flex items-center px-10 border-b border-slate-100">
-                <div className="absolute top-6 right-6">
+              {/* Header */}
+              <div className="relative pt-12 pb-8 px-10 overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-green via-emerald-400 to-brand-green opacity-50"></div>
+                
+                <div className="absolute top-8 right-8 z-10">
                   <button 
                     onClick={() => setSelectedIA(null)}
-                    className="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
+                    className="size-12 rounded-2xl bg-emerald-50 dark:bg-white/5 flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-white/10 transition-all hover:rotate-90 active:scale-90 shadow-sm"
                   >
-                    <X size={20} />
+                    <X size={24} />
                   </button>
                 </div>
                 
-                <div className="flex items-center gap-6">
-                  <div className="size-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-lab-cyan shadow-sm">
-                    <Cpu size={32} />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase leading-tight">
-                      {selectedIA.nomeFerramenta}
-                    </h2>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+                  <div className="text-center md:text-left space-y-2">
+                    <div className="flex flex-wrap justify-center md:justify-start items-center gap-3">
+                      <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full border tracking-widest ${
                         selectedIA.statusAuditoria === "Aprovado" 
                         ? "bg-brand-green/10 text-brand-green border-brand-green/20" 
                         : "bg-brand-orange/10 text-brand-orange border-brand-orange/20"
                       }`}>
                         {selectedIA.statusAuditoria || "Pendente"}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
-                        <Globe size={10} /> {selectedIA.fornecedor}
+                      <span className="text-[10px] text-emerald-600/60 dark:text-emerald-500/60 font-black uppercase tracking-[0.2em]">
+                        {selectedIA.fornecedor}
                       </span>
                     </div>
+                    <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">
+                      {selectedIA.nomeFerramenta}
+                    </h2>
+                    <p className="text-sm font-medium text-slate-500 dark:text-white/60 max-w-md">
+                      {selectedIA.descricaoAtividade.split('.')[0]}.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Conteúdo do Modal */}
-              <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar bg-white">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-[10px] font-black text-lab-cyan uppercase tracking-widest">
-                      <Info size={14} /> Atribuição e Origem
+              {/* Bento Grid */}
+              <div className="px-10 pb-12 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-6 rounded-[2rem] bg-emerald-50/20 dark:bg-white/[0.03] border border-emerald-100/50 dark:border-white/5 space-y-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-green">Atribuição</span>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-slate-400 dark:text-white/40 uppercase">Setor</p>
+                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase truncate">{selectedIA.unidadeSetor}</p>
                     </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span className="text-xs text-slate-400 font-bold">Unidade / Setor</span>
-                        <span className="text-sm text-slate-900 font-black uppercase">{selectedIA.unidadeSetor}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span className="text-xs text-slate-400 font-bold">Responsável</span>
-                        <span className="text-sm text-slate-900 font-black">{selectedIA.responsavelPreenchimento}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                        <span className="text-xs text-slate-400 font-bold">Natureza de Uso</span>
-                        <span className="text-sm text-slate-900 font-black">{selectedIA.naturezaUso}</span>
-                      </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-slate-400 dark:text-white/40 uppercase">Gestor</p>
+                      <p className="text-sm font-black text-slate-800 dark:text-white">{selectedIA.responsavelPreenchimento}</p>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-[10px] font-black text-brand-green uppercase tracking-widest">
-                      <Shield size={14} /> Governança Lab
+                  <div className="p-6 rounded-[2rem] bg-emerald-50/50 dark:bg-brand-green/5 border border-emerald-100 dark:border-brand-green/20 space-y-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-green">Segurança</span>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-emerald-600/60 dark:text-emerald-400/60 uppercase">LGPD</p>
+                      <span className="text-sm font-black text-slate-900 dark:text-white">{selectedIA.alinhadoLGPD === "Sim" ? "CONFORME" : "PENDENTE"}</span>
                     </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span className="text-xs text-slate-400 font-bold">Status Conformidade</span>
-                        <div className="flex items-center gap-2">
-                          <div className={`size-1.5 rounded-full ${selectedIA.alinhadoLGPD === "Sim" ? "bg-brand-green" : "bg-red-400"}`}></div>
-                          <span className="text-sm text-slate-900 font-black uppercase">LGPD: {selectedIA.alinhadoLGPD}</span>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                        <span className="text-xs text-slate-400 font-bold">Risco Residual</span>
-                        <span className={`text-sm font-black uppercase ${
-                          selectedIA.riscoResidual === "Baixo" ? "text-brand-green" : "text-brand-orange"
-                        }`}>{selectedIA.riscoResidual}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                        <span className="text-xs text-slate-400 font-bold">Criticidade</span>
-                        <span className="text-sm text-slate-900 font-black uppercase">{selectedIA.criticidade}</span>
-                      </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-emerald-600/60 dark:text-emerald-400/60 uppercase">Risco</p>
+                      <span className={`text-sm font-black uppercase ${selectedIA.riscoResidual === "Baixo" ? "text-brand-green" : "text-brand-orange"}`}>{selectedIA.riscoResidual}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 rounded-[2rem] bg-emerald-50/20 dark:bg-white/[0.03] border border-emerald-100/50 dark:border-white/5 space-y-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600/70 dark:text-emerald-400/70">Impacto</span>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-slate-400 dark:text-white/40 uppercase">Uso</p>
+                      <span className="text-sm font-black text-slate-900 dark:text-white uppercase truncate block">{selectedIA.naturezaUso}</span>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-slate-400 dark:text-white/40 uppercase">Criticidade</p>
+                      <span className="text-sm font-black text-slate-900 dark:text-white uppercase truncate block">{selectedIA.criticidade}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-[10px] font-black text-lab-blue uppercase tracking-widest">
-                    <Database size={14} /> Descritivo e Objetivos
-                  </div>
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-4">
-                    <div className="space-y-2">
-                       <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Atividade / Processo</p>
-                       <p className="text-sm text-slate-700 italic leading-relaxed">
-                         "{selectedIA.descricaoAtividade}"
-                       </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-2">
+                <div className="p-8 rounded-[2.5rem] bg-emerald-50/30 dark:bg-white/[0.02] border border-emerald-100/30 dark:border-white/5 space-y-6">
+                  <h4 className="text-sm font-black uppercase tracking-widest text-brand-green">Objetivos</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <p className="text-sm text-slate-600 dark:text-white/60 italic leading-relaxed">"{selectedIA.descricaoAtividade}"</p>
+                    <div className="flex flex-wrap gap-2">
                       {selectedIA.objetivos?.map((obj, i) => (
-                        <span key={i} className="text-[9px] font-black bg-white text-slate-500 px-3 py-1 rounded-full border border-slate-200 uppercase">
-                          {obj}
-                        </span>
+                        <div key={i} className="bg-white dark:bg-white/5 px-4 py-2 rounded-xl border border-emerald-100/40 dark:border-white/10 shadow-sm text-[10px] font-black text-slate-500 dark:text-white/40 uppercase">{obj}</div>
                       ))}
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                   <div className="flex items-center gap-4">
-                      <div className="size-12 rounded-2xl bg-lab-blue/10 flex items-center justify-center text-lab-blue">
-                        <Zap size={24} />
-                      </div>
-                      <div>
-                        <p className="text-xs text-lab-blue font-black uppercase tracking-widest">Usuário(s) Autorizado(s)</p>
-                        <p className="text-slate-900 font-black">{selectedIA.responsavelPreenchimento}</p>
-                      </div>
-                   </div>
-                   <button 
-                     onClick={() => setShowTechnicalReport(selectedIA)}
-                     className="px-6 py-2 bg-slate-900 text-white font-black text-xs rounded-full hover:bg-black transition-all uppercase tracking-widest"
-                   >
-                      Ver Fluxo
-                   </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Relatório Técnico de Integração */}
-      <AnimatePresence>
-        {showTechnicalReport && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowTechnicalReport(null)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, x: 20 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.95, x: 20 }}
-              className="relative w-full max-w-4xl bg-white border border-slate-200 rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px]"
-            >
-              {/* Sidebar do Relatório */}
-              <div className="w-full md:w-80 bg-slate-50 border-r border-slate-100 p-10 flex flex-col justify-between">
-                <div>
-                  <div className="size-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-lab-cyan mb-6">
-                    <Database size={32} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 leading-tight uppercase mb-2">Relatório de Integração</h3>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{showTechnicalReport.nomeFerramenta}</p>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">ID do Registro</p>
-                    <p className="text-sm font-black text-slate-900 dark:text-white">{showTechnicalReport.id}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase">Versão do Sistema</p>
-                    <p className="text-sm font-black text-slate-900">{showTechnicalReport.versao || "v1.0.0"}</p>
-                  </div>
-                  <button 
-                    onClick={() => setShowTechnicalReport(null)}
-                    className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
-                  >
-                    <X size={14} /> Fechar Relatório
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid de Informações Técnicas */}
-              <div className="flex-1 p-12 overflow-y-auto max-h-[85vh] custom-scrollbar bg-white">
-                <div className="space-y-12">
-                  {/* Seção 1: Camada de Dados */}
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-px flex-1 bg-slate-100"></div>
-                      <h4 className="text-[10px] font-black text-lab-cyan uppercase tracking-[0.3em]">01. Camada de Dados</h4>
-                      <div className="h-px flex-1 bg-slate-100"></div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Tratamento PII</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-slate-700">Anonimização</span>
-                          <span className={`text-[10px] font-black px-3 py-1 rounded-full ${
-                            showTechnicalReport.dadosAnonimizados === "Sim" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                          }`}>
-                            {showTechnicalReport.dadosAnonimizados === "Sim" ? "ATIVO" : "NÃO APLICADO"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Exposição Externa</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-slate-700">Fornecedor Cloud</span>
-                          <span className="text-[10px] font-black text-slate-900 uppercase">{showTechnicalReport.envioFornecedorExterno}</span>
-                        </div>
-                      </div>
-                      <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Pipeline Treinamento</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-slate-700">Reuso de Dados</span>
-                          <span className={`text-[10px] font-black px-3 py-1 rounded-full ${
-                            showTechnicalReport.dadosTreinamentoModelo === "Não" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                          }`}>
-                            {showTechnicalReport.dadosTreinamentoModelo === "Não" ? "PROTEGIDO" : "TREINAMENTO"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4">Acesso Físico</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-slate-700">Nível Perfil</span>
-                          <span className="text-[10px] font-black text-slate-900 uppercase">CONTROLADO</span>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-
-                  {/* Seção 2: Conectividade */}
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-px flex-1 bg-slate-100"></div>
-                      <h4 className="text-[10px] font-black text-lab-blue uppercase tracking-[0.3em]">02. Conectividade</h4>
-                      <div className="h-px flex-1 bg-slate-100"></div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                        <div className="flex items-center gap-4">
-                           <Layers size={18} className="text-lab-blue" />
-                           <span className="text-sm font-black text-slate-900 uppercase">Interface de Sistemas</span>
-                        </div>
-                        <span className="text-xs font-bold text-slate-500">
-                          {showTechnicalReport.integradaSistemaInterno === "Sim" 
-                            ? `Integrado ao ${showTechnicalReport.qualSistema || "Core Lab"}` 
-                            : "Uso Standalone"}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                        <div className="flex items-center gap-4">
-                           <Layout size={18} className="text-lab-blue" />
-                           <span className="text-sm font-black text-slate-900 uppercase">Ambiente Produtivo</span>
-                        </div>
-                        <span className="text-xs font-bold text-slate-500">
-                          {showTechnicalReport.ambienteHomologacao === "Sim" ? "Homologado em Sandbox" : "Apenas Produção"}
-                        </span>
-                      </div>
-                    </div>
-                  </section>
-
-                  {/* Seção 3: Observabilidade */}
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-px flex-1 bg-slate-100"></div>
-                      <h4 className="text-[10px] font-black text-brand-orange uppercase tracking-[0.3em]">03. Observabilidade</h4>
-                      <div className="h-px flex-1 bg-slate-100"></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                       <div className="p-8 rounded-[2rem] border-2 border-slate-50 space-y-4">
-                          <Zap size={24} className="text-brand-orange" />
-                          <h5 className="font-black text-slate-900 uppercase tracking-tight">Trilha de Auditoria</h5>
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            Registro contínuo de logs de acesso e transações para conformidade técnica.
-                          </p>
-                          <span className={`text-[10px] font-black px-4 py-1.5 rounded-full ${
-                             showTechnicalReport.trilhaAuditoria === "Sim" ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-400"
-                          }`}>
-                            {showTechnicalReport.trilhaAuditoria === "Sim" ? "CONFIGURADO" : "INDISPONÍVEL"}
-                          </span>
-                       </div>
-
-                       <div className="p-8 rounded-[2rem] border-2 border-slate-50 space-y-4">
-                          <ShieldCheck size={24} className="text-brand-green" />
-                          <h5 className="font-black text-slate-900 uppercase tracking-tight">Log de Decisão</h5>
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            Rastreabilidade dos parâmetros que levaram ao resultado gerado pela IA.
-                          </p>
-                          <span className={`text-[10px] font-black px-4 py-1.5 rounded-full ${
-                             showTechnicalReport.registroLogDecisao === "Sim" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"
-                          }`}>
-                            {showTechnicalReport.registroLogDecisao === "Sim" ? "LOG ATIVO" : "SEM LOG"}
-                          </span>
-                       </div>
-                    </div>
-                  </section>
                 </div>
               </div>
             </motion.div>

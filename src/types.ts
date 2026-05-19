@@ -195,6 +195,7 @@ export interface UserProfile {
   contato?: string;
   role?: "admin" | "user";
   status: "Pendente" | "Autorizado" | "Rejeitado";
+  last_seen?: string;
   authorized_by?: string;
   authorized_at?: string;
   updated_at?: string;

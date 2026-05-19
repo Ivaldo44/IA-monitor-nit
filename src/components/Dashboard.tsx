@@ -66,7 +66,7 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
     const columns = [
       { header: "ID", key: "id", width: 18 },
       { header: "NOME DA FERRAMENTA", key: "nome", width: 35 },
-      { header: "SETOR RESPONSÁVEL", key: "setor", width: 25 },
+      { header: "SETOR", key: "setor", width: 25 },
       { header: "STATUS DE USO", key: "status", width: 22 },
       { header: "CLASSIFICAÇÃO RISCO", key: "risco", width: 25 },
       { header: "DATA DE REGISTRO", key: "data", width: 20 },
@@ -137,9 +137,9 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
 
   const cards = useMemo(() => [
     { label: "Total de IAs", value: stats.total, color: "border-slate-200" },
-    { label: "Pendente Auditoria", value: stats.pendentesAprovacao, color: "border-yellow-500 border-l-4", textColor: "text-yellow-600" },
-    { label: "Aprovadas Admin", value: stats.autorizadas, color: "border-brand-green border-l-4", textColor: "text-brand-green" },
-    { label: "Negadas Admin", value: stats.negadas, color: "border-red-500 border-l-4", textColor: "text-red-500" },
+    { label: "Pendente", value: stats.pendentesAprovacao, color: "border-yellow-500 border-l-4", textColor: "text-yellow-600" },
+    { label: "Aprovadas", value: stats.autorizadas, color: "border-brand-green border-l-4", textColor: "text-brand-green" },
+    { label: "Negadas", value: stats.negadas, color: "border-red-500 border-l-4", textColor: "text-red-500" },
     { label: "Dados Sensíveis", value: stats.dadosSensiveis, color: "border-brand-orange border-l-4", textColor: "text-brand-orange" },
   ], [stats]);
 
@@ -266,8 +266,7 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
                   <th className="px-6 py-5 border-b border-emerald-800/50">ID da IA</th>
                   <th className="px-6 py-5 border-b border-emerald-800/50">IA / Setor</th>
                   <th className="px-6 py-5 border-b border-emerald-800/50 text-center">Risco</th>
-                  <th className="px-6 py-5 border-b border-emerald-800/50">Auditoria</th>
-                  <th className="px-6 py-5 border-b border-emerald-800/50">Status Uso</th>
+                  <th className="px-6 py-5 border-b border-emerald-800/50">Status</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
@@ -302,24 +301,18 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
                       <div className="text-[10px] font-black uppercase tracking-widest">
                         {record.statusAuditoria === StatusAuditoria.PENDENTE ? (
                           <span className="text-yellow-400 flex items-center gap-2 animate-pulse">
-                            <Clock size={14} /> Pendente
+                            <Clock size={14} /> {record.statusUso === StatusUso.EM_AVALIACAO ? "Em Avaliação" : "Pendente"}
                           </span>
                         ) : record.statusAuditoria === StatusAuditoria.NEGADO ? (
                           <span className="text-red-400 flex items-center gap-2">
-                            <ShieldX size={14} /> Negado
+                            <ShieldX size={14} /> {record.statusUso === StatusUso.NAO_APROVADO ? "Negado" : "Não Aprovado"}
                           </span>
                         ) : (
                           <span className="text-brand-green flex items-center gap-2">
-                            <CheckCircle2 size={14} /> Aprovado
+                            <CheckCircle2 size={14} /> {record.statusUso === StatusUso.APROVADO ? "Aprovado" : record.statusUso}
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td className="px-6 py-5">
-                       <div className="flex items-center gap-2">
-                         <div className={`size-1.5 rounded-full ${record.statusUso === StatusUso.APROVADO ? "bg-brand-green shadow-[0_0_8px_rgba(0,255,101,0.4)]" : "bg-brand-orange/50"}`}></div>
-                         <span className="text-[10px] font-black tracking-widest text-emerald-100/80 group-hover:text-white transition-colors uppercase">{record.statusUso}</span>
-                       </div>
                     </td>
                   </tr>
                 ))}

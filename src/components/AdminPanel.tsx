@@ -5,7 +5,7 @@ import {
   Database, ArrowUpRight, TrendingUp, AlertTriangle, Activity,
   ChevronLeft, ExternalLink
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { IARecord, StatusAuditoria, StatusUso, UserProfile } from "../types";
 
 interface AdminPanelProps {
@@ -13,11 +13,20 @@ interface AdminPanelProps {
   profiles: UserProfile[];
   onUpdateStatus: (recordId: string, status: StatusAuditoria, comment?: string) => void;
   onViewRecord: (record: IARecord) => void;
+  onUpdateUserRole?: (userId: string, newRole: "admin" | "user") => void;
+  onDeleteUser?: (userId: string) => void;
 }
 
 type AdminTab = "approvals" | "sectors" | "users";
 
-export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRecord }: AdminPanelProps) {
+export default function AdminPanel({ 
+  records, 
+  profiles, 
+  onUpdateStatus, 
+  onViewRecord, 
+  onUpdateUserRole,
+  onDeleteUser
+}: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("approvals");
   const [approvalFilter, setApprovalFilter] = useState<StatusAuditoria | "all">(StatusAuditoria.PENDENTE);
   const [searchTerm, setSearchTerm] = useState("");
@@ -25,6 +34,8 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [decisionModal, setDecisionModal] = useState<{ isOpen: boolean; record: IARecord | null; status: StatusAuditoria | null }>({ isOpen: false, record: null, status: null });
   const [auditComment, setAuditComment] = useState("");
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
   // Statistics for the Admin Header
   const stats = useMemo(() => ({
@@ -101,6 +112,8 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
     };
   }, [selectedUser, records, profiles]);
 
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+
   return (
     <div className="space-y-8 pb-20">
       {/* Admin Hero Header */}
@@ -115,7 +128,7 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
               <Activity size={12} className="animate-pulse" /> Console de Governança
             </div>
             <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase leading-[0.9] mb-6">
-              Central de <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-emerald-100">Auditoria IA</span>
+              Central <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-emerald-100">Administrativa</span>
             </h1>
             <p className="text-emerald-50/80 font-medium max-w-md leading-relaxed">
               Gerencie aprovações, verifique conformidade técnica e acompanhe o ecossistema de inteligência artificial em todos os setores do laboratório.
@@ -234,7 +247,7 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
                         >
                           <LayoutGrid size={12} /> {record.unidadeSetor}
                         </button>
-                        <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400/70 group-hover:dark:text-white transition-colors"><Users size={12} /> {record.responsavelPreenchimento}</span>
+                        <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400/70 group-hover:text-emerald-600 dark:group-hover:text-brand-green transition-colors"><Users size={12} /> {record.responsavelPreenchimento}</span>
                         <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400/70"><AlertTriangle size={12} /> {new Date(record.createdAt).toLocaleDateString()}</span>
                         <span className={`flex items-center gap-1 mt-1 sm:mt-0 ${record.usaDadosSensiveis === "Sim" ? "text-amber-600 dark:text-amber-400" : "text-emerald-600/60 dark:text-emerald-500/60"}`}>
                           <ShieldAlert size={12} /> {record.usaDadosSensiveis === "Sim" ? "Dados Sensíveis" : "Dados Comuns"}
@@ -498,21 +511,27 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
                <table className="w-full text-left">
                   <thead className="bg-emerald-50/10 dark:bg-white/[0.01] border-b border-emerald-100/30 dark:border-white/5">
                     <tr>
-                      <th className="px-8 py-6 text-[10px] font-black text-emerald-600/60 dark:text-emerald-500/60 uppercase tracking-[0.2em]">Responsável / Setor</th>
+                      <th className="px-8 py-6 text-[10px] font-black text-emerald-600/60 dark:text-emerald-500/60 uppercase tracking-[0.2em]">Responsável</th>
+                      <th className="px-8 py-6 text-[10px] font-black text-emerald-600/60 dark:text-emerald-500/60 uppercase tracking-[0.2em]">Setor</th>
                       <th className="px-8 py-6 text-[10px] font-black text-emerald-600/60 dark:text-emerald-500/60 uppercase tracking-[0.2em]">IA's Sob Custódia</th>
                       <th className="px-8 py-6 text-[10px] font-black text-emerald-600/60 dark:text-emerald-500/60 uppercase tracking-[0.2em]">Status Governança</th>
                       <th className="px-8 py-6 text-[10px] font-black text-emerald-600/60 dark:text-emerald-500/60 uppercase tracking-[0.2em] text-right">Ação</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-emerald-100/30 dark:divide-white/5">
-                    {(profiles.length > 0 ? profiles.map(p => p.full_name) : Array.from(new Set(records.map(r => r.responsavelPreenchimento)))).map((userName, i) => {
-                      const userProfile = profiles.find(p => p.full_name === userName);
+                    {(profiles.length > 0 ? profiles : Array.from(new Set(records.map(r => r.responsavelPreenchimento))).map(name => ({ id: name, full_name: name, role: 'user' as const, setor: 'N/A' }))).map((userItem, i) => {
+                      const isProfile = profiles.length > 0;
+                      const userProfile = isProfile ? (userItem as UserProfile) : null;
+                      const userName = isProfile ? (userItem as UserProfile).full_name : (userItem as any).full_name;
+                      
                       const userIAs = records.filter(r => 
                         r.responsavelPreenchimento === userName
                       );
                       const hasPending = userIAs.some(r => (r.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE);
+                      const userId = userProfile?.id || userName;
+
                       return (
-                        <tr key={i} className="hover:bg-white/60 dark:hover:bg-white/[0.02] transition-colors group">
+                        <tr key={userId + i} className="hover:bg-white/60 dark:hover:bg-white/[0.02] transition-colors group">
                           <td className="px-8 py-6">
                             <div className="flex items-center gap-4">
                               <div 
@@ -525,22 +544,34 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
                                   className="w-full h-full object-cover"
                                 />
                               </div>
-                              <div>
+                              <div className="flex items-center gap-2">
                                 <p className="text-base font-black text-emerald-900 dark:text-brand-green uppercase tracking-tight">{userName}</p>
-                                <button 
-                                  onClick={() => { 
-                                    const sector = userProfile?.setor || (userIAs.length > 0 ? userIAs[0].unidadeSetor : null);
-                                    if (sector) {
-                                      setActiveTab("sectors"); 
-                                      setSelectedSector(sector);
-                                    }
-                                  }}
-                                  className="text-[10px] text-lab-cyan font-bold uppercase tracking-widest mt-0.5 hover:underline"
-                                 >
-                                  {userProfile?.setor || (userIAs.length > 0 ? userIAs[0].unidadeSetor : "Nenhum setor")}
-                                </button>
+                                {userProfile?.role === "admin" && (
+                                  <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[8px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 shrink-0">
+                                    <ShieldCheck size={10} /> Admin
+                                  </span>
+                                )}
+                                {!userProfile && (
+                                  <span className="px-1.5 py-0.5 bg-slate-500/10 border border-slate-500/20 rounded text-[7px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1 shrink-0">
+                                    <AlertTriangle size={8} /> Sem Conta
+                                  </span>
+                                )}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <button 
+                              onClick={() => { 
+                                const sector = userProfile?.setor || (userIAs.length > 0 ? userIAs[0].unidadeSetor : null);
+                                if (sector) {
+                                  setActiveTab("sectors"); 
+                                  setSelectedSector(sector);
+                                }
+                              }}
+                              className="text-[10px] text-lab-cyan font-bold uppercase tracking-widest hover:underline"
+                             >
+                              {userProfile?.setor || (userIAs.length > 0 ? userIAs[0].unidadeSetor : "Nenhum setor")}
+                            </button>
                           </td>
                           <td className="px-8 py-6">
                              <div className="flex items-center gap-3 font-mono text-sm">
@@ -567,13 +598,93 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
                             )}
                           </td>
                           <td className="px-8 py-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                          {onUpdateUserRole && (
                             <button 
-                              onClick={() => setSelectedUser(userName)}
-                              className="px-4 py-2 bg-white dark:bg-white/5 hover:bg-slate-900 dark:hover:bg-lab-cyan hover:text-white dark:hover:text-slate-900 rounded-lg text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 ml-auto transition-all border border-slate-50 dark:border-white/10 hover:border-slate-800 dark:hover:border-lab-cyan"
+                              disabled={updatingUserId === userId || !userProfile}
+                              onClick={async () => {
+                                if (!userProfile) return;
+                                console.log("Updating role for user:", userProfile.id, userProfile.full_name);
+                                setUpdatingUserId(userProfile.id);
+                                try {
+                                  await onUpdateUserRole(userProfile.id, userProfile.role === "admin" ? "user" : "admin");
+                                } finally {
+                                  setUpdatingUserId(null);
+                                }
+                              }}
+                              className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
+                                !userProfile
+                                ? "bg-slate-100 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10 cursor-not-allowed"
+                                : userProfile.role === "admin" 
+                                ? "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500 hover:text-white" 
+                                : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green hover:text-black"
+                              } ${updatingUserId === (userProfile?.id || "") ? "opacity-50 cursor-wait" : ""}`}
+                              title={!userProfile ? "Este usuário não possui conta no sistema" : userProfile.role === "admin" ? "Remover Admin" : "Tornar Admin"}
                             >
-                              Histórico <ArrowUpRight size={14} />
+                              {updatingUserId === (userProfile?.id || "") ? (
+                                <span className="animate-spin size-3 border-2 border-current border-t-transparent rounded-full" />
+                              ) : null}
+                              {userProfile?.role === "admin" ? "Revogar Admin" : "Tornar Admin"}
                             </button>
-                          </td>
+                          )}
+                          <button 
+                            onClick={() => setSelectedUser(userName)}
+                            className="px-4 py-2 bg-white dark:bg-white/5 hover:bg-slate-900 dark:hover:bg-lab-cyan hover:text-white dark:hover:text-slate-900 rounded-lg text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2 transition-all border border-slate-50 dark:border-white/10 hover:border-slate-800 dark:hover:border-lab-cyan"
+                          >
+                            Histórico <ArrowUpRight size={14} />
+                          </button>
+
+                          {onDeleteUser && userProfile && (
+                             <div className="relative">
+                               <AnimatePresence>
+                                {showDeleteConfirm === userProfile.id && (
+                                  <motion.div 
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    className="absolute right-0 bottom-full mb-2 p-3 bg-white dark:bg-slate-900 border border-red-500/50 rounded-xl shadow-2xl z-50 min-w-[200px]"
+                                  >
+                                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase mb-2 text-center">Confirmar exclusão permanente?</p>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => setShowDeleteConfirm(null)}
+                                        className="flex-1 px-2 py-1 text-[8px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-md transition-colors"
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        onClick={async () => {
+                                          setDeletingUserId(userProfile.id);
+                                          try {
+                                            await onDeleteUser(userProfile.id);
+                                          } finally {
+                                            setDeletingUserId(null);
+                                            setShowDeleteConfirm(null);
+                                          }
+                                        }}
+                                        disabled={deletingUserId === userProfile.id}
+                                        className="flex-1 px-2 py-1 text-[8px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-700 rounded-md transition-colors flex items-center justify-center gap-1"
+                                      >
+                                        {deletingUserId === userProfile.id ? <span className="animate-spin size-2 border border-white border-t-transparent rounded-full" /> : null}
+                                        Excluir
+                                      </button>
+                                    </div>
+                                  </motion.div>
+                                )}
+                               </AnimatePresence>
+
+                               <button
+                                 onClick={() => setShowDeleteConfirm(userProfile.id)}
+                                 disabled={deletingUserId === userProfile.id}
+                                 className={`size-9 flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 rounded-lg transition-all ${deletingUserId === userProfile.id ? 'opacity-50 cursor-wait' : ''}`}
+                                 title="Apagar Conta Permanentemente"
+                               >
+                                 <ShieldX size={14} />
+                               </button>
+                             </div>
+                          )}
+                        </div>
+                      </td>
                         </tr>
                       );
                     })}
@@ -610,7 +721,14 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
                         <ShieldCheck size={10} /> Perfil {selectedUserInfo.profile?.status === 'Autorizado' ? 'Ativo' : selectedUserInfo.profile?.status || 'Pendente'}
                       </div>
 
-                      <h2 className="text-3xl font-black text-emerald-900 dark:text-brand-green uppercase tracking-tight mb-1 leading-tight">{selectedUserInfo.name}</h2>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h2 className="text-3xl font-black text-emerald-900 dark:text-brand-green uppercase tracking-tight leading-tight">{selectedUserInfo.name}</h2>
+                        {selectedUserInfo.profile?.role === "admin" && (
+                          <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 shrink-0 mt-1">
+                            <ShieldCheck size={12} /> Admin
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-lab-cyan font-black uppercase tracking-[0.2em] mb-6 flex items-center gap-1.5">
                         <LayoutGrid size={12} /> {selectedUserInfo.sector}
                       </p>
@@ -784,7 +902,7 @@ export default function AdminPanel({ records, profiles, onUpdateStatus, onViewRe
                 <div className="space-y-6">
                   <div className="bg-black/20 dark:bg-black/40 p-6 rounded-2xl border border-emerald-800/50 flex items-center gap-6">
                     <div className="flex-1">
-                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Setor / Custodiante</p>
+                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Setor</p>
                       <p className="text-xs font-black text-white uppercase">{decisionModal.record.unidadeSetor}</p>
                       <p className="text-[10px] font-bold text-emerald-100/70 mt-0.5">{decisionModal.record.responsavelPreenchimento}</p>
                     </div>

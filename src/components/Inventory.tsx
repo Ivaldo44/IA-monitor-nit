@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Search, Filter, Eye, Edit, Trash2, FileOutput, ArrowUpDown, AlertCircle, CheckCircle2, AlertTriangle, XCircle, Download, ClipboardList, PlusCircle, Database, FileSpreadsheet } from "lucide-react";
 import { IARecord, StatusUso, Criticidade, ClassificacaoRisco, StatusAuditoria } from "../types";
 import ExcelJS from "exceljs";
@@ -28,6 +29,7 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
   const [filterDadosSensiveis, setFilterDadosSensiveis] = useState("");
   const [sortField, setSortField] = useState<keyof IARecord | "">("");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Get unique sectors for filter
   const sectors = useMemo(() => {
@@ -104,7 +106,7 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
       { header: "ID", key: "id", width: 18 },
       { header: "NOME DA FERRAMENTA", key: "nome", width: 35 },
       { header: "FORNECEDOR", key: "fornecedor", width: 25 },
-      { header: "SETOR RESPONSÁVEL", key: "setor", width: 25 },
+      { header: "SETOR", key: "setor", width: 25 },
       { header: "STATUS DE USO", key: "status", width: 22 },
       { header: "CLASSIFICAÇÃO RISCO", key: "risco", width: 25 },
       { header: "DADOS SENSÍVEIS", key: "dados_sensiveis", width: 18 },
@@ -261,7 +263,7 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { label: "Setor Responsável", value: filterSetor, onChange: setFilterSetor, options: sectors },
+            { label: "Setor", value: filterSetor, onChange: setFilterSetor, options: sectors },
             { label: "Status de Uso", value: filterStatus, onChange: setFilterStatus, options: Object.values(StatusUso) },
             { label: "Auditoria Admin", value: filterApproval, onChange: setFilterApproval, options: Object.values(StatusAuditoria) },
             { label: "Classificacao de Risco", value: filterRisco, onChange: setFilterRisco, options: Object.values(ClassificacaoRisco) },
@@ -295,19 +297,19 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
           <table className="w-full text-left border-collapse">
             <thead className="bg-brand-green/5 dark:bg-brand-green/10 text-xs uppercase text-[var(--text-muted)] border-b border-[var(--border-lab)]">
               <tr>
-                <th className="px-8 py-6 font-bold tracking-tight cursor-pointer hover:bg-black/5 dark:hover:bg-white/[0.05] transition-all" onClick={() => handleSort("id")}>
+                <th className="pl-8 pr-4 py-6 font-bold tracking-tight cursor-pointer hover:bg-black/5 dark:hover:bg-white/[0.05] transition-all" onClick={() => handleSort("id")}>
                   <div className="flex items-center gap-2 group">ID <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
                 </th>
-                <th className="px-8 py-6 font-bold tracking-tight cursor-pointer hover:bg-black/5 dark:hover:bg-white/[0.05] transition-all" onClick={() => handleSort("nomeFerramenta")}>
-                  <div className="flex items-center gap-2 group">Nome da IA <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
-                </th>
-                <th className="px-8 py-6 font-bold tracking-tight cursor-pointer hover:bg-black/5 dark:hover:bg-white/[0.05] transition-all" onClick={() => handleSort("unidadeSetor")}>
-                  <div className="flex items-center gap-2 group">Setor Responsável <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
-                </th>
-                <th className="px-8 py-6 font-bold tracking-tight">Risco</th>
-                <th className="px-8 py-6 font-bold tracking-tight">Status Uso</th>
-                <th className="px-8 py-6 font-bold tracking-tight">Auditoria</th>
-                <th className="px-8 py-6 font-bold tracking-tight text-right">Ações</th>
+                  <th className="px-4 py-6 font-bold tracking-tight cursor-pointer hover:bg-black/5 dark:hover:bg-white/[0.05] transition-all min-w-[150px]" onClick={() => handleSort("nomeFerramenta")}>
+                    <div className="flex items-center gap-2 group">Nome da IA <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
+                  </th>
+                  <th className="px-4 py-6 font-bold tracking-tight cursor-pointer hover:bg-black/5 dark:hover:bg-white/[0.05] transition-all min-w-[120px]" onClick={() => handleSort("unidadeSetor")}>
+                    <div className="flex items-center gap-2 group">Setor <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
+                  </th>
+                  <th className="px-4 py-6 font-bold tracking-tight min-w-[110px]">Risco</th>
+                  <th className="px-4 py-6 font-bold tracking-tight min-w-[140px]">Status Uso</th>
+                  <th className="px-4 py-6 font-bold tracking-tight min-w-[140px]">Auditoria</th>
+                <th className="pl-4 pr-8 py-6 font-bold tracking-tight text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="text-sm">
@@ -316,35 +318,34 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                   key={record.id} 
                   className={`border-b border-[var(--border-lab)] hover:bg-black/5 dark:hover:bg-white/[0.03] transition-all group duration-300 cursor-default`}
                 >
-                  <td className="px-8 py-6 whitespace-nowrap min-w-[180px]">
+                  <td className="pl-8 pr-4 py-6 whitespace-nowrap min-w-[120px]">
                     <span className="font-mono text-[10px] text-emerald-800 dark:text-brand-green bg-brand-green/20 px-3 py-1.5 rounded-lg group-hover:bg-brand-green/30 transition-all border border-brand-green/20 uppercase tracking-tight inline-block">{record.id}</span>
                   </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-[var(--text-bright)] group-hover:text-brand-green transition-colors uppercase tracking-tight">{record.nomeFerramenta}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                         <div className="size-1.5 rounded-full bg-lab-cyan"></div>
-                         <span className="text-[10px] font-black text-lab-cyan uppercase tracking-widest leading-none">{record.unidadeSetor}</span>
-                      </div>
-                    </div>
+                  <td className="px-4 py-6">
+                    <span className="font-bold text-[var(--text-bright)] group-hover:text-brand-green transition-colors uppercase tracking-tight">{record.nomeFerramenta}</span>
                   </td>
-                  <td className="px-8 py-6">
-                     <span className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest border transition-all ${
-                        record.criticidade?.includes("ALTA") ? "bg-lab-red/10 text-lab-red border-lab-red/20" : 
-                        record.criticidade?.includes("MEDIA") ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20" : 
+                  <td className="px-4 py-6">
+                    <span className="px-3 py-1.5 bg-lab-cyan/10 border border-lab-cyan/20 rounded-lg text-[10px] font-black text-lab-cyan uppercase tracking-widest leading-none whitespace-nowrap shadow-sm">
+                      {record.unidadeSetor}
+                    </span>
+                  </td>
+                  <td className="px-4 py-6">
+                     <span className={`text-[9px] px-3 py-1.5 rounded-full font-black uppercase tracking-widest border transition-all whitespace-nowrap ${
+                        record.classificacaoRiscoManual === ClassificacaoRisco.CRITICO || record.classificacaoRiscoManual === ClassificacaoRisco.ALTO ? "bg-lab-red/10 text-lab-red border-lab-red/20" : 
+                        record.classificacaoRiscoManual === ClassificacaoRisco.MEDIO ? "bg-brand-orange/10 text-brand-orange border-brand-orange/20" : 
                         "bg-brand-green/10 text-brand-green border-brand-green/20"
                      }`}>
-                       {record.criticidade ? record.criticidade.split(":")[0] : "N/A"}
+                       {record.classificacaoRiscoManual || "BAIXO RISCO"}
                      </span>
                   </td>
-                  <td className="px-8 py-6">
+                  <td className="px-4 py-6 whitespace-nowrap">
                      <div className="flex items-center gap-2">
                        <div className={`size-1.5 rounded-full ${record.statusUso === StatusUso.APROVADO ? "bg-brand-green" : "bg-brand-orange"}`}></div>
                        <span className="text-[11px] font-bold tracking-tight text-[var(--text-main)] uppercase leading-none">{record.statusUso}</span>
                      </div>
                   </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col gap-2">
+                  <td className="px-4 py-6">
+                    <div className="flex items-center gap-3 whitespace-nowrap">
                        <span className={`text-[9px] px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full font-black uppercase tracking-widest border w-fit ${
                           record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-green-500/10 text-green-500 border-green-500/20" :
                           record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-red-500/10 text-red-500 border-red-500/20" :
@@ -352,73 +353,116 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                        }`}>
                          {record.statusAuditoria || StatusAuditoria.PENDENTE}
                        </span>
+
+                       {isAdmin && (!record.statusAuditoria || record.statusAuditoria === StatusAuditoria.PENDENTE) && (
+                         <div className="flex items-center gap-1.5">
+                           <button 
+                             onClick={(e) => { 
+                               e.preventDefault();
+                               e.stopPropagation(); 
+                               onEdit({ ...record, statusAuditoria: StatusAuditoria.APROVADO }); 
+                             }} 
+                             className="size-7 flex items-center justify-center bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white rounded-lg transition-all border border-green-500/20"
+                             title="Aprovar"
+                           >
+                             <CheckCircle2 size={14} />
+                           </button>
+                           <button 
+                             onClick={(e) => { 
+                               e.preventDefault();
+                               e.stopPropagation(); 
+                               onEdit({ ...record, statusAuditoria: StatusAuditoria.NEGADO }); 
+                             }} 
+                             className="size-7 flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all border border-red-500/20"
+                             title="Negar"
+                           >
+                             <XCircle size={14} />
+                           </button>
+                         </div>
+                       )}
                     </div>
                   </td>
-                    <td className="px-8 py-6 text-right">
-                      <div className="flex items-center justify-end gap-3 transition-all">
-                        {isAdmin && record.statusAuditoria === StatusAuditoria.PENDENTE && (
-                          <>
-                            <button 
-                              onClick={(e) => { 
-                                e.preventDefault();
-                                e.stopPropagation(); 
-                                onEdit({ ...record, statusAuditoria: StatusAuditoria.APROVADO }); 
-                                setTimeout(() => onRefresh(), 500);
-                              }} 
-                              title="Aprovar Auditoria"
-                              className="flex items-center justify-center size-10 bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white rounded-xl transition-all active:scale-95 border border-green-500/20"
+                  <td className="pl-4 pr-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2 transition-all">
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault();
+                          e.stopPropagation(); 
+                          onView(record); 
+                        }} 
+                        title="Visualizar"
+                        className="flex items-center justify-center size-9 glass hover:text-lab-cyan hover:border-lab-cyan/50 rounded-xl transition-all active:scale-95 bg-white/5 dark:bg-white/10"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button 
+                        onClick={(e) => { 
+                          e.preventDefault();
+                          e.stopPropagation(); 
+                          onEdit(record); 
+                        }} 
+                        title="Editar"
+                        className="flex items-center justify-center size-9 glass hover:text-brand-green hover:border-brand-green/50 rounded-xl transition-all active:scale-95 bg-white/5 dark:bg-white/10"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      
+                      <div className="relative">
+                        <AnimatePresence>
+                          {deleteConfirmId === record.id && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 bottom-full mb-2 flex items-center gap-1 bg-white dark:bg-slate-900 border border-lab-red/50 rounded-xl shadow-xl p-1 z-50"
                             >
-                              <CheckCircle2 size={18} />
-                            </button>
-                            <button 
-                              onClick={(e) => { 
-                                e.preventDefault();
-                                e.stopPropagation(); 
-                                onEdit({ ...record, statusAuditoria: StatusAuditoria.NEGADO }); 
-                                setTimeout(() => onRefresh(), 500);
-                              }} 
-                              title="Negar Auditoria"
-                              className="flex items-center justify-center size-10 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all active:scale-95 border border-red-500/20"
-                            >
-                              <XCircle size={18} />
-                            </button>
-                          </>
-                        )}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDeleteConfirmId(null);
+                                }}
+                                className="px-2 py-1 text-[8px] font-black uppercase text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                Não
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onDelete(record.id);
+                                  setDeleteConfirmId(null);
+                                }}
+                                className="px-2 py-1 text-[8px] font-black uppercase bg-red-500 text-white hover:bg-red-600 rounded-lg transition-colors"
+                              >
+                                Sim
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        
                         <button 
                           onClick={(e) => { 
                             e.preventDefault();
                             e.stopPropagation(); 
-                            onView(record); 
-                          }} 
-                          title="Visualizar"
-                          className="flex items-center justify-center size-10 glass hover:text-lab-cyan hover:border-lab-cyan/50 rounded-xl transition-all active:scale-95 bg-white/5 dark:bg-white/10"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <button 
-                          onClick={(e) => { 
-                            e.preventDefault();
-                            e.stopPropagation(); 
-                            onEdit(record); 
-                          }} 
-                          title="Editar"
-                          className="flex items-center justify-center size-10 glass hover:text-brand-green hover:border-brand-green/50 rounded-xl transition-all active:scale-95 bg-white/5 dark:bg-white/10"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button 
-                          onClick={(e) => { 
-                            e.preventDefault();
-                            e.stopPropagation(); 
-                            onDelete(record.id); 
+                            if (deleteConfirmId === record.id) {
+                                setDeleteConfirmId(null);
+                            } else {
+                                setDeleteConfirmId(record.id);
+                            }
                           }} 
                           title="Excluir"
-                          className="flex items-center justify-center size-10 glass border-lab-red/30 text-lab-red hover:bg-lab-red/10 rounded-xl transition-all active:scale-95 shadow-sm"
+                          className={`flex items-center justify-center size-9 transition-all active:scale-95 shadow-sm rounded-xl ${
+                            deleteConfirmId === record.id 
+                            ? "bg-lab-red text-white scale-110" 
+                            : "glass border-lab-red/30 text-lab-red hover:bg-lab-red/10"
+                          }`}
                         >
-                          <Trash2 size={18} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
-                    </td>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filteredRecords.length === 0 && (
