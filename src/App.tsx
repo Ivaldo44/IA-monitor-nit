@@ -234,7 +234,14 @@ export default function App() {
         body: JSON.stringify({ userId, newRole })
       });
 
-      const result = await response.json();
+      let result;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(`Erro do servidor (${response.status}): O servidor não retornou JSON. Verifique se as rotas de API estão configuradas.`);
+      }
 
       if (!response.ok) {
         throw new Error(result.error || "Falha na comunicação com o servidor");
@@ -270,8 +277,16 @@ export default function App() {
         body: JSON.stringify({ userId })
       });
 
+      let result;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        result = await response.json();
+      } else {
+        await response.text(); // consume body anyway
+        throw new Error(`Erro do servidor (${response.status}). Verifique se as rotas de API do backend estão ativas no ambiente de produção.`);
+      }
+
       if (!response.ok) {
-        const result = await response.json();
         throw new Error(result.error || "Falha ao apagar usuário");
       }
 

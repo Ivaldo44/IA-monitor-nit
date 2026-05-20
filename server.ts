@@ -39,7 +39,6 @@ app.post("/api/admin/update-role", async (req, res) => {
   }
 
   try {
-    // 1. Verify the requester's identity and if they are an admin
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
@@ -47,7 +46,6 @@ app.post("/api/admin/update-role", async (req, res) => {
       return res.status(401).json({ error: "Invalid token" });
     }
 
-    // 2. Check if the requester is an admin in the profiles table
     const { data: requesterProfile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
@@ -58,12 +56,9 @@ app.post("/api/admin/update-role", async (req, res) => {
       return res.status(403).json({ error: "Forbidden: You are not an admin" });
     }
 
-    // 3. Perform the update using the ADMIN client (bypasses RLS)
     if (!supabaseAdmin) {
       return res.status(500).json({ error: "Server misconfigured: Service Role Key missing" });
     }
-
-    console.log(`[Admin] Updating user ${userId} to role ${newRole}`);
 
     const { data, error: updateError } = await supabaseAdmin
       .from("profiles")
@@ -73,13 +68,11 @@ app.post("/api/admin/update-role", async (req, res) => {
       .single();
 
     if (updateError) {
-      console.error("Supabase Admin Update Error:", updateError);
       return res.status(500).json({ error: updateError.message });
     }
 
     return res.json({ success: true, profile: data });
   } catch (err) {
-    console.error("Critical error in update-role:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -98,24 +91,19 @@ app.post("/api/admin/delete-user", async (req, res) => {
 
       if (authError || !user) return res.status(401).json({ error: "Invalid token" });
 
-      // Verificar se quem solicita é admin
       const { data: requester } = await supabase.from("profiles").select("role").eq("id", user.id).single();
       if (requester?.role !== "admin") return res.status(403).json({ error: "Forbidden" });
 
-      console.log(`[Admin] Permanently deleting user ${userId}`);
-
-      // 1. Limpar mensagens vinculadas ao usuário
+      // 1. Limpar mensagens vinculadas
       await supabaseAdmin.from("messages").delete().eq("sender_id", userId);
       await supabaseAdmin.from("messages").delete().eq("recipient_id", userId);
 
-      // 2. Limpar referências em ia_records
+      // 2. Limpar referências
       await supabaseAdmin.from("ia_records").update({ authorized_by: null }).eq("authorized_by", userId);
       await supabaseAdmin.from("ia_records").update({ owner_id: null }).eq("owner_id", userId);
-
-      // 3. Limpar referências em outros perfis
       await supabaseAdmin.from("profiles").update({ authorized_by: null }).eq("authorized_by", userId);
 
-      // 4. Limpar Storage (Opcional - tenta remover referências em storage.objects se o admin puder)
+      // 3. Storage
       try {
         await supabaseAdmin.rpc('delete_user_storage_objects', { user_id: userId });
       } catch (e) {
@@ -123,32 +111,30 @@ app.post("/api/admin/delete-user", async (req, res) => {
         await supabaseAdmin.from('storage.objects').delete().eq('owner', userId).catch(() => {});
       }
 
-      // 5. Deletar o perfil do usuário
+      // 4. Deletar perfil
       const { error: profileDeleteError } = await supabaseAdmin.from("profiles").delete().eq("id", userId);
       if (profileDeleteError) {
-        console.error("Profile Delete Error:", profileDeleteError);
         return res.status(500).json({ error: `Erro ao apagar perfil: ${profileDeleteError.message}` });
       }
 
-      // 6. Deletar do Auth (Supabase Auth)
+      // 5. Deletar do Auth
       const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (authDeleteError) {
-         console.error("Auth Delete Error:", authDeleteError);
          return res.status(500).json({ 
-           error: `Erro ao apagar conta no Auth: ${authDeleteError.message}. Verifique se existem registros vinculados a este usuário em outras tabelas.`,
-           details: authDeleteError
+           error: `Erro ao apagar conta no Auth: ${authDeleteError.message}`
          });
       }
 
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("Critical error during user deletion flow:", err);
       return res.status(500).json({ error: err.message });
     }
 });
 
+// Export for serverless
+export { app };
+
 async function startServer() {
-  // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -168,4 +154,7 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only start the server if this file is run directly (not as a function)
+if (process.env.NETLIFY !== "true" && process.env.RENDER !== "true") {
+  startServer();
+}
