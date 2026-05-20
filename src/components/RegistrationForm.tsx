@@ -455,7 +455,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     value={formData.etapaProcesso}
                     onChange={(e) => updateField("etapaProcesso", e.target.value)}
                   >
-                    {Object.values(EtapaProcesso).map(e => <option key={e} value={e}>{e}</option>)}
+                    {Object.values(EtapaProcesso).map(e => <option key={e} value={e} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{e}</option>)}
                   </select>
                 </InputGroup>
                 <TextArea 
@@ -614,7 +614,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <InputGroup label="Risco Residual">
                       <select className={sharedInputClass} value={formData.riscoResidual} onChange={(e) => updateField("riscoResidual", e.target.value)}>
-                        {Object.values(RiscoResidual).map(r => <option key={r} value={r}>{r}</option>)}
+                        {Object.values(RiscoResidual).map(r => <option key={r} value={r} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{r}</option>)}
                       </select>
                    </InputGroup>
                    <InputGroup label="Responsável pelo risco">
@@ -695,20 +695,20 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <InputGroup label="Criticidade" required>
                     <select className={sharedInputClass} value={formData.criticidade} onChange={(e) => updateField("criticidade", e.target.value)}>
-                      <option value="">Selecione...</option>
-                      {Object.values(Criticidade).map(c => <option key={c} value={c}>{c}</option>)}
+                      <option value="" className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">Selecione...</option>
+                      {Object.values(Criticidade).map(c => <option key={c} value={c} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{c}</option>)}
                     </select>
                   </InputGroup>
                   <InputGroup label="Natureza do Uso" required>
                     <select className={sharedInputClass} value={formData.naturezaUso} onChange={(e) => updateField("naturezaUso", e.target.value)}>
-                      <option value="">Selecione...</option>
-                      {Object.values(NaturezaUso).map(n => <option key={n} value={n}>{n}</option>)}
+                      <option value="" className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">Selecione...</option>
+                      {Object.values(NaturezaUso).map(n => <option key={n} value={n} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{n}</option>)}
                     </select>
                   </InputGroup>
                   <InputGroup label="Grau de Autonomia" required>
                     <select className={sharedInputClass} value={formData.grauAutonomia} onChange={(e) => updateField("grauAutonomia", e.target.value)}>
-                      <option value="">Selecione...</option>
-                      {Object.values(GrauAutonomia).map(g => <option key={g} value={g}>{g}</option>)}
+                      <option value="" className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">Selecione...</option>
+                      {Object.values(GrauAutonomia).map(g => <option key={g} value={g} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{g}</option>)}
                     </select>
                   </InputGroup>
                 </div>
@@ -738,7 +738,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                         value={formData.classificacaoRiscoManual} 
                         onChange={(e) => updateField("classificacaoRiscoManual", e.target.value)}
                       >
-                        {Object.values(ClassificacaoRisco).map(cr => <option key={cr} value={cr} className="bg-[var(--bg-sidebar)]">{cr}</option>)}
+                        {Object.values(ClassificacaoRisco).map(cr => <option key={cr} value={cr} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{cr}</option>)}
                       </select>
                     </InputGroup>
                     <TextArea 
@@ -763,15 +763,15 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   required 
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InputGroup label="Status do Uso" required>
+                  <InputGroup label="Status" required>
                     <select className={sharedInputClass} value={formData.statusUso} onChange={(e) => updateField("statusUso", e.target.value)}>
-                      {Object.values(StatusUso).map(s => <option key={s} value={s}>{s}</option>)}
+                      {Object.values(StatusUso).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
                     </select>
                   </InputGroup>
                   {isAdmin && (
                     <InputGroup label="Auditoria / Aprovação Admin" required>
                       <select className={`${sharedInputClass} !border-brand-green/30 !bg-brand-green/5 text-brand-green`} value={formData.statusAuditoria} onChange={(e) => updateField("statusAuditoria", e.target.value)}>
-                        {Object.values(StatusAuditoria).map(s => <option key={s} value={s}>{s}</option>)}
+                        {Object.values(StatusAuditoria).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
                       </select>
                     </InputGroup>
                   )}

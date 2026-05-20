@@ -25,7 +25,6 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
   const [filterSetor, setFilterSetor] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterRisco, setFilterRisco] = useState("");
-  const [filterApproval, setFilterApproval] = useState("");
   const [filterDadosSensiveis, setFilterDadosSensiveis] = useState("");
   const [sortField, setSortField] = useState<keyof IARecord | "">("");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -48,9 +47,8 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
       const matchesStatus = !filterStatus || r.statusUso === filterStatus;
       const matchesRisco = !filterRisco || r.classificacaoRiscoManual === filterRisco;
       const matchesSensiveis = !filterDadosSensiveis || r.usaDadosSensiveis === filterDadosSensiveis;
-      const matchesApproval = !filterApproval || r.statusAuditoria === filterApproval;
 
-      return matchesSearch && matchesSetor && matchesStatus && matchesRisco && matchesSensiveis && matchesApproval;
+      return matchesSearch && matchesSetor && matchesStatus && matchesRisco && matchesSensiveis;
     }).sort((a, b) => {
       if (!sortField) return 0;
       const valA = a[sortField];
@@ -107,7 +105,7 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
       { header: "NOME DA FERRAMENTA", key: "nome", width: 35 },
       { header: "FORNECEDOR", key: "fornecedor", width: 25 },
       { header: "SETOR", key: "setor", width: 25 },
-      { header: "STATUS DE USO", key: "status", width: 22 },
+      { header: "STATUS", key: "status", width: 22 },
       { header: "CLASSIFICAÇÃO RISCO", key: "risco", width: 25 },
       { header: "DADOS SENSÍVEIS", key: "dados_sensiveis", width: 18 },
       { header: "DATA DE REGISTRO", key: "data", width: 20 },
@@ -264,8 +262,7 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { label: "Setor", value: filterSetor, onChange: setFilterSetor, options: sectors },
-            { label: "Status de Uso", value: filterStatus, onChange: setFilterStatus, options: Object.values(StatusUso) },
-            { label: "Auditoria Admin", value: filterApproval, onChange: setFilterApproval, options: Object.values(StatusAuditoria) },
+            { label: "Status", value: filterStatus, onChange: setFilterStatus, options: Object.values(StatusUso) },
             { label: "Classificacao de Risco", value: filterRisco, onChange: setFilterRisco, options: Object.values(ClassificacaoRisco) },
             { label: "Dados Sensíveis", value: filterDadosSensiveis, onChange: setFilterDadosSensiveis, options: ["Sim", "Não"], isSensitive: true }
           ].map((filter, i) => (
@@ -279,8 +276,8 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                   value={filter.value}
                   onChange={(e) => filter.onChange(e.target.value)}
                 >
-                  <option value="" className="bg-white dark:bg-slate-900 text-slate-900">Todos os Registros</option>
-                  {filter.options.map(opt => <option key={opt} value={opt} className="bg-white dark:bg-slate-900 text-slate-900">{opt}</option>)}
+                  <option value="" className="bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white font-black">Todos os Registros</option>
+                  {filter.options.map(opt => <option key={opt} value={opt} className="bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white font-black">{opt}</option>)}
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-400 transition-transform group-hover:translate-y-[-40%]">
                   <ArrowUpDown size={12} className="group-hover:text-brand-green transition-colors" />
@@ -307,8 +304,7 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                     <div className="flex items-center gap-2 group">Setor <ArrowUpDown size={12} className="opacity-30 group-hover:opacity-100 transition-opacity" /></div>
                   </th>
                   <th className="px-4 py-6 font-bold tracking-tight min-w-[110px]">Risco</th>
-                  <th className="px-4 py-6 font-bold tracking-tight min-w-[140px]">Status Uso</th>
-                  <th className="px-4 py-6 font-bold tracking-tight min-w-[140px]">Auditoria</th>
+                  <th className="px-4 py-6 font-bold tracking-tight min-w-[140px]">Status</th>
                 <th className="pl-4 pr-8 py-6 font-bold tracking-tight text-right">Ações</th>
               </tr>
             </thead>
@@ -343,44 +339,6 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
                        <div className={`size-1.5 rounded-full ${record.statusUso === StatusUso.APROVADO ? "bg-brand-green" : "bg-brand-orange"}`}></div>
                        <span className="text-[11px] font-bold tracking-tight text-[var(--text-main)] uppercase leading-none">{record.statusUso}</span>
                      </div>
-                  </td>
-                  <td className="px-4 py-6">
-                    <div className="flex items-center gap-3 whitespace-nowrap">
-                       <span className={`text-[9px] px-3 py-1 bg-black/5 dark:bg-white/5 rounded-full font-black uppercase tracking-widest border w-fit ${
-                          record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-green-500/10 text-green-500 border-green-500/20" :
-                          record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-red-500/10 text-red-500 border-red-500/20" :
-                          "bg-yellow-500/10 text-yellow-500 border-yellow-500/20 shadow-[0_0_10px_rgba(234,179,8,0.1)]"
-                       }`}>
-                         {record.statusAuditoria || StatusAuditoria.PENDENTE}
-                       </span>
-
-                       {isAdmin && (!record.statusAuditoria || record.statusAuditoria === StatusAuditoria.PENDENTE) && (
-                         <div className="flex items-center gap-1.5">
-                           <button 
-                             onClick={(e) => { 
-                               e.preventDefault();
-                               e.stopPropagation(); 
-                               onEdit({ ...record, statusAuditoria: StatusAuditoria.APROVADO }); 
-                             }} 
-                             className="size-7 flex items-center justify-center bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white rounded-lg transition-all border border-green-500/20"
-                             title="Aprovar"
-                           >
-                             <CheckCircle2 size={14} />
-                           </button>
-                           <button 
-                             onClick={(e) => { 
-                               e.preventDefault();
-                               e.stopPropagation(); 
-                               onEdit({ ...record, statusAuditoria: StatusAuditoria.NEGADO }); 
-                             }} 
-                             className="size-7 flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all border border-red-500/20"
-                             title="Negar"
-                           >
-                             <XCircle size={14} />
-                           </button>
-                         </div>
-                       )}
-                    </div>
                   </td>
                   <td className="pl-4 pr-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2 transition-all">

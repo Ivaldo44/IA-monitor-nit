@@ -209,7 +209,7 @@ export default function SectorMap({ records, profiles }: SectorMapProps) {
                                 <div className="text-[10px] text-[var(--text-muted)] flex items-center gap-1.5 min-w-0">
                                    <div className="flex items-center gap-1 truncate">
                                      <User size={10} /> {r.responsavelPreenchimento}
-                                     {profiles.find(p => p.full_name === r.responsavelPreenchimento)?.role === "admin" && (
+                                     {profiles.find(p => p.full_name === r.responsavelPreenchimento)?.role?.toLowerCase().trim() === "admin" && (
                                        <span className="p-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[7px] font-black text-amber-500 uppercase tracking-tighter shrink-0 flex items-center gap-0.5 ml-1">
                                          <ShieldCheck size={7} /> ADM
                                        </span>

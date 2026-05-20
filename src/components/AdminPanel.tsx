@@ -501,7 +501,7 @@ export default function AdminPanel({
             <div className="bg-white dark:bg-white/5 rounded-[3rem] border border-emerald-200/60 dark:border-emerald-700/40 overflow-hidden shadow-xl shadow-emerald-200/5 dark:shadow-none">
                <div className="p-8 border-b border-emerald-100/30 dark:border-emerald-900/30 bg-white/50 dark:bg-black/20 flex justify-between items-center">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Custodiantes de Tecnologia</h3>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Responsáveis</h3>
                     <p className="text-[10px] text-emerald-600/60 dark:text-emerald-500/60 font-extrabold uppercase tracking-[0.2em] mt-1">Gestão de acessos e responsabilidade técnica</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -546,7 +546,7 @@ export default function AdminPanel({
                               </div>
                               <div className="flex items-center gap-2">
                                 <p className="text-base font-black text-emerald-900 dark:text-brand-green uppercase tracking-tight">{userName}</p>
-                                {userProfile?.role === "admin" && (
+                                {userProfile?.role?.toLowerCase().trim() === "admin" && (
                                   <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[8px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1 shrink-0">
                                     <ShieldCheck size={10} /> Admin
                                   </span>
@@ -607,7 +607,8 @@ export default function AdminPanel({
                                 console.log("Updating role for user:", userProfile.id, userProfile.full_name);
                                 setUpdatingUserId(userProfile.id);
                                 try {
-                                  await onUpdateUserRole(userProfile.id, userProfile.role === "admin" ? "user" : "admin");
+                                  const isUserAdmin = userProfile?.role?.toLowerCase().trim() === "admin";
+                                  await onUpdateUserRole(userProfile.id, isUserAdmin ? "user" : "admin");
                                 } finally {
                                   setUpdatingUserId(null);
                                 }
@@ -615,16 +616,16 @@ export default function AdminPanel({
                               className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
                                 !userProfile
                                 ? "bg-slate-100 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10 cursor-not-allowed"
-                                : userProfile.role === "admin" 
+                                : userProfile?.role?.toLowerCase().trim() === "admin" 
                                 ? "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500 hover:text-white" 
                                 : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green hover:text-black"
                               } ${updatingUserId === (userProfile?.id || "") ? "opacity-50 cursor-wait" : ""}`}
-                              title={!userProfile ? "Este usuário não possui conta no sistema" : userProfile.role === "admin" ? "Remover Admin" : "Tornar Admin"}
+                              title={!userProfile ? "Este usuário não possui conta no sistema" : userProfile?.role?.toLowerCase().trim() === "admin" ? "Remover Admin" : "Tornar Admin"}
                             >
                               {updatingUserId === (userProfile?.id || "") ? (
                                 <span className="animate-spin size-3 border-2 border-current border-t-transparent rounded-full" />
                               ) : null}
-                              {userProfile?.role === "admin" ? "Revogar Admin" : "Tornar Admin"}
+                              {userProfile?.role?.toLowerCase().trim() === "admin" ? "Revogar Admin" : "Tornar Admin"}
                             </button>
                           )}
                           <button 
@@ -723,7 +724,7 @@ export default function AdminPanel({
 
                       <div className="flex items-center gap-3 mb-1">
                         <h2 className="text-3xl font-black text-emerald-900 dark:text-brand-green uppercase tracking-tight leading-tight">{selectedUserInfo.name}</h2>
-                        {selectedUserInfo.profile?.role === "admin" && (
+                        {selectedUserInfo.profile?.role?.toLowerCase().trim() === "admin" && (
                           <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5 shrink-0 mt-1">
                             <ShieldCheck size={12} /> Admin
                           </span>
@@ -736,11 +737,11 @@ export default function AdminPanel({
                       <div className="space-y-1.5 border-t border-slate-100 dark:border-white/5 pt-6">
                         <div className="flex flex-col gap-1">
                           <span className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Cargo / Função</span>
-                          <span className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase">{selectedUserInfo.profile?.cargo || "Custodiante de Tecnologia"}</span>
+                          <span className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase">{selectedUserInfo.profile?.cargo || "Colaborador"}</span>
                         </div>
                         <div className="flex flex-col gap-1 mt-3">
                           <span className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Nível de Acesso</span>
-                          <span className="text-[10px] font-black text-lab-blue dark:text-lab-cyan uppercase">{selectedUserInfo.profile?.role === 'admin' ? 'Administrador' : 'Editor de Inventário'}</span>
+                          <span className="text-[10px] font-black text-lab-blue dark:text-lab-cyan uppercase">{selectedUserInfo.profile?.role?.toLowerCase().trim() === 'admin' ? 'Administrador' : 'Editor de Inventário'}</span>
                         </div>
                       </div>
                     </div>

@@ -37,17 +37,38 @@ export const getProfiles = async (): Promise<UserProfile[]> => {
 };
 
 export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?: string): Promise<IARecord[]> => {
+  let finalIsAdmin = isAdmin;
   try {
-    console.log('🔍 Buscando registros no Supabase...', { userId, isAdmin, userSector });
+    if (userId && !finalIsAdmin) {
+      try {
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        if (!profErr && prof && prof.role?.toLowerCase().trim() === 'admin') {
+          console.log('👑 Role admin verificada diretamente no banco!');
+          finalIsAdmin = true;
+        }
+      } catch (e) {
+        console.warn('Erro ao checar admin no banco em getRecords:', e);
+      }
+    }
+
+    console.log('🔍 Buscando registros no Supabase...', { userId, isAdmin: finalIsAdmin, userSector });
 
     let query = supabase
       .from('ia_records')
       .select('*');
 
-    if (!isAdmin && userId) {
+    if (!finalIsAdmin) {
       console.log('🛡️ Aplicando filtros de segurança para usuário comum');
-      if (userSector) {
-        query = query.eq('unidade_setor', userSector);
+      const sectorStr = (userSector || '').trim();
+      if (sectorStr) {
+        // Use case-insensitive LIKE (ilike) to avoid mismatches on upper/lowercase stored values
+        query = query.ilike('unidade_setor', sectorStr);
+      } else {
+        query = query.eq('unidade_setor', '---SECTOR-BLANK-NO-ACCESS---');
       }
     }
 
@@ -58,6 +79,8 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       throw error;
     }
 
+    let resultRecords: IARecord[] = [];
+
     if (data && data.length > 0) {
       console.log(`✅ ${data.length} registros encontrados no Supabase.`);
       const mappedData = data.map(item => {
@@ -66,6 +89,8 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
         if (item.data) {
           record = item.data as IARecord;
           record.id = item.id; // Sync ID
+          // Ensure unity sector is populated from raw database column fallback
+          record.unidadeSetor = item.unidade_setor || record.unidadeSetor || (record as any).unidade_setor || '';
         } else {
           record = {
             id: item.id,
@@ -92,42 +117,76 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       });
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedData));
-      return mappedData;
-    }
+      resultRecords = mappedData;
+    } else {
+      console.log('ℹ️ Supabase retornou 0 registros. Verificando fallback...');
 
-    console.log('ℹ️ Supabase retornou 0 registros. Verificando fallback...');
-
-    const localDataStr = localStorage.getItem(STORAGE_KEY);
-    if (localDataStr) {
-      const localRecords: IARecord[] = JSON.parse(localDataStr);
-      if (localRecords.length > 0) {
-        console.log('📦 Carregando do LocalStorage:', localRecords.length);
-        
-        return localRecords;
+      const localDataStr = localStorage.getItem(STORAGE_KEY);
+      if (localDataStr) {
+        const localRecords: IARecord[] = JSON.parse(localDataStr);
+        if (localRecords.length > 0) {
+          console.log('📦 Carregando do LocalStorage:', localRecords.length);
+          resultRecords = localRecords;
+        } else {
+          resultRecords = getExampleRecords();
+        }
+      } else {
+        resultRecords = getExampleRecords();
       }
     }
 
-    console.log('💡 Carregando registros padrão/exemplo.');
-    const examples = getExampleRecords();
-    
-    return examples;
+    if (!finalIsAdmin) {
+      const activeSector = (userSector || '').trim().toLowerCase();
+      console.log(`🛡️ Filtrando registros para o setor do usuário: ${activeSector}`);
+      resultRecords = resultRecords.filter(r => {
+        const rSector = (r.unidadeSetor || (r as any).unidade_setor || '').trim().toLowerCase();
+        return rSector === activeSector;
+      });
+    }
+
+    return resultRecords;
   } catch (error) {
     console.error('💥 Erro crítico no getRecords:', error);
+    let fallbackRecords: IARecord[] = [];
     const data = localStorage.getItem(STORAGE_KEY);
     try {
-      if (data) return JSON.parse(data);
-    } catch (e) {}
-    return getExampleRecords();
+      if (data) fallbackRecords = JSON.parse(data);
+      else fallbackRecords = getExampleRecords();
+    } catch (e) {
+      fallbackRecords = getExampleRecords();
+    }
+    
+    if (!finalIsAdmin) {
+      const activeSector = (userSector || '').trim().toLowerCase();
+      fallbackRecords = fallbackRecords.filter(r => 
+        r.unidadeSetor && r.unidadeSetor.trim().toLowerCase() === activeSector
+      );
+    }
+    return fallbackRecords;
   }
 };
 
 export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boolean) => {
+  let finalIsAdmin = isAdmin;
   try {
-    console.log('☁️ Tentando salvar registro no Supabase:', record.id);
+    if (userId && !finalIsAdmin) {
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        if (prof?.role?.toLowerCase().trim() === 'admin') {
+          finalIsAdmin = true;
+        }
+      } catch (e) {}
+    }
+
+    console.log('☁️ Tentando salvar registro no Supabase:', record.id, { isAdmin: finalIsAdmin });
     
     // Determinando o status final: 
     // Pendente, Aprovado ou Negado
-    const finalStatus = record.statusAuditoria || (isAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
+    const finalStatus = record.statusAuditoria || (finalIsAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
     const recordWithStatus = { ...record, statusAuditoria: finalStatus };
 
     const { error } = await supabase
@@ -156,7 +215,7 @@ export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boo
     const localData = localStorage.getItem(STORAGE_KEY);
     const records: IARecord[] = localData ? JSON.parse(localData) : [];
     const index = records.findIndex(r => r.id === record.id);
-    const finalStatus = record.statusAuditoria || (isAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
+    const finalStatus = record.statusAuditoria || (finalIsAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
     const recordWithStatus = { ...record, statusAuditoria: finalStatus };
     
     if (index === -1) records.push(recordWithStatus);

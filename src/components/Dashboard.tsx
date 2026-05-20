@@ -67,7 +67,7 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
       { header: "ID", key: "id", width: 18 },
       { header: "NOME DA FERRAMENTA", key: "nome", width: 35 },
       { header: "SETOR", key: "setor", width: 25 },
-      { header: "STATUS DE USO", key: "status", width: 22 },
+      { header: "STATUS", key: "status", width: 22 },
       { header: "CLASSIFICAÇÃO RISCO", key: "risco", width: 25 },
       { header: "DATA DE REGISTRO", key: "data", width: 20 },
     ];

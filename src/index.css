@@ -90,3 +90,16 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 128, 128, 0.5);
 }
+
+/* Force high contrast and brand styling for select options across all browsers and modes */
+select option {
+  background-color: #022c22 !important; /* Emerald 950 (Dark Cedar Green) */
+  color: #ffffff !important;            /* Pure white contrast */
+  font-weight: 600 !important;
+}
+
+.dark select option,
+.dark option {
+  background-color: #022c22 !important; /* Explicitly dark green inside dark selector context */
+  color: #f8fafc !important;            /* Bright slate text */
+}

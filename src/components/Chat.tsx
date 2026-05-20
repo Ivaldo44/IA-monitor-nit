@@ -95,6 +95,17 @@ export const Chat: React.FC = () => {
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (activeTab === "private" && selectedRecipient) {
+      localStorage.setItem("active_chat_with", selectedRecipient.id);
+    } else {
+      localStorage.removeItem("active_chat_with");
+    }
+    return () => {
+      localStorage.removeItem("active_chat_with");
+    };
+  }, [selectedRecipient, activeTab]);
+
   const isOnline = (lastSeen?: string) => {
     if (!lastSeen) return false;
     const lastSeenDate = new Date(lastSeen);
@@ -206,18 +217,27 @@ export const Chat: React.FC = () => {
   };
 
   const fetchUsers = async () => {
-    let query = supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .neq("id", user?.id || "");
     
-    // Privacidade Total: Usuários comuns veem apenas membros do seu próprio setor
-    if (profile?.role !== "admin" && profile?.setor) {
-      query = query.eq("setor", profile.setor);
+    if (error) {
+      console.error("Erro ao buscar usuários do chat:", error);
     }
 
-    const { data } = await query;
-    setUsers(data || []);
+    let filtered = data || [];
+    
+    const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
+    if (!isCurrentUserAdmin) {
+      const userSector = profile?.setor?.toLowerCase().trim();
+      filtered = filtered.filter(u => {
+        const isUserAdmin = u.role?.toLowerCase().trim() === "admin";
+        const isSameSector = u.setor && userSector && u.setor.toLowerCase().trim() === userSector;
+        return isUserAdmin || isSameSector;
+      });
+    }
+    setUsers(filtered);
   };
 
   const fetchMessages = async () => {

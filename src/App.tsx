@@ -21,8 +21,91 @@ import { UserProfileView } from "./components/UserProfileView";
 import { Chat } from "./components/Chat";
 import { useAuth } from "./contexts/AuthContext";
 
+export interface NotificationToast {
+  id: string;
+  title: string;
+  message: string;
+  type: "success" | "info" | "warning" | "chat";
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+function playNotificationSound(type: "chat" | "success" | "info" | "warning") {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    if (type === "chat") {
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+      gain2.gain.setValueAtTime(0.1, ctx.currentTime + 0.1);
+      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+      osc2.start(ctx.currentTime + 0.1);
+      osc2.stop(ctx.currentTime + 0.3);
+    } else if (type === "success") {
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15); // E5
+      gain2.gain.setValueAtTime(0.1, ctx.currentTime + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.type = "sine";
+      osc3.frequency.setValueAtTime(783.99, ctx.currentTime + 0.3); // G5
+      gain3.gain.setValueAtTime(0.1, ctx.currentTime + 0.3);
+      gain3.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+      osc2.start(ctx.currentTime + 0.15);
+      osc2.stop(ctx.currentTime + 0.35);
+      osc3.start(ctx.currentTime + 0.3);
+      osc3.stop(ctx.currentTime + 0.5);
+    } else {
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, ctx.currentTime); // A4
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch (e) {
+    console.error("Erro ao reproduzir som de notificação:", e);
+  }
+}
+
 export default function App() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
+  const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
   const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin">("dashboard");
   const [records, setRecords] = useState<IARecord[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -35,6 +118,20 @@ export default function App() {
   });
 
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<NotificationToast[]>([]);
+
+  const addToast = (toast: Omit<NotificationToast, "id">) => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { ...toast, id }]);
+    playNotificationSound(toast.type);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   useEffect(() => {
     localStorage.setItem("theme", isDarkMode ? "dark" : "light");
@@ -53,13 +150,22 @@ export default function App() {
       const isOnline = await checkSupabaseStatus();
       setSupabaseStatus(isOnline ? "online" : "offline");
       
-      const isAdmin = profile?.role === "admin";
+      const isAdmin = profile?.role?.toLowerCase().trim() === "admin";
       const data = await getRecords(user?.id, isAdmin, profile?.setor);
       setRecords(data);
       
+      // Sempre buscar perfis para que o chat e outros componentes tenham os dados correspondentes
+      const usersData = await getProfiles();
       if (isAdmin) {
-        const usersData = await getProfiles();
         setProfiles(usersData);
+      } else {
+        const userSector = profile?.setor?.toLowerCase().trim();
+        const filteredUsers = usersData.filter(p => {
+          const isUserAdmin = p.role?.toLowerCase().trim() === "admin";
+          const isSameSector = p.setor && userSector && p.setor.toLowerCase().trim() === userSector;
+          return isUserAdmin || isSameSector;
+        });
+        setProfiles(filteredUsers);
       }
     } catch (error) {
       console.error("Erro ao atualizar registros:", error);
@@ -100,6 +206,146 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Refs to always keep current values inside real-time event listeners
+  const activeTabRef = React.useRef(activeTab);
+  const profileRef = React.useRef(profile);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    console.log("🔔 Iniciando escutadores em tempo real para notificações...");
+
+    // 1. Escutador de novas mensagens no chat
+    const messageChannel = supabase
+      .channel("global-chat-notifications")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        async (payload) => {
+          const msg = payload.new as any;
+          if (!msg || msg.sender_id === user.id) return;
+
+          const currentTab = activeTabRef.current;
+          let shouldNotify = false;
+
+          if (currentTab !== "chat") {
+            // Se não está no chat, notifica sobre mensagens públicas ou privadas direcionadas para si
+            if (!msg.is_private) {
+              shouldNotify = true;
+            } else if (msg.recipient_id === user.id) {
+              shouldNotify = true;
+            }
+          } else {
+            // Se está na tela do chat, notifica apenas se for mensagem privada direcionada e o remetente não for o chat ativo atual
+            if (msg.is_private && msg.recipient_id === user.id) {
+              const activeChatWith = localStorage.getItem("active_chat_with");
+              if (activeChatWith !== msg.sender_id) {
+                shouldNotify = true;
+              }
+            }
+          }
+
+          if (shouldNotify) {
+            try {
+              const { data: senderProf } = await supabase
+                .from("profiles")
+                .select("full_name")
+                .eq("id", msg.sender_id)
+                .single();
+
+              const senderName = senderProf?.full_name || "Colega";
+              addToast({
+                title: `Chat: ${senderName}`,
+                message: msg.content.length > 60 ? `${msg.content.slice(0, 60)}...` : msg.content,
+                type: "chat",
+                actionLabel: "Ver Mensagem",
+                onAction: () => {
+                  setActiveTab("chat");
+                }
+              });
+            } catch (err) {
+              console.error("Erro ao buscar remetente:", err);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Escutador de avaliações de IA de interesse
+    const recordChannel = supabase
+      .channel("global-records-notifications")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "ia_records" },
+        async (payload) => {
+          const recordRaw = payload.new as any;
+          if (!recordRaw || !recordRaw.data) return;
+
+          const updatedRec = recordRaw.data as IARecord;
+          updatedRec.id = recordRaw.id; // Garante ID correto
+
+          setRecords(prevRecords => {
+            const oldRec = prevRecords.find(r => r.id === updatedRec.id);
+            if (oldRec) {
+              const statusAuditoriaChanged = oldRec.statusAuditoria !== updatedRec.statusAuditoria;
+              const statusUsoChanged = oldRec.statusUso !== updatedRec.statusUso;
+
+              if (statusAuditoriaChanged || statusUsoChanged) {
+                const currentProfile = profileRef.current;
+                
+                // Notificar se a IA editada pertence ao mesmo setor do usuário
+                const isRelevantForMe = 
+                  updatedRec.unidadeSetor?.toLowerCase().trim() === currentProfile?.setor?.toLowerCase().trim();
+
+                const isUpdatedByMe = currentProfile?.role?.toLowerCase().trim() === "admin" && 
+                  (activeTabRef.current === "admin" || activeTabRef.current === "sectors");
+
+                if (isRelevantForMe && !isUpdatedByMe) {
+                  let text = "";
+                  if (statusAuditoriaChanged && statusUsoChanged) {
+                    text = `Auditoria: "${updatedRec.statusAuditoria}" e Uso: "${updatedRec.statusUso}".`;
+                  } else if (statusAuditoriaChanged) {
+                    text = `Auditoria atualizada para "${updatedRec.statusAuditoria}".`;
+                  } else {
+                    text = `Status de uso atualizado para "${updatedRec.statusUso}".`;
+                  }
+
+                  setTimeout(() => {
+                    addToast({
+                      title: `IA Avaliada: ${updatedRec.nomeFerramenta}`,
+                      message: text,
+                      type: updatedRec.statusAuditoria === StatusAuditoria.APROVADO ? "success" : "info",
+                      actionLabel: "Analisar",
+                      onAction: () => {
+                        setSelectedRecord(updatedRec);
+                        setActiveTab("report");
+                      }
+                    });
+                  }, 50);
+                }
+              }
+              return prevRecords.map(r => r.id === updatedRec.id ? updatedRec : r);
+            }
+            return prevRecords;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messageChannel);
+      supabase.removeChannel(recordChannel);
+    };
+  }, [user]);
+
   const handleSync = async () => {
     if (supabaseStatus !== "online") {
       alert("Supabase está offline. Verifique suas chaves de API.");
@@ -109,7 +355,7 @@ export default function App() {
     setIsSyncing(true);
     try {
       console.log("Forçando sincronização manual...");
-      const isAdmin = profile?.role === "admin";
+      const isAdmin = isCurrentUserAdmin;
       await saveRecordsToSupabase(records, user?.id, isAdmin);
       await refreshRecords();
       alert("✅ Sincronização concluída com sucesso!");
@@ -152,7 +398,7 @@ export default function App() {
 
   const handleSave = async (record: IARecord) => {
     const isNew = !records.find(r => r.id === record.id);
-    const isAdmin = profile?.role === "admin";
+    const isAdmin = isCurrentUserAdmin;
     
     try {
       if (isNew) {
@@ -173,7 +419,7 @@ export default function App() {
     const record = records.find(r => r.id === recordId);
     if (!record) return;
 
-    const isAdmin = profile?.role === "admin";
+    const isAdmin = isCurrentUserAdmin;
     const historyEntry = {
       date: new Date().toISOString(),
       user: profile?.full_name || "Admin",
@@ -181,9 +427,17 @@ export default function App() {
       message: comment || `Status de auditoria atualizado para ${status}`
     };
 
+    // Keep statusUso in sync with statusAuditoria so it updates the Status view for users
+    const newStatusUso = status === StatusAuditoria.APROVADO 
+      ? StatusUso.APROVADO 
+      : status === StatusAuditoria.NEGADO 
+      ? StatusUso.NAO_APROVADO 
+      : StatusUso.EM_AVALIACAO;
+
     const updatedRecord = { 
       ...record, 
       statusAuditoria: status,
+      statusUso: newStatusUso,
       historico: [historyEntry, ...(record.historico || [])]
     };
     
@@ -255,6 +509,9 @@ export default function App() {
       }
       
       // Full refresh to ensure consistency across all data
+      if (userId === user?.id) {
+        await refreshProfile();
+      }
       await refreshRecords();
       alert(`✅ Sucesso! O usuário agora tem acesso de ${newRole === "admin" ? "ADMINISTRADOR" : "USUÁRIO COMUM"}.`);
     } catch (error: any) {
@@ -307,7 +564,7 @@ export default function App() {
     { id: "report", label: "Relatórios", icon: FileText },
     { id: "chat", label: "Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
-  ].filter(item => !item.adminOnly || profile?.role === "admin");
+  ].filter(item => !item.adminOnly || isCurrentUserAdmin);
 
   if (authLoading) {
     return (
@@ -412,7 +669,7 @@ export default function App() {
               <div className="hidden sm:flex items-center gap-3 mr-4">
                 <div className="text-right">
                   <div className="flex items-center gap-2 justify-end">
-                    {profile?.role === "admin" && (
+                    {isCurrentUserAdmin && (
                       <span className="text-[9px] font-black bg-brand-green/20 text-brand-green px-1.5 py-0.5 rounded border border-brand-green/30">ADMIN</span>
                     )}
                     <p className="text-[11px] font-bold text-[var(--text-bright)] leading-tight">{profile?.full_name || "Usuário"}</p>
@@ -484,7 +741,7 @@ export default function App() {
               className="max-w-[90rem] mx-auto"
             >
               {activeTab === "dashboard" && (
-                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={profile?.role === "admin"} />
+                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={isCurrentUserAdmin} />
               )}
               {activeTab === "inventory" && (
                 <Inventory 
@@ -497,13 +754,13 @@ export default function App() {
                     setActiveTab("new");
                   }}
                   onRefresh={refreshRecords}
-                  isAdmin={profile?.role === "admin"}
+                  isAdmin={isCurrentUserAdmin}
                 />
               )}
-              {activeTab === "sectors" && (
+              {activeTab === "sectors" && isCurrentUserAdmin && (
                 <SectorMap records={records} profiles={profiles} />
               )}
-              {activeTab === "admin" && profile?.role === "admin" && (
+              {activeTab === "admin" && isCurrentUserAdmin && (
                 <AdminPanel 
                   records={records} 
                   profiles={profiles}
@@ -524,7 +781,7 @@ export default function App() {
                   initialData={selectedRecord} 
                   onSave={handleSave} 
                   onCancel={() => setActiveTab("inventory")} 
-                  isAdmin={profile?.role === "admin"}
+                  isAdmin={isCurrentUserAdmin}
                 />
               )}
               {activeTab === "report" && (
@@ -599,6 +856,56 @@ export default function App() {
       <AnimatePresence>
         {/* Removed redundant delete modal as it's handled by components */}
       </AnimatePresence>
+
+      {/* Toast Notification Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-[360px] pointer-events-none px-4 sm:px-0">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0, x: 50 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="pointer-events-auto bg-slate-900/90 dark:bg-emerald-950/95 backdrop-blur-md rounded-2xl border border-emerald-800/50 p-4 shadow-2xl flex gap-3 relative overflow-hidden"
+              style={{ boxShadow: "0 20px 50px rgba(0, 0, 0, 0.3)" }}
+            >
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-green to-lab-cyan" />
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-1 mb-1">
+                  <h4 className="font-bold text-white text-sm tracking-tight truncate uppercase pr-4">
+                    {toast.title}
+                  </h4>
+                  <button 
+                    onClick={() => removeToast(toast.id)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors -mr-1 -mt-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <p className="text-slate-300 dark:text-emerald-100 text-xs line-clamp-3 leading-relaxed mb-3 pr-2">
+                  {toast.message}
+                </p>
+                
+                {toast.actionLabel && toast.onAction && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        toast.onAction?.();
+                        removeToast(toast.id);
+                      }}
+                      className="text-[10px] font-black uppercase text-brand-green bg-brand-green/10 hover:bg-brand-green hover:text-black py-1 px-3 rounded-full transition-all tracking-[0.05em] border border-brand-green/20"
+                    >
+                      {toast.actionLabel}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
