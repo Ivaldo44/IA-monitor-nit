@@ -245,7 +245,7 @@ create policy "Permitir tudo público"
 
 As suas chaves já parecem estar configuradas. Se o monitor no topo do app mostrar **NUVEM: ATIVO**, a conexão está funcionando.
 
-- `VITE_SUPABASE_URL`: `https://ftzmrlxajloljvlubarx.supabase.co`
+- `VITE_SUPABASE_URL`: `https://seu-projeto.supabase.co`
 - `VITE_SUPABASE_ANON_KEY`: (A chave que você enviou no chat)
 
 ## 3. Status da Integração
