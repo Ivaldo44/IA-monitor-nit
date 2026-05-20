@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
@@ -30,7 +29,9 @@ const supabaseAdmin = supabaseServiceKey
   : null;
 
 // API Routes
-app.post("/api/admin/update-role", async (req, res) => {
+const router = express.Router();
+
+router.post("/admin/update-role", async (req, res) => {
   const { userId, newRole } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -77,7 +78,7 @@ app.post("/api/admin/update-role", async (req, res) => {
   }
 });
 
-app.post("/api/admin/delete-user", async (req, res) => {
+router.post("/admin/delete-user", async (req, res) => {
   const { userId } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -85,57 +86,62 @@ app.post("/api/admin/delete-user", async (req, res) => {
     return res.status(401).json({ error: "Unauthorized or server misconfigured" });
   }
 
+  try {
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) return res.status(401).json({ error: "Invalid token" });
+
+    const { data: requester } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (requester?.role !== "admin") return res.status(403).json({ error: "Forbidden" });
+
+    // 1. Limpar mensagens vinculadas
+    await supabaseAdmin.from("messages").delete().eq("sender_id", userId);
+    await supabaseAdmin.from("messages").delete().eq("recipient_id", userId);
+
+    // 2. Limpar referências
+    await supabaseAdmin.from("ia_records").update({ authorized_by: null }).eq("authorized_by", userId);
+    await supabaseAdmin.from("ia_records").update({ owner_id: null }).eq("owner_id", userId);
+    await supabaseAdmin.from("profiles").update({ authorized_by: null }).eq("authorized_by", userId);
+
+    // 3. Storage
     try {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-      if (authError || !user) return res.status(401).json({ error: "Invalid token" });
-
-      const { data: requester } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-      if (requester?.role !== "admin") return res.status(403).json({ error: "Forbidden" });
-
-      // 1. Limpar mensagens vinculadas
-      await supabaseAdmin.from("messages").delete().eq("sender_id", userId);
-      await supabaseAdmin.from("messages").delete().eq("recipient_id", userId);
-
-      // 2. Limpar referências
-      await supabaseAdmin.from("ia_records").update({ authorized_by: null }).eq("authorized_by", userId);
-      await supabaseAdmin.from("ia_records").update({ owner_id: null }).eq("owner_id", userId);
-      await supabaseAdmin.from("profiles").update({ authorized_by: null }).eq("authorized_by", userId);
-
-      // 3. Storage
-      try {
-        await supabaseAdmin.rpc('delete_user_storage_objects', { user_id: userId });
-      } catch (e) {
-        // @ts-ignore
-        await supabaseAdmin.from('storage.objects').delete().eq('owner', userId).catch(() => {});
-      }
-
-      // 4. Deletar perfil
-      const { error: profileDeleteError } = await supabaseAdmin.from("profiles").delete().eq("id", userId);
-      if (profileDeleteError) {
-        return res.status(500).json({ error: `Erro ao apagar perfil: ${profileDeleteError.message}` });
-      }
-
-      // 5. Deletar do Auth
-      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (authDeleteError) {
-         return res.status(500).json({ 
-           error: `Erro ao apagar conta no Auth: ${authDeleteError.message}`
-         });
-      }
-
-      return res.json({ success: true });
-    } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      await supabaseAdmin.rpc('delete_user_storage_objects', { user_id: userId });
+    } catch (e) {
+      // @ts-ignore
+      await supabaseAdmin.from('storage.objects').delete().eq('owner', userId).catch(() => {});
     }
+
+    // 4. Deletar perfil
+    const { error: profileDeleteError } = await supabaseAdmin.from("profiles").delete().eq("id", userId);
+    if (profileDeleteError) {
+      return res.status(500).json({ error: `Erro ao apagar perfil: ${profileDeleteError.message}` });
+    }
+
+    // 5. Deletar do Auth
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authDeleteError) {
+       return res.status(500).json({ 
+         error: `Erro ao apagar conta no Auth: ${authDeleteError.message}`
+       });
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
+
+// App routing and Netlify serverless compatibility
+app.use("/api", router);
+app.use("/.netlify/functions/api", router);
 
 // Export for serverless
 export { app };
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
