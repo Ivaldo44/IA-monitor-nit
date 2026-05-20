@@ -11,7 +11,7 @@ import {
   IARecord, TiposIA, ObjetivosIA, EtapaProcesso, RiscoResidual, 
   Criticidade, NaturezaUso, GrauAutonomia, ClassificacaoRisco, StatusUso 
 } from "../types";
-import { generateId, getRecords } from "../storage";
+import { generateId, getGlobalRecords } from "../storage";
 
 import { useAuth } from "../contexts/AuthContext";
 
@@ -169,24 +169,26 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
   });
 
   const [activeSection, setActiveSection] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
-    } else {
+    } else if (!isInitialized && profile) {
       const fetchAndSetId = async () => {
-        const records = await getRecords();
+        const records = await getGlobalRecords();
         setFormData(prev => ({ 
           ...prev, 
           id: generateId(records),
-          unidadeSetor: (profile && profile.role !== "admin") ? profile.setor : prev.unidadeSetor,
-          responsavelPreenchimento: (profile && profile.role !== "admin") ? profile.full_name : prev.responsavelPreenchimento,
-          cargo: (profile && profile.role !== "admin") ? profile.cargo : prev.cargo
+          unidadeSetor: profile.setor && profile.setor !== "Não definido" ? profile.setor : prev.unidadeSetor,
+          responsavelPreenchimento: profile.full_name || prev.responsavelPreenchimento,
+          cargo: profile.cargo && profile.cargo !== "Colaborador" ? profile.cargo : prev.cargo
         }));
+        setIsInitialized(true);
       };
       fetchAndSetId();
     }
-  }, [initialData, profile]);
+  }, [initialData, profile, isInitialized]);
 
   const updateField = (field: keyof IARecord, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -336,27 +338,25 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <InputGroup label="Setor" required>
                   <input 
-                    className={`${sharedInputClass} ${(profile?.role !== "admin" && !isAdmin) ? "opacity-70 cursor-not-allowed bg-black/10" : ""}`}
+                    className={sharedInputClass}
                     value={formData.unidadeSetor || ""}
                     onChange={(e) => updateField("unidadeSetor", e.target.value)}
                     placeholder="Ex: NIT, TI, Marketing, Hematologia..."
                     required
-                    disabled={profile?.role !== "admin" && !isAdmin}
+                    list="setores-list"
                   />
-                  {(profile?.role === "admin" || isAdmin) && (
-                    <datalist id="setores-list">
-                      <option value="NIT" />
-                      <option value="TI" />
-                      <option value="Marketing" />
-                      <option value="Administrativo" />
-                      <option value="Jurídico" />
-                      <option value="Direção Técnica" />
-                      <option value="Qualidade" />
-                      <option value="Atendimento / Recepção" />
-                      <option value="Laboratório de Patologia" />
-                      <option value="Laboratório Central" />
-                    </datalist>
-                  )}
+                  <datalist id="setores-list">
+                    <option value="NIT" />
+                    <option value="TI" />
+                    <option value="Marketing" />
+                    <option value="Administrativo" />
+                    <option value="Jurídico" />
+                    <option value="Direção Técnica" />
+                    <option value="Qualidade" />
+                    <option value="Atendimento / Recepção" />
+                    <option value="Laboratório de Patologia" />
+                    <option value="Laboratório Central" />
+                  </datalist>
                 </InputGroup>
                 <InputGroup label="Responsável pelo Preenchimento" required>
                   <input 

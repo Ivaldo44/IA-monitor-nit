@@ -36,6 +36,42 @@ export const getProfiles = async (): Promise<UserProfile[]> => {
   }
 };
 
+export const getGlobalRecords = async (): Promise<IARecord[]> => {
+  try {
+    console.log('🌐 Buscando todos os registros públicos no Supabase (ID de Protocolo Global)...');
+    const { data, error } = await supabase
+      .from('ia_records')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      return data.map(item => {
+        let record: IARecord;
+        if (item.data) {
+          record = item.data as IARecord;
+          record.id = item.id;
+          record.unidadeSetor = item.unidade_setor || record.unidadeSetor || '';
+          record.ownerId = item.owner_id || record.ownerId || '';
+        } else {
+          record = {
+            id: item.id,
+            unidadeSetor: item.unidade_setor || '',
+            ownerId: item.owner_id || '',
+            nomeFerramenta: item.nome_ferramenta || '',
+          } as any as IARecord;
+        }
+        return record;
+      });
+    }
+    return [];
+  } catch (error) {
+    console.error('💥 Erro ao buscar registros globais:', error);
+    return [];
+  }
+};
+
 export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?: string): Promise<IARecord[]> => {
   let finalIsAdmin = isAdmin;
   try {
@@ -62,11 +98,15 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       .select('*');
 
     if (!finalIsAdmin) {
-      console.log('🛡️ Aplicando filtros de segurança para usuário comum');
+      console.log('🛡️ Aplicando filtros de segurança para usuário comum (Setor OU Propriedade)');
       const sectorStr = (userSector || '').trim();
-      if (sectorStr) {
-        // Use case-insensitive LIKE (ilike) to avoid mismatches on upper/lowercase stored values
+      if (sectorStr && userId) {
+        // Exibimos registros que pertencem ao setor do usuário OU que foram criados por ele (owner_id)
+        query = query.or(`unidade_setor.ilike."${sectorStr}",owner_id.eq.${userId}`);
+      } else if (sectorStr) {
         query = query.ilike('unidade_setor', sectorStr);
+      } else if (userId) {
+        query = query.eq('owner_id', userId);
       } else {
         query = query.eq('unidade_setor', '---SECTOR-BLANK-NO-ACCESS---');
       }
@@ -91,6 +131,7 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
           record.id = item.id; // Sync ID
           // Ensure unity sector is populated from raw database column fallback
           record.unidadeSetor = item.unidade_setor || record.unidadeSetor || (record as any).unidade_setor || '';
+          record.ownerId = item.owner_id || record.ownerId || (record as any).owner_id || '';
         } else {
           record = {
             id: item.id,
@@ -104,6 +145,7 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
             statusUso: (item.status_uso as StatusUso) || StatusUso.EM_AVALIACAO,
             createdAt: item.created_at || new Date().toISOString(),
             updatedAt: item.updated_at || new Date().toISOString(),
+            ownerId: item.owner_id || '',
             historico: []
           } as any as IARecord;
         }
@@ -137,10 +179,13 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
 
     if (!finalIsAdmin) {
       const activeSector = (userSector || '').trim().toLowerCase();
-      console.log(`🛡️ Filtrando registros para o setor do usuário: ${activeSector}`);
+      console.log(`🛡️ Filtrando registros para o setor do usuário: ${activeSector} ou criados pelo próprio usuário`);
       resultRecords = resultRecords.filter(r => {
         const rSector = (r.unidadeSetor || (r as any).unidade_setor || '').trim().toLowerCase();
-        return rSector === activeSector;
+        const rOwner = r.ownerId || (r as any).owner_id || '';
+        const isOwner = userId && String(rOwner) === String(userId);
+        const matchesSector = activeSector && rSector === activeSector;
+        return matchesSector || isOwner;
       });
     }
 
@@ -187,7 +232,12 @@ export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boo
     // Determinando o status final: 
     // Pendente, Aprovado ou Negado
     const finalStatus = record.statusAuditoria || (finalIsAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
-    const recordWithStatus = { ...record, statusAuditoria: finalStatus };
+    const resolvedOwnerId = userId || record.ownerId || (record as any).owner_id || null;
+    const recordWithStatus = { 
+      ...record, 
+      statusAuditoria: finalStatus,
+      ownerId: resolvedOwnerId 
+    };
 
     const { error } = await supabase
       .from('ia_records')
@@ -197,7 +247,8 @@ export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boo
         updated_at: new Date().toISOString(),
         unidade_setor: record.unidadeSetor,
         responsavel_preenchimento: record.responsavelPreenchimento,
-        nome_ferramenta: record.nomeFerramenta
+        nome_ferramenta: record.nomeFerramenta,
+        owner_id: resolvedOwnerId
       });
     
     if (error) {
@@ -216,7 +267,12 @@ export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boo
     const records: IARecord[] = localData ? JSON.parse(localData) : [];
     const index = records.findIndex(r => r.id === record.id);
     const finalStatus = record.statusAuditoria || (finalIsAdmin ? StatusAuditoria.APROVADO : StatusAuditoria.PENDENTE);
-    const recordWithStatus = { ...record, statusAuditoria: finalStatus };
+    const resolvedOwnerId = userId || record.ownerId || (record as any).owner_id || null;
+    const recordWithStatus = { 
+      ...record, 
+      statusAuditoria: finalStatus,
+      ownerId: resolvedOwnerId
+    };
     
     if (index === -1) records.push(recordWithStatus);
     else records[index] = recordWithStatus;

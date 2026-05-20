@@ -94,6 +94,7 @@ export enum StatusAuditoria {
 export interface IARecord {
   statusAuditoria?: StatusAuditoria;
   id: string; // Generated automatically like IA-CEDRO-0001
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 
