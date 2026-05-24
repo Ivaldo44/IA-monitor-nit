@@ -246,41 +246,41 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
 
       <div className="grid grid-cols-12 gap-8">
         {/* Governance & Risk Alerts Table */}
-        <div className="col-span-12 xl:col-span-8 bg-emerald-900 dark:bg-emerald-950 rounded-[2.5rem] flex flex-col overflow-hidden relative border border-emerald-800/50 shadow-2xl shadow-emerald-500/10 transition-all">
-          <div className="p-6 border-b border-emerald-800/50 flex justify-between items-center bg-black/20">
+        <div className="col-span-12 xl:col-span-8 bg-white dark:bg-[#0c131e] rounded-[2.5rem] flex flex-col overflow-hidden relative border-2 border-[#03440c] dark:border-emerald-700 shadow-md transition-all">
+          <div className="p-6 border-b border-black/5 dark:border-white/5 flex justify-between items-center bg-black/5 dark:bg-white/5">
             <div className="flex items-center gap-3">
-              <div className="size-2.5 rounded-full bg-brand-green shadow-[0_0_10px_rgba(0,255,101,0.5)]"></div>
-              <h3 className="font-black text-white uppercase tracking-tight text-base">Monitoramento de Governança e Risco</h3>
+              <div className="size-2.5 rounded-full bg-[#03440c] dark:bg-emerald-500 shadow-[0_0_10px_rgba(3,68,12,0.6)] dark:shadow-[0_0_10px_rgba(16,185,129,0.6)] animate-pulse"></div>
+              <h3 className="font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight text-base">Monitoramento de Governança e Risco</h3>
             </div>
             <button 
               onClick={() => onNavigate("inventory")}
-              className="text-[10px] bg-white/10 text-emerald-100 hover:bg-brand-green hover:text-black px-5 py-2 rounded-xl font-black transition-all border border-white/10 active:scale-95 uppercase tracking-widest"
+              className="text-[10px] bg-white/40 dark:bg-white/10 text-slate-800 dark:text-slate-200 hover:bg-white/60 dark:hover:bg-white/20 px-5 py-2 rounded-xl font-black transition-all border border-slate-300 dark:border-white/10 active:scale-95 uppercase tracking-widest"
             >
               Ver Tudo →
             </button>
           </div>
           <div className="overflow-auto flex-1 custom-scrollbar">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-black/40 text-[10px] uppercase text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] sticky top-0 z-10 font-black tracking-widest">
+              <thead className="bg-[#03440c]/10 dark:bg-emerald-950/20 text-[10px] uppercase text-[#03440c] dark:text-emerald-400 sticky top-0 z-10 font-black tracking-widest border-b border-black/5 dark:border-white/5">
                 <tr>
-                  <th className="px-6 py-5 border-b border-emerald-800/50">ID da IA</th>
-                  <th className="px-6 py-5 border-b border-emerald-800/50">IA / Setor</th>
-                  <th className="px-6 py-5 border-b border-emerald-800/50 text-center">Risco</th>
-                  <th className="px-6 py-5 border-b border-emerald-800/50">Status</th>
+                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5">ID da IA</th>
+                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5">IA / Setor</th>
+                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5 text-center">Risco</th>
+                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5">Status</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {records.slice(0, 6).map((record) => (
-                  <tr key={record.id} className="border-b border-emerald-800/30 hover:bg-white/5 transition-all group font-medium">
+                  <tr key={record.id} className="border-b border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 transition-all group font-medium text-slate-800 dark:text-slate-200">
                     <td className="px-6 py-5 whitespace-nowrap">
-                       <span className="font-mono text-[10px] text-emerald-400 bg-black/30 px-2 py-1 rounded border border-emerald-800/50 group-hover:text-brand-green transition-colors">{record.id}</span>
+                       <span className="font-mono text-[10px] text-slate-900 dark:text-slate-200 bg-white/60 dark:bg-white/10 px-2 py-1 rounded border border-slate-200 dark:border-white/10 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{record.id}</span>
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
-                        <span className="font-bold text-white group-hover:text-brand-green transition-colors uppercase tracking-tight">{record.nomeFerramenta}</span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{record.nomeFerramenta}</span>
                         <div className="flex items-center gap-1.5 mt-1">
-                           <div className="size-1 rounded-full bg-brand-green/60"></div>
-                           <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">{record.unidadeSetor}</span>
+                           <div className="size-1 rounded-full bg-slate-600 dark:bg-slate-400"></div>
+                           <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{record.unidadeSetor}</span>
                         </div>
                       </div>
                     </td>
@@ -288,10 +288,10 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
                       <div className="flex justify-center">
                         <span className={`text-[9px] px-3 py-1 rounded-md font-black border tracking-widest transition-transform group-hover:scale-110 ${
                           record.criticidade?.includes("ALTA") 
-                            ? "bg-red-500/20 border-red-500/40 text-red-500" 
+                            ? "bg-red-500/10 dark:bg-red-500/20 border-red-200 dark:border-red-500/40 text-red-700 dark:text-red-300" 
                             : record.criticidade?.includes("MEDIA") 
-                              ? "bg-brand-orange/20 border-brand-orange/40 text-brand-orange" 
-                              : "bg-brand-green/20 border-brand-green/40 text-brand-green"
+                              ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/40 text-amber-700 dark:text-amber-300" 
+                              : "bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                         }`}>
                           {record.criticidade ? record.criticidade.split(":")[0] : "NA"}
                         </span>
@@ -300,15 +300,15 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
                     <td className="px-6 py-5">
                       <div className="text-[10px] font-black uppercase tracking-widest">
                         {record.statusAuditoria === StatusAuditoria.PENDENTE ? (
-                          <span className="text-yellow-400 flex items-center gap-2 animate-pulse">
+                          <span className="text-amber-700 dark:text-amber-400 flex items-center gap-2 animate-pulse">
                             <Clock size={14} /> {record.statusUso === StatusUso.EM_AVALIACAO ? "Em Avaliação" : "Pendente"}
                           </span>
                         ) : record.statusAuditoria === StatusAuditoria.NEGADO ? (
-                          <span className="text-red-400 flex items-center gap-2">
+                          <span className="text-red-650 dark:text-red-400 flex items-center gap-2">
                             <ShieldX size={14} /> {record.statusUso === StatusUso.NAO_APROVADO ? "Negado" : "Não Aprovado"}
                           </span>
                         ) : (
-                          <span className="text-brand-green flex items-center gap-2">
+                          <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
                             <CheckCircle2 size={14} /> {record.statusUso === StatusUso.APROVADO ? "Aprovado" : record.statusUso}
                           </span>
                         )}

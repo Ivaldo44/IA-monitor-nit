@@ -47,8 +47,10 @@ export const getGlobalRecords = async (): Promise<IARecord[]> => {
     if (error) throw error;
     
     if (data && data.length > 0) {
-      return data.map(item => {
-        let record: IARecord;
+      return data
+        .filter(item => item.id !== 'METADATA-SECTORS')
+        .map(item => {
+          let record: IARecord;
         if (item.data) {
           record = item.data as IARecord;
           record.id = item.id;
@@ -112,7 +114,22 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       }
     }
 
-    const { data, error, status } = await query.order('id', { ascending: true });
+    let result = await query.order('id', { ascending: true });
+    let data = result.data;
+    let error = result.error;
+    let status = result.status;
+
+    // Se falhar por falta da coluna 'owner_id', fazemos fallback seguro buscando todos e filtrando em memória
+    if (error && (error.code === '42703' || error.message?.includes('owner_id') || status === 400 || error.code === 'PGRST100')) {
+      console.warn('⚠️ Coluna owner_id não existe. Buscando todos os registros públicos e filtrando na memória...');
+      const fallbackResult = await supabase
+        .from('ia_records')
+        .select('*')
+        .order('id', { ascending: true });
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+      status = fallbackResult.status;
+    }
 
     if (error) {
       console.error('❌ Erro ao buscar no Supabase:', error, 'Status:', status);
@@ -123,7 +140,8 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
 
     if (data && data.length > 0) {
       console.log(`✅ ${data.length} registros encontrados no Supabase.`);
-      const mappedData = data.map(item => {
+      const filteredData = data.filter(item => item.id !== 'METADATA-SECTORS');
+      const mappedData = filteredData.map(item => {
         let record: IARecord;
         
         if (item.data) {
@@ -166,14 +184,15 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
       const localDataStr = localStorage.getItem(STORAGE_KEY);
       if (localDataStr) {
         const localRecords: IARecord[] = JSON.parse(localDataStr);
-        if (localRecords.length > 0) {
-          console.log('📦 Carregando do LocalStorage:', localRecords.length);
-          resultRecords = localRecords;
+        const cleanLocalRecords = localRecords.filter(r => r.id !== "METADATA-SECTORS" && !["IA-CEDRO-0001", "IA-CEDRO-0002", "IA-CEDRO-0003", "IA-CEDRO-0004", "IA-CEDRO-0005", "IA-CEDRO-0006"].includes(r.id));
+        if (cleanLocalRecords.length > 0) {
+          console.log('📦 Carregando do LocalStorage:', cleanLocalRecords.length);
+          resultRecords = cleanLocalRecords;
         } else {
-          resultRecords = getExampleRecords();
+          resultRecords = [];
         }
       } else {
-        resultRecords = getExampleRecords();
+        resultRecords = [];
       }
     }
 
@@ -195,10 +214,14 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
     let fallbackRecords: IARecord[] = [];
     const data = localStorage.getItem(STORAGE_KEY);
     try {
-      if (data) fallbackRecords = JSON.parse(data);
-      else fallbackRecords = getExampleRecords();
+      if (data) {
+        const parsed = JSON.parse(data);
+        fallbackRecords = parsed.filter((r: any) => r.id !== "METADATA-SECTORS" && !["IA-CEDRO-0001", "IA-CEDRO-0002", "IA-CEDRO-0003", "IA-CEDRO-0004", "IA-CEDRO-0005", "IA-CEDRO-0006"].includes(r.id));
+      } else {
+        fallbackRecords = [];
+      }
     } catch (e) {
-      fallbackRecords = getExampleRecords();
+      fallbackRecords = [];
     }
     
     if (!finalIsAdmin) {
@@ -239,21 +262,44 @@ export const addRecord = async (record: IARecord, userId?: string, isAdmin?: boo
       ownerId: resolvedOwnerId 
     };
 
-    const { error } = await supabase
-      .from('ia_records')
-      .upsert({ 
-        id: record.id, 
-        data: recordWithStatus,
-        updated_at: new Date().toISOString(),
-        unidade_setor: record.unidadeSetor,
-        responsavel_preenchimento: record.responsavelPreenchimento,
-        nome_ferramenta: record.nomeFerramenta,
-        owner_id: resolvedOwnerId
-      });
-    
-    if (error) {
-      console.error('❌ Erro detalhado do Supabase:', error);
-      throw error;
+    const payload: any = { 
+      id: record.id, 
+      data: recordWithStatus,
+      updated_at: new Date().toISOString(),
+      unidade_setor: record.unidadeSetor || '',
+      responsavel_preenchimento: record.responsavelPreenchimento || '',
+      nome_ferramenta: record.nomeFerramenta || ''
+    };
+
+    let upsertErr;
+    try {
+      const { error } = await supabase
+        .from('ia_records')
+        .upsert({ 
+          ...payload,
+          owner_id: resolvedOwnerId
+        });
+      upsertErr = error;
+    } catch (e: any) {
+      upsertErr = e;
+    }
+
+    if (upsertErr) {
+      const errMsg = (upsertErr.message || '').toLowerCase();
+      const isMissingColumn = upsertErr.code === 'PGRST204' || upsertErr.code === '42703' || errMsg.includes('owner_id') || errMsg.includes('schema cache');
+      if (isMissingColumn) {
+        console.warn('⚠️ Coluna owner_id não existe no banco. Salvando registro sem essa coluna...', upsertErr);
+        const { error: retryError } = await supabase
+          .from('ia_records')
+          .upsert(payload);
+        if (retryError) {
+          console.error('❌ Erro no salvamento de fallback (sem owner_id):', retryError);
+          throw retryError;
+        }
+      } else {
+        console.error('❌ Erro detalhado do Supabase (com owner_id):', upsertErr);
+        throw upsertErr;
+      }
     }
     console.log('✅ Registro salvo com sucesso no Supabase!');
   } catch (error: any) {
@@ -380,389 +426,89 @@ export const generateId = (records: IARecord[]): string => {
   return `IA-CEDRO-${(maxId + 1).toString().padStart(4, "0")}`;
 };
 
-function getExampleRecords(): IARecord[] {
-  const now = new Date().toISOString();
-  const dateStr = now.split('T')[0];
+export const DEFAULT_SECTORS = [
+  "NIT",
+  "TI",
+  "Marketing",
+  "Administrativo",
+  "Jurídico",
+  "Direção Técnica",
+  "Qualidade",
+  "Atendimento / Recepção",
+  "Laboratório de Patologia",
+  "Laboratório Central"
+];
 
-  return [
-    {
-      id: "IA-CEDRO-0001",
-      createdAt: now,
-      updatedAt: now,
-      unidadeSetor: "Atendimento / Recepção",
-      responsavelPreenchimento: "João Silva",
-      cargo: "Gestor Administrativo",
-      dataRegistro: dateStr,
-      utilizaIA: "Sim",
-      nomeFerramenta: "CedroBot Chat",
-      fornecedor: "Zendesk AI",
-      versao: "1.2 Enterprise",
-      tipoIA: [TiposIA.CHATBOT],
-      descricaoAtividade: "Chatbot para triagem de pacientes e agendamento de exames via site e WhatsApp.",
-      objetivos: [ObjetivosIA.GESTAO_ADMINISTRATIVA, ObjetivosIA.PRODUTIVIDADE],
-      etapaProcesso: EtapaProcesso.ATENDIMENTO,
-      beneficiosEsperados: "Redução no tempo de espera e automatização de agendamentos simples.",
-      usaDadosPessoais: "Sim",
-      usaDadosSensiveis: "Não",
-      quaisDados: "Nome, CPF, Telefone, Tipo de Exame",
-      dadosAnonimizados: "Não",
-      envioFornecedorExterno: "Sim",
-      dadosTreinamentoModelo: "Não",
-      obsProtecaoDados: "Dados criptografados em trânsito.",
-      integradaSistemaInterno: "Sim",
-      qualSistema: "CRM / Sistema de Atendimento",
-      impactoResultadosLaboratoriais: "Não",
-      validacaoHumana: "Sim",
-      quemValida: "Equipe de triagem no check-in",
-      registroLogDecisao: "Sim",
-      ambienteHomologacao: "Sim",
-      obsIntegracao: "API Rest estável.",
-      riscosIdentificados: "Sim",
-      quaisRiscos: "Erro na interpretação do pedido de exame.",
-      controlesImplementados: "Sim",
-      quaisControles: ["Revisão humana obrigatória", "Treinamento dos usuários"],
-      riscoResidual: RiscoResidual.BAIXO,
-      responsavelRisco: "João Silva",
-      frequenciaReavaliacao: "Anual",
-      obsRiscosControles: "Risco baixo devido à validação humana no balcão.",
-      alinhadoLGPD: "Sim",
-      politicaInterna: "Sim",
-      treinamentoColaboradores: "Sim",
-      documentacaoTecnica: "Sim",
-      contratoProtecaoDados: "Sim",
-      controleAcessoPerfil: "Sim",
-      trilhaAuditoria: "Sim",
-      procedimentoIncidente: "Sim",
-      obsConformidade: "Tudo em conformidade.",
-      criticidade: Criticidade.BAIXA,
-      naturezaUso: NaturezaUso.ADMINISTRATIVO,
-      grauAutonomia: GrauAutonomia.MEDIO,
-      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
-      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
-      areaAvaliadora: ["NIT", "TI"],
-      statusUso: StatusUso.APROVADO,
-      necessitaPlanoAcao: "Não",
-      parecerTecnico: "Solução segura com baixo impacto técnico.",
-      observacoesGerais: "Iniciado em Janeiro de 2024.",
-      anexos: "Link para documentação técnica interna.",
-      statusAuditoria: StatusAuditoria.APROVADO,
-      historico: [{ date: now, action: "Criação do registro" }]
-    },
-    {
-      id: "IA-CEDRO-0002",
-      createdAt: now,
-      updatedAt: now,
-      unidadeSetor: "Laboratório de Patologia",
-      responsavelPreenchimento: "Dra. Maria Oliveira",
-      cargo: "Médica Patologista / Coordenadora",
-      dataRegistro: dateStr,
-      utilizaIA: "Sim",
-      nomeFerramenta: "PathoScan AI",
-      fornecedor: "DeepTech Health",
-      versao: "2023.4",
-      tipoIA: [TiposIA.ANALISE_IMAGENS, TiposIA.MACHINE_LEARNING],
-      descricaoAtividade: "Identificação automática de células suspeitas em lâminas digitais de citopatologia.",
-      objetivos: [ObjetivosIA.ANALISE_IMAGENS, ObjetivosIA.TRIAGEM_PRIORIZACAO],
-      etapaProcesso: EtapaProcesso.ANALITICA,
-      beneficiosEsperados: "Aumento na precisão diagnóstica e agilidade na triagem de casos críticos.",
-      usaDadosPessoais: "Sim",
-      usaDadosSensiveis: "Sim",
-      quaisDados: "Imagens de lâminas, ID do paciente, histórico clínico resumido",
-      dadosAnonimizados: "Parcial",
-      envioFornecedorExterno: "Sim",
-      dadosTreinamentoModelo: "Sim",
-      obsProtecaoDados: "Envio de dados via servidor seguro (VPN).",
-      integradaSistemaInterno: "Sim",
-      qualSistema: "Middleware / Sistema de Laudos",
-      impactoResultadosLaboratoriais: "Sim",
-      validacaoHumana: "Sim",
-      quemValida: "Médico Patologista",
-      registroLogDecisao: "Sim",
-      ambienteHomologacao: "Sim",
-      obsIntegracao: "Integrado ao visualizador de lâminas.",
-      riscosIdentificados: "Sim",
-      quaisRiscos: "Falso negativo ou classificação incorreta.",
-      controlesImplementados: "Sim",
-      quaisControles: ["Revisão humana obrigatória", "Monitoramento de uso", "Validação técnica prévia"],
-      riscoResidual: RiscoResidual.MEDIO,
-      responsavelRisco: "Maria Oliveira",
-      frequenciaReavaliacao: "Semestral",
-      obsRiscosControles: "Uso obrigatório de revisão por médico especialista.",
-      alinhadoLGPD: "Sim",
-      politicaInterna: "Sim",
-      treinamentoColaboradores: "Sim",
-      documentacaoTecnica: "Sim",
-      contratoProtecaoDados: "Sim",
-      controleAcessoPerfil: "Sim",
-      trilhaAuditoria: "Sim",
-      procedimentoIncidente: "Sim",
-      obsConformidade: "Avaliado pelo jurídico.",
-      criticidade: Criticidade.ALTA,
-      naturezaUso: NaturezaUso.DIAGNOSTICO,
-      grauAutonomia: GrauAutonomia.MEDIO,
-      classificacaoRiscoAutomatico: ClassificacaoRisco.ALTO,
-      classificacaoRiscoManual: ClassificacaoRisco.ALTO,
-      areaAvaliadora: ["Direção Técnica", "Qualidade"],
-      statusUso: StatusUso.APROVADO_COM_RESTRICOES,
-      necessitaPlanoAcao: "Sim",
-      descricaoPlanoAcao: "Auditoria quinzenal dos primeiros 1000 casos.",
-      responsavelPlanoAcao: "Maria Oliveira",
-      prazoPlanoAcao: dateStr,
-      parecerTecnico: "Aprovado sob condição de revisão 100% humana.",
-      observacoesGerais: "Projeto piloto estendido.",
-      anexos: "Termo de responsabilidade técnica assinado.",
-      statusAuditoria: StatusAuditoria.APROVADO,
-      historico: [{ date: now, action: "Criação do registro" }]
-    },
-    {
-      id: "IA-CEDRO-0003",
-      createdAt: now,
-      updatedAt: now,
-      unidadeSetor: "Laboratório Central",
-      responsavelPreenchimento: "Carlos Mendes",
-      cargo: "Gestor de TI",
-      dataRegistro: dateStr,
-      utilizaIA: "Sim",
-      nomeFerramenta: "AutoAnalyzer AI Module",
-      fornecedor: "MegaRoche Systems",
-      versao: "6.0",
-      tipoIA: [TiposIA.EQUIPAMENTO_IA_EMBARCADA, TiposIA.ALGORITMO_APOIO_DECISAO],
-      descricaoAtividade: "Módulo de IA embarcada no equipamento para liberação automática de resultados normais.",
-      objetivos: [ObjetivosIA.AUTOMACAO, ObjetivosIA.PRODUTIVIDADE],
-      etapaProcesso: EtapaProcesso.ANALITICA,
-      beneficiosEsperados: "Liberação de 70% da rotina sem intervenção humana.",
-      usaDadosPessoais: "Sim",
-      usaDadosSensiveis: "Sim",
-      quaisDados: "Resultados bioquímicos, dados de cadastro",
-      dadosAnonimizados: "Não",
-      envioFornecedorExterno: "Não",
-      dadosTreinamentoModelo: "Não",
-      obsProtecaoDados: "Processamento local no equipamento.",
-      integradaSistemaInterno: "Sim",
-      qualSistema: "LIS / Middleware",
-      impactoResultadosLaboratoriais: "Sim",
-      validacaoHumana: "Não",
-      quemValida: "Ninguém (autolaboração)",
-      registroLogDecisao: "Sim",
-      ambienteHomologacao: "Não",
-      obsIntegracao: "Sistema fechado do fabricante.",
-      riscosIdentificados: "Sim",
-      quaisRiscos: "Falha no algoritmo de validação automática, erro não detectado.",
-      controlesImplementados: "Não",
-      quaisControles: [],
-      riscoResidual: RiscoResidual.ALTO,
-      responsavelRisco: "Carlos Mendes",
-      frequenciaReavaliacao: "Trimestral",
-      obsRiscosControles: "Ausência de validação humana direta na liberação.",
-      alinhadoLGPD: "Sim",
-      politicaInterna: "Não",
-      treinamentoColaboradores: "Não",
-      documentacaoTecnica: "Sim",
-      contratoProtecaoDados: "Não",
-      controleAcessoPerfil: "Não",
-      trilhaAuditoria: "Não",
-      procedimentoIncidente: "Não",
-      obsConformidade: "Necessita regularização urgente.",
-      criticidade: Criticidade.ALTA,
-      naturezaUso: NaturezaUso.TECNICO,
-      grauAutonomia: GrauAutonomia.ALTO,
-      classificacaoRiscoAutomatico: ClassificacaoRisco.CRITICO,
-      classificacaoRiscoManual: ClassificacaoRisco.CRITICO,
-      areaAvaliadora: ["Qualidade", "Direção Técnica"],
-      statusUso: StatusUso.NAO_APROVADO,
-      statusAuditoria: StatusAuditoria.NEGADO,
-      necessitaPlanoAcao: "Sim",
-      parecerTecnico: "Risco inaceitável sem validação humana e controles de acesso.",
-      observacoesGerais: "Suspenso temporariamente.",
-      anexos: "Relatório de incidentes anexo.",
-      historico: [{ date: now, action: "Criação do registro" }]
-    },
-    {
-      id: "IA-CEDRO-0004",
-      createdAt: now,
-      updatedAt: now,
-      unidadeSetor: "NIT",
-      responsavelPreenchimento: "Alice Tech",
-      cargo: "Analista de Inovação",
-      dataRegistro: dateStr,
-      utilizaIA: "Sim",
-      nomeFerramenta: "Generative Code Helper",
-      fornecedor: "CodeLabs Inc",
-      versao: "Beta 2.0",
-      tipoIA: [TiposIA.IA_GENERATIVA],
-      descricaoAtividade: "Assistente de geração de código para acelerar o desenvolvimento de ferramentas internas.",
-      objetivos: [ObjetivosIA.PRODUTIVIDADE, ObjetivosIA.AUTOMACAO],
-      etapaProcesso: EtapaProcesso.OUTRO,
-      beneficiosEsperados: "Redução de 30% no tempo de codificação.",
-      usaDadosPessoais: "Não",
-      usaDadosSensiveis: "Não",
-      quaisDados: "Snippets de código genéricos",
-      dadosAnonimizados: "Sim",
-      envioFornecedorExterno: "Sim",
-      dadosTreinamentoModelo: "Não",
-      obsProtecaoDados: "Nenhum dado sensível é enviado.",
-      integradaSistemaInterno: "Não",
-      impactoResultadosLaboratoriais: "Não",
-      validacaoHumana: "Sim",
-      quemValida: "Desenvolvedor responsável",
-      registroLogDecisao: "Não",
-      ambienteHomologacao: "Sim",
-      riscosIdentificados: "Sim",
-      quaisRiscos: "Geração de código com vulnerabilidades ou bugs.",
-      controlesImplementados: "Sim",
-      quaisControles: ["Revisão humana obrigatória", "Testes unitários"],
-      riscoResidual: RiscoResidual.BAIXO,
-      responsavelRisco: "Alice Tech",
-      frequenciaReavaliacao: "Semestral",
-      obsRiscosControles: "Código sempre revisado por um sênior.",
-      alinhadoLGPD: "Sim",
-      politicaInterna: "Sim",
-      treinamentoColaboradores: "Sim",
-      documentacaoTecnica: "Sim",
-      contratoProtecaoDados: "Sim",
-      controleAcessoPerfil: "Sim",
-      trilhaAuditoria: "Não",
-      procedimentoIncidente: "Sim",
-      criticidade: Criticidade.BAIXA,
-      naturezaUso: NaturezaUso.TECNICO,
-      grauAutonomia: GrauAutonomia.MEDIO,
-      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
-      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
-      areaAvaliadora: ["TI"],
-      statusUso: StatusUso.EM_AVALIACAO,
-      statusAuditoria: StatusAuditoria.PENDENTE,
-      obsIntegracao: "N/A",
-      obsConformidade: "N/A",
-      necessitaPlanoAcao: "Não",
-      parecerTecnico: "Aguardando análise da TI.",
-      observacoesGerais: "",
-      anexos: "",
-      historico: [{ date: now, action: "Criação do registro" }]
-    },
-    {
-      id: "IA-CEDRO-0005",
-      createdAt: now,
-      updatedAt: now,
-      unidadeSetor: "Marketing",
-      responsavelPreenchimento: "Roberto Ads",
-      cargo: "Coordenador de Marketing",
-      dataRegistro: dateStr,
-      utilizaIA: "Sim",
-      nomeFerramenta: "Social Media Auto-Designer",
-      fornecedor: "VisualAI Ltd",
-      versao: "Full Access",
-      tipoIA: [TiposIA.IA_GENERATIVA, TiposIA.ANALISE_IMAGENS],
-      descricaoAtividade: "Criação de artes para redes sociais e análise de engajamento baseada em tendências.",
-      objetivos: [ObjetivosIA.PRODUTIVIDADE],
-      etapaProcesso: EtapaProcesso.OUTRO,
-      beneficiosEsperados: "Padronização visual e rapidez nas postagens.",
-      usaDadosPessoais: "Não",
-      usaDadosSensiveis: "Não",
-      quaisDados: "Imagens de banco de dados e textos publicitários.",
-      dadosAnonimizados: "Sim",
-      envioFornecedorExterno: "Sim",
-      dadosTreinamentoModelo: "Sim",
-      obsProtecaoDados: "Uso de prompts sem referências internas.",
-      integradaSistemaInterno: "Não",
-      impactoResultadosLaboratoriais: "Não",
-      validacaoHumana: "Sim",
-      quemValida: "Equipe criativa",
-      registroLogDecisao: "Não",
-      ambienteHomologacao: "Sim",
-      riscosIdentificados: "Não",
-      quaisRiscos: "Não identificado",
-      controlesImplementados: "Sim",
-      quaisControles: ["Revisão humana obrigatória"],
-      riscoResidual: RiscoResidual.BAIXO,
-      responsavelRisco: "Roberto Ads",
-      frequenciaReavaliacao: "Anual",
-      obsRiscosControles: "Validação da estética e direitos autorais.",
-      alinhadoLGPD: "Sim",
-      politicaInterna: "Sim",
-      treinamentoColaboradores: "Sim",
-      documentacaoTecnica: "Sim",
-      contratoProtecaoDados: "Sim",
-      controleAcessoPerfil: "Sim",
-      trilhaAuditoria: "Não",
-      procedimentoIncidente: "Não",
-      criticidade: Criticidade.BAIXA,
-      naturezaUso: NaturezaUso.ADMINISTRATIVO,
-      grauAutonomia: GrauAutonomia.MEDIO,
-      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
-      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
-      areaAvaliadora: ["NIT"],
-      statusUso: StatusUso.EM_TESTE_PILOTO,
-      statusAuditoria: StatusAuditoria.PENDENTE,
-      obsIntegracao: "N/A",
-      obsConformidade: "N/A",
-      necessitaPlanoAcao: "Não",
-      parecerTecnico: "Aguardando análise do NIT.",
-      observacoesGerais: "",
-      anexos: "",
-      historico: [{ date: now, action: "Criação do registro" }]
-    },
-    {
-      id: "IA-CEDRO-0006",
-      createdAt: now,
-      updatedAt: now,
-      unidadeSetor: "NIT",
-      responsavelPreenchimento: "Admin Experimento",
-      cargo: "Auditor AI",
-      dataRegistro: dateStr,
-      utilizaIA: "Sim",
-      nomeFerramenta: "Data Science Optimizer",
-      fornecedor: "Experimento Lab",
-      versao: "v1",
-      tipoIA: [TiposIA.MACHINE_LEARNING],
-      descricaoAtividade: "Otimização de pipelines de dados sensíveis para pesquisa laboratorial.",
-      objetivos: [ObjetivosIA.PRODUTIVIDADE, ObjetivosIA.REDUCAO_ERROS],
-      etapaProcesso: EtapaProcesso.TI,
-      beneficiosEsperados: "Aceleração de 50% no processamento de lotes de dados.",
-      usaDadosPessoais: "Sim",
-      usaDadosSensiveis: "Sim",
-      quaisDados: "Metadados de exames, logs de processamento",
-      dadosAnonimizados: "Sim",
-      envioFornecedorExterno: "Não",
-      dadosTreinamentoModelo: "Não",
-      obsProtecaoDados: "Processamento local isolado.",
-      integradaSistemaInterno: "Sim",
-      qualSistema: "Data Lake Interno",
-      impactoResultadosLaboratoriais: "Não",
-      validacaoHumana: "Sim",
-      quemValida: "Cientista de Dados",
-      registroLogDecisao: "Sim",
-      ambienteHomologacao: "Sim",
-      obsIntegracao: "Conexão via gRPC.",
-      riscosIdentificados: "Sim",
-      quaisRiscos: "Possível overfitting em conjuntos pequenos.",
-      controlesImplementados: "Sim",
-      quaisControles: ["Validação cruzada", "Monitoramento de métricas"],
-      riscoResidual: RiscoResidual.BAIXO,
-      responsavelRisco: "Admin Experimento",
-      frequenciaReavaliacao: "Mensal",
-      obsRiscosControles: "Ambiente controlado.",
-      alinhadoLGPD: "Sim",
-      politicaInterna: "Sim",
-      treinamentoColaboradores: "Sim",
-      documentacaoTecnica: "Sim",
-      contratoProtecaoDados: "Sim",
-      controleAcessoPerfil: "Sim",
-      trilhaAuditoria: "Sim",
-      procedimentoIncidente: "Sim",
-      obsConformidade: "OK",
-      criticidade: Criticidade.BAIXA,
-      naturezaUso: NaturezaUso.TECNICO,
-      grauAutonomia: GrauAutonomia.MEDIO,
-      classificacaoRiscoAutomatico: ClassificacaoRisco.BAIXO,
-      classificacaoRiscoManual: ClassificacaoRisco.BAIXO,
-      areaAvaliadora: ["NIT", "TI"],
-      statusUso: StatusUso.EM_TESTE_PILOTO,
-      necessitaPlanoAcao: "Não",
-      parecerTecnico: "Aprovado para testes.",
-      observacoesGerais: "Experimento de multi-IA.",
-      anexos: "",
-      statusAuditoria: StatusAuditoria.PENDENTE,
-      historico: [{ date: now, action: "Criação do registro" }]
+const SECTORS_STORAGE_KEY = "cedro_custom_sectors";
+
+export const getSectors = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('ia_records')
+      .select('data')
+      .eq('id', 'METADATA-SECTORS')
+      .maybeSingle();
+
+    if (!error && data && data.data && Array.isArray((data.data as any).sectors)) {
+      const dbSectors = (data.data as any).sectors as string[];
+      localStorage.setItem(SECTORS_STORAGE_KEY, JSON.stringify(dbSectors));
+      return dbSectors;
     }
-  ];
+  } catch (error) {
+    console.error('Erro ao buscar setores do Supabase:', error);
+  }
+
+  // Fallback 1: LocalStorage
+  try {
+    const local = localStorage.getItem(SECTORS_STORAGE_KEY);
+    if (local) {
+      return JSON.parse(local);
+    }
+  } catch (e) {
+    console.error('Erro ao ler setores do localStorage:', e);
+  }
+
+  // Fallback 2: Padrão
+  return DEFAULT_SECTORS;
+};
+
+export const saveSectors = async (sectors: string[]): Promise<boolean> => {
+  try {
+    localStorage.setItem(SECTORS_STORAGE_KEY, JSON.stringify(sectors));
+  } catch (e) {
+    console.error(e);
+  }
+
+  try {
+    const payload = {
+      id: "METADATA-SECTORS",
+      unidade_setor: "METADATA",
+      nome_ferramenta: "Configuração de Setores",
+      responsavel_preenchimento: "ADMIN",
+      data_registro: new Date().toISOString().split('T')[0],
+      utiliza_ia: "Não",
+      status_uso: "Em uso",
+      data: {
+        sectors: sectors
+      },
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('ia_records')
+      .upsert(payload);
+
+    if (error) {
+      console.error("Erro ao salvar setores no Supabase:", error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Erro crítico ao salvar setores:", err);
+    return false;
+  }
+};
+
+function getExampleRecords(): IARecord[] {
+  return [];
 }

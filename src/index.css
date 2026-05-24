@@ -92,6 +92,26 @@
 }
 
 /* Force high contrast and brand styling for select options across all browsers and modes */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+select {
+  color: var(--text-bright) !important;
+}
+
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="url"],
+.dark input[type="tel"],
+.dark input[type="number"],
+.dark select {
+  color: #ffffff !important;
+}
+
 select option {
   background-color: #022c22 !important; /* Emerald 950 (Dark Cedar Green) */
   color: #ffffff !important;            /* Pure white contrast */
@@ -102,4 +122,11 @@ select option {
 .dark option {
   background-color: #022c22 !important; /* Explicitly dark green inside dark selector context */
   color: #f8fafc !important;            /* Bright slate text */
+}
+
+/* Specific class to force white text colors for the inventory select dropdown filters */
+.inventory-filter-select,
+input[type="text"].inventory-search-input,
+.inventory-search-input {
+  color: #ffffff !important;
 }

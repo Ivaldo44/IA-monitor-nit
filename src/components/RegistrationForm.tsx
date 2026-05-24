@@ -11,7 +11,7 @@ import {
   IARecord, TiposIA, ObjetivosIA, EtapaProcesso, RiscoResidual, 
   Criticidade, NaturezaUso, GrauAutonomia, ClassificacaoRisco, StatusUso 
 } from "../types";
-import { generateId, getGlobalRecords } from "../storage";
+import { generateId, getGlobalRecords, getSectors } from "../storage";
 
 import { useAuth } from "../contexts/AuthContext";
 
@@ -56,7 +56,7 @@ const RadioGroup = ({
           className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border ${
             value === opt 
               ? "bg-brand-green text-black border-brand-green shadow-sm scale-[1.05]" 
-              : "bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border-[var(--border-lab)] hover:border-[var(--text-main)] hover:text-[var(--text-bright)]"
+              : "bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border-brand-green/35 dark:border-brand-green/20 hover:border-brand-green/60 hover:text-[var(--text-bright)]"
           }`}
         >
           {opt}
@@ -91,7 +91,7 @@ const CheckboxGroup = ({
             className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border ${
               isSelected 
                 ? "bg-lab-cyan text-white border-lab-cyan shadow-sm scale-[1.05]" 
-                : "bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border-[var(--border-lab)] hover:border-[var(--text-main)] hover:text-[var(--text-bright)]"
+                : "bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border-brand-green/35 dark:border-brand-green/20 hover:border-brand-green/60 hover:text-[var(--text-bright)]"
             }`}
           >
             {opt}
@@ -170,6 +170,15 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
   const [activeSection, setActiveSection] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [sectors, setSectors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchSectors = async () => {
+      const list = await getSectors();
+      setSectors(list);
+    };
+    fetchSectors();
+  }, []);
 
   useEffect(() => {
     if (initialData) {
@@ -260,8 +269,14 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.unidadeSetor || !formData.nomeFerramenta || !formData.responsavelPreenchimento) {
-      alert("Por favor, preencha os campos obrigatórios da primeira seção.");
+    const cleanSector = (formData.unidadeSetor || "").trim();
+    if (!cleanSector || cleanSector.toLowerCase() === "não definido" || cleanSector.toLowerCase() === "nao definido") {
+      alert("Por favor, preencha o campo obrigatório 'Setor' na primeira seção. Ele não pode ser vazio ou 'Não definido'.");
+      setActiveSection(0);
+      return;
+    }
+    if (!formData.nomeFerramenta || !formData.responsavelPreenchimento) {
+      alert("Por favor, preencha todos os campos obrigatórios da primeira seção.");
       setActiveSection(0);
       return;
     }
@@ -278,7 +293,18 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     } as IARecord);
   };
 
-  const sharedInputClass = "w-full p-4 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-2xl text-[var(--text-bright)] font-bold text-sm outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all placeholder:text-[var(--text-muted)] shadow-inner";
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // If the user presses "Enter" on an input field, prevent default form submission
+    if (e.key === "Enter") {
+      const target = e.target as HTMLElement;
+      // Allow Enter on textareas or if it's explicitly a submit button, otherwise prevent
+      if (target.tagName !== "TEXTAREA" && target.getAttribute("type") !== "submit") {
+        e.preventDefault();
+      }
+    }
+  };
+
+  const sharedInputClass = "w-full p-4 bg-black/5 dark:bg-white/5 border border-brand-green/35 dark:border-brand-green/20 rounded-2xl text-[var(--text-bright)] font-bold text-sm outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all placeholder:text-[var(--text-muted)] shadow-inner";
 
   return (
     <div className="bg-[var(--bg-main)] rounded-[2rem] shadow-xl dark:shadow-black/40 border border-[var(--border-lab)] overflow-hidden flex flex-col md:flex-row min-h-[700px] relative">
@@ -288,11 +314,12 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
         {sections.map((sec, i) => (
           <button
             key={i}
+            type="button"
             onClick={() => setActiveSection(i)}
-            className={`flex items-center gap-4 w-full p-4 rounded-2xl transition-all whitespace-nowrap text-left group relative overflow-hidden ${
+            className={`flex items-center gap-4 w-full p-4 rounded-2xl transition-all whitespace-nowrap text-left group relative overflow-hidden border ${
               activeSection === i 
-                ? "bg-brand-green/10 text-brand-green font-bold" 
-                : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5"
+                ? "bg-brand-green/10 text-brand-green font-bold border-brand-green" 
+                : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border-lab)]"
             }`}
           >
             {activeSection === i && (
@@ -312,7 +339,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
       </div>
 
       {/* Form Area */}
-      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-w-0 bg-[var(--bg-main)] relative">
+      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="flex-1 flex flex-col min-w-0 bg-[var(--bg-main)] relative">
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 blur-3xl rounded-full pointer-events-none"></div>
         <div className="p-10 flex-1 overflow-y-auto custom-scrollbar relative z-10">
           <div className="mb-12 flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b border-[var(--border-lab)] pb-8">
@@ -328,7 +355,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   {sections[activeSection].label}
                 </h2>
              </div>
-             <div className="px-6 py-3 glass rounded-2xl font-mono text-xs font-bold text-slate-900 dark:text-white border border-brand-green/20">
+             <div className="px-6 py-3 glass rounded-2xl font-mono text-xs font-extrabold text-emerald-800 dark:text-brand-green border border-brand-green/30">
                Protocolo: {formData.id}
              </div>
           </div>
@@ -338,24 +365,18 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <InputGroup label="Setor" required>
                   <input 
-                    className={sharedInputClass}
+                    className={`${sharedInputClass} disabled:opacity-60 disabled:cursor-not-allowed`}
                     value={formData.unidadeSetor || ""}
                     onChange={(e) => updateField("unidadeSetor", e.target.value)}
-                    placeholder="Ex: NIT, TI, Marketing, Hematologia..."
+                    placeholder={isAdmin ? "Ex: NIT, TI, Marketing, Hematologia..." : ""}
                     required
                     list="setores-list"
+                    disabled={!isAdmin}
                   />
                   <datalist id="setores-list">
-                    <option value="NIT" />
-                    <option value="TI" />
-                    <option value="Marketing" />
-                    <option value="Administrativo" />
-                    <option value="Jurídico" />
-                    <option value="Direção Técnica" />
-                    <option value="Qualidade" />
-                    <option value="Atendimento / Recepção" />
-                    <option value="Laboratório de Patologia" />
-                    <option value="Laboratório Central" />
+                    {sectors.map(sec => (
+                      <option key={sec} value={sec} />
+                    ))}
                   </datalist>
                 </InputGroup>
                 <InputGroup label="Responsável pelo Preenchimento" required>
@@ -755,67 +776,90 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
             {activeSection === 8 && (
               <div className="space-y-6">
-                <CheckboxGroup 
-                  label="Área Avaliadora" 
-                  options={["Qualidade", "TI", "Compliance", "Jurídico/LGPD", "Direção Técnica", "NIT", "Gestão", "Outra"]} 
-                  value={formData.areaAvaliadora as any[]}
-                  onToggle={(val) => handleArrayToggle("areaAvaliadora", val)}
-                  required 
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InputGroup label="Status" required>
-                    <select className={sharedInputClass} value={formData.statusUso} onChange={(e) => updateField("statusUso", e.target.value)}>
-                      {Object.values(StatusUso).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
-                    </select>
-                  </InputGroup>
-                  {isAdmin && (
-                    <InputGroup label="Auditoria / Aprovação Admin" required>
-                      <select className={`${sharedInputClass} !border-brand-green/30 !bg-brand-green/5 text-brand-green`} value={formData.statusAuditoria} onChange={(e) => updateField("statusAuditoria", e.target.value)}>
-                        {Object.values(StatusAuditoria).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
-                      </select>
-                    </InputGroup>
-                  )}
-                  <RadioGroup 
-                    label="Necessita Plano de Ação?" 
-                    options={["Sim", "Não"]} 
-                    value={formData.necessitaPlanoAcao as string}
-                    onChange={(val) => updateField("necessitaPlanoAcao", val)}
-                    required 
-                  />
-                </div>
-                {formData.necessitaPlanoAcao === "Sim" && (
-                   <div className="p-6 bg-amber-50 border border-amber-100 rounded-xl space-y-4 shadow-sm">
-                      <TextArea 
-                        label="Descrição do Plano de Ação" 
-                        value={formData.descricaoPlanoAcao as string}
-                        onChange={(val) => updateField("descricaoPlanoAcao", val)}
-                        className={`${sharedInputClass} min-h-[100px]`}
-                      />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputGroup label="Responsável">
-                           <input className={sharedInputClass} value={formData.responsavelPlanoAcao || ""} onChange={(e) => updateField("responsavelPlanoAcao", e.target.value)} />
-                        </InputGroup>
-                        <InputGroup label="Prazo">
-                           <input type="date" className={sharedInputClass} value={formData.prazoPlanoAcao || ""} onChange={(e) => updateField("prazoPlanoAcao", e.target.value)} />
-                        </InputGroup>
+                {!isAdmin ? (
+                  <div className="glass p-10 rounded-[2.5rem] border border-[var(--border-lab)] space-y-6 text-center max-w-2xl mx-auto shadow-inner bg-black/5 dark:bg-white/[0.02]">
+                    <div className="size-20 mx-auto bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-[2rem] flex items-center justify-center shadow-lg shadow-brand-green/10">
+                      <ClipboardCheck size={36} />
+                    </div>
+                    <div className="space-y-3">
+                      <h3 className="text-2xl font-black text-[var(--text-bright)] uppercase tracking-tight">Fase de Aprovação e Auditoria</h3>
+                      <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-md mx-auto">
+                        Esta etapa é destinada exclusivamente aos auditores e administradores do NIT Cedro. Você pode avançar para a próxima etapa para adicionar observações gerais e finalizar o cadastro.
+                      </p>
+                    </div>
+                    
+                    <div className="pt-6 border-t border-[var(--border-lab)] max-w-sm mx-auto">
+                      <div className="flex justify-between items-center bg-black/10 dark:bg-black/30 p-4 rounded-2xl border border-[var(--border-lab)]">
+                        <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Status da Auditoria:</span>
+                        <span className="px-3 py-1.5 bg-brand-green/20 border border-brand-green/30 text-brand-green font-black uppercase rounded-xl text-[10px] tracking-wide">
+                          {formData.statusAuditoria || StatusAuditoria.PENDENTE}
+                        </span>
                       </div>
-                   </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <CheckboxGroup 
+                      label="Área Avaliadora" 
+                      options={["Qualidade", "TI", "Compliance", "Jurídico/LGPD", "Direção Técnica", "NIT", "Gestão", "Outra"]} 
+                      value={formData.areaAvaliadora as any[]}
+                      onToggle={(val) => handleArrayToggle("areaAvaliadora", val)}
+                      required 
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <InputGroup label="Status" required>
+                        <select className={sharedInputClass} value={formData.statusUso} onChange={(e) => updateField("statusUso", e.target.value)}>
+                          {Object.values(StatusUso).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
+                        </select>
+                      </InputGroup>
+                      <InputGroup label="Auditoria / Aprovação Admin" required>
+                        <select className={`${sharedInputClass} !border-brand-green/30 !bg-brand-green/5 text-brand-green`} value={formData.statusAuditoria} onChange={(e) => updateField("statusAuditoria", e.target.value)}>
+                          {Object.values(StatusAuditoria).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
+                        </select>
+                      </InputGroup>
+                      <RadioGroup 
+                        label="Necessita Plano de Ação?" 
+                        options={["Sim", "Não"]} 
+                        value={formData.necessitaPlanoAcao as string}
+                        onChange={(val) => updateField("necessitaPlanoAcao", val)}
+                        required 
+                      />
+                    </div>
+                    {formData.necessitaPlanoAcao === "Sim" && (
+                       <div className="p-6 bg-amber-50 border border-amber-100 rounded-xl space-y-4 shadow-sm">
+                          <TextArea 
+                            label="Descrição do Plano de Ação" 
+                            value={formData.descricaoPlanoAcao as string}
+                            onChange={(val) => updateField("descricaoPlanoAcao", val)}
+                            className={`${sharedInputClass} min-h-[100px]`}
+                          />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <InputGroup label="Responsável">
+                               <input className={sharedInputClass} value={formData.responsavelPlanoAcao || ""} onChange={(e) => updateField("responsavelPlanoAcao", e.target.value)} />
+                            </InputGroup>
+                            <InputGroup label="Prazo">
+                               <input type="date" className={sharedInputClass} value={formData.prazoPlanoAcao || ""} onChange={(e) => updateField("prazoPlanoAcao", e.target.value)} />
+                            </InputGroup>
+                          </div>
+                       </div>
+                    )}
+                    <TextArea 
+                      label="Parecer técnico da área avaliadora" 
+                      value={formData.parecerTecnico as string}
+                      onChange={(val) => updateField("parecerTecnico", val)}
+                      className={`${sharedInputClass} min-h-[100px]`}
+                      required 
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       <InputGroup label="Data Aprovação">
+                          <input type="date" className={sharedInputClass} value={formData.dataAprovacao || ""} onChange={(e) => updateField("dataAprovacao", e.target.value)} />
+                       </InputGroup>
+                       <InputGroup label="Próxima Revisão">
+                          <input type="date" className={sharedInputClass} value={formData.proximaRevisao || ""} onChange={(e) => updateField("proximaRevisao", e.target.value)} />
+                       </InputGroup>
+                    </div>
+                  </>
                 )}
-                <TextArea 
-                  label="Parecer técnico da área avaliadora" 
-                  value={formData.parecerTecnico as string}
-                  onChange={(val) => updateField("parecerTecnico", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                  required 
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <InputGroup label="Data Aprovação">
-                      <input type="date" className={sharedInputClass} value={formData.dataAprovacao || ""} onChange={(e) => updateField("dataAprovacao", e.target.value)} />
-                   </InputGroup>
-                   <InputGroup label="Próxima Revisão">
-                      <input type="date" className={sharedInputClass} value={formData.proximaRevisao || ""} onChange={(e) => updateField("proximaRevisao", e.target.value)} />
-                   </InputGroup>
-                </div>
               </div>
             )}
 
@@ -853,7 +897,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                <button 
                  type="button" 
                  onClick={() => setActiveSection(s => s - 1)} 
-                 className="px-8 py-3 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] text-[var(--text-muted)] text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-black/10 dark:hover:bg-white/10 hover:text-[var(--text-bright)] transition-all active:scale-95"
+                 className="px-8 py-3 bg-black/5 dark:bg-white/5 border border-brand-green/35 dark:border-brand-green/20 text-[var(--text-muted)] text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-black/10 dark:hover:bg-white/10 hover:border-brand-green/60 hover:text-[var(--text-bright)] transition-all active:scale-95"
                >
                  Voltar
                </button>

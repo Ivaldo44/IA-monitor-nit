@@ -38,10 +38,15 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
 
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
+      const searchLower = searchTerm.toLowerCase();
       const matchesSearch = 
-        r.nomeFerramenta.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.fornecedor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.id.toLowerCase().includes(searchTerm.toLowerCase());
+        r.nomeFerramenta.toLowerCase().includes(searchLower) ||
+        r.fornecedor.toLowerCase().includes(searchLower) ||
+        r.id.toLowerCase().includes(searchLower) ||
+        (r.unidadeSetor && r.unidadeSetor.toLowerCase().includes(searchLower)) ||
+        (r.classificacaoRiscoManual && r.classificacaoRiscoManual.toLowerCase().includes(searchLower)) ||
+        (r.statusUso && r.statusUso.toLowerCase().includes(searchLower)) ||
+        (r.usaDadosSensiveis && r.usaDadosSensiveis.toLowerCase().includes(searchLower));
       
       const matchesSetor = !filterSetor || r.unidadeSetor === filterSetor;
       const matchesStatus = !filterStatus || r.statusUso === filterStatus;
@@ -228,30 +233,30 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
   return (
     <div className="space-y-8 pb-10">
       {/* Search and Filters */}
-      <div className="bg-emerald-900 dark:bg-emerald-950 rounded-[3rem] p-8 space-y-8 border border-emerald-800/50 relative overflow-hidden group shadow-2xl shadow-emerald-500/10 transition-all">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-brand-green/30 to-transparent"></div>
+      <div className="bg-white rounded-[3rem] p-8 space-y-8 border-2 border-[#03440c] relative overflow-hidden group shadow-md transition-all">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
         <div className="flex flex-col xl:flex-row gap-6 justify-between items-stretch lg:items-center">
           <div className="relative flex-1 group">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-emerald-400 dark:text-emerald-500 group-focus-within:text-brand-green transition-all transform group-focus-within:scale-110" size={20} />
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 transition-all transform group-focus-within:scale-110 group-focus-within:text-[#03440c]" size={20} />
             <input 
               type="text" 
               placeholder="Pesquisar por nome, fornecedor ou ID..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 bg-black/20 dark:bg-black/40 border border-emerald-800/50 rounded-2xl focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green text-white placeholder:text-emerald-400 dark:placeholder:text-emerald-600 transition-all outline-none font-semibold text-sm tracking-tight"
+              className="w-full pl-14 pr-6 py-4 bg-white/70 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#03440c]/10 focus:border-[#03440c] text-slate-900 placeholder-slate-500 transition-all outline-none font-semibold text-sm tracking-tight shadow-sm"
             />
           </div>
           <div className="flex flex-wrap gap-3">
             <button 
               onClick={exportExcel}
-              className="px-6 py-4 bg-white/5 dark:bg-white/10 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/10 active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase group/btn"
+              className="px-6 py-4 bg-white/20 hover:bg-white/30 text-slate-900 font-bold rounded-2xl transition-all border border-slate-205 active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase group/btn backdrop-blur-sm shadow-sm"
             >
-              <FileSpreadsheet size={14} className="text-brand-green group-hover/btn:scale-110 transition-transform" />
+              <FileSpreadsheet size={14} className="text-slate-900 group-hover/btn:scale-110 transition-transform" />
               Exportar Inventário
             </button>
             <button 
               onClick={onAdd}
-              className="px-8 py-4 bg-brand-green hover:bg-brand-green/80 text-black font-bold rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase"
+              className="px-8 py-4 bg-white hover:bg-slate-100 text-[#03440c] font-black rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 text-xs tracking-tight uppercase"
             >
               <PlusCircle size={16} />
               Novo Registro
@@ -267,20 +272,20 @@ export default function Inventory({ records, onEdit, onView, onDelete, onAdd, on
             { label: "Dados Sensíveis", value: filterDadosSensiveis, onChange: setFilterDadosSensiveis, options: ["Sim", "Não"], isSensitive: true }
           ].map((filter, i) => (
             <div key={i} className="space-y-3">
-              <label className="text-xs font-black text-emerald-100/70 uppercase tracking-widest pl-1 flex items-center gap-2">
-                <div className="size-1.5 rounded-full bg-brand-green shadow-[0_0_8px_rgba(0,255,101,0.5)]"></div> {filter.label}
+              <label className="text-xs font-black text-slate-900/80 dark:text-slate-900/80 uppercase tracking-widest pl-1 flex items-center gap-2">
+                <div className="size-1.5 rounded-full bg-[#03440c] shadow-[0_0_8px_rgba(3,68,12,0.5)]"></div> {filter.label}
               </label>
               <div className="relative group">
                 <select 
-                   className="w-full p-4 bg-black/20 dark:bg-black/40 border border-emerald-800/50 rounded-xl text-xs font-black text-white outline-none appearance-none cursor-pointer hover:border-brand-green/50 focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 transition-all shadow-inner"
+                  className="w-full p-4 bg-white/70 border border-slate-200 rounded-xl text-xs font-black text-slate-900 outline-none appearance-none cursor-pointer hover:border-slate-300 focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 transition-all shadow-inner"
                   value={filter.value}
                   onChange={(e) => filter.onChange(e.target.value)}
                 >
-                  <option value="" className="bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white font-black">Todos os Registros</option>
-                  {filter.options.map(opt => <option key={opt} value={opt} className="bg-emerald-600 text-white dark:bg-emerald-600 dark:text-white font-black">{opt}</option>)}
+                  <option value="" className="bg-emerald-950 text-white font-black">Todos os Registros</option>
+                  {filter.options.map(opt => <option key={opt} value={opt} className="bg-emerald-950 text-white font-black">{opt}</option>)}
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-400 transition-transform group-hover:translate-y-[-40%]">
-                  <ArrowUpDown size={12} className="group-hover:text-brand-green transition-colors" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-600 transition-transform group-hover:translate-y-[-40%]">
+                  <ArrowUpDown size={12} className="group-hover:text-[#03440c] transition-colors" />
                 </div>
               </div>
             </div>

@@ -112,46 +112,73 @@ export default function AdminPanel({
     };
   }, [selectedUser, records, profiles]);
 
+  // Performance Optimization: Pre-compute and memoize user-specific metrics so keystrokes / search filter updates are O(1)
+  const usersWithStats = useMemo(() => {
+    const isProfile = profiles.length > 0;
+    const list = isProfile 
+      ? profiles 
+      : Array.from(new Set(records.map(r => r.responsavelPreenchimento)))
+          .map(name => ({ id: name, full_name: name, role: 'user' as const, setor: 'N/A' }));
+
+    return list.map(userItem => {
+      const userProfile = isProfile ? (userItem as UserProfile) : null;
+      const userName = isProfile ? (userItem as UserProfile).full_name : (userItem as any).full_name;
+      
+      const userIAs = records.filter(r => r.responsavelPreenchimento === userName);
+      const hasPending = userIAs.some(r => (r.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE);
+      const userId = userProfile?.id || userName;
+
+      return {
+        userItem,
+        userProfile,
+        userName,
+        userIAs,
+        hasPending,
+        userId
+      };
+    });
+  }, [profiles, records]);
+
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
   return (
     <div className="space-y-8 pb-20">
       {/* Admin Hero Header */}
-      <section className="relative p-10 rounded-[3rem] overflow-hidden bg-emerald-900 dark:bg-emerald-950 border border-emerald-800 dark:border-emerald-800 shadow-2xl transition-all">
-        <div className="absolute top-0 right-0 p-12 opacity-10 dark:opacity-20 rotate-12 scale-110">
-          <ShieldCheck size={320} className="text-emerald-400" />
+      <section className="relative p-10 rounded-[3rem] overflow-hidden bg-white border-2 border-[#03440c] shadow-md transition-all">
+        <div className="absolute top-0 right-0 p-12 opacity-5 rotate-12 scale-110 pointer-events-none">
+          <ShieldCheck size={320} className="text-[#03440c] bg-transparent" />
         </div>
         
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-400/20 border border-emerald-400/30 rounded-full text-emerald-300 text-[10px] font-black uppercase tracking-[0.2em] mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#03440c]/10 border border-[#03440c]/20 rounded-full text-[#03440c] text-[10px] font-black uppercase tracking-[0.2em] mb-6">
               <Activity size={12} className="animate-pulse" /> Console de Governança
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase leading-[0.9] mb-6">
-              Central <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-emerald-100">Administrativa</span>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-950 tracking-tighter uppercase leading-[0.9] mb-6">
+              Central <span className="text-[#03440c]">Administrativa</span>
             </h1>
-            <p className="text-emerald-50/80 font-medium max-w-md leading-relaxed">
+            <p className="text-slate-700 font-semibold max-w-md leading-relaxed">
               Gerencie aprovações, verifique conformidade técnica e acompanhe o ecossistema de inteligência artificial em todos os setores do laboratório.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
-              { label: "Pendentes", value: stats.pending, color: "text-red-500", icon: AlertTriangle, bg: "bg-red-500/10", borderColor: "border-red-500/20" },
-              { label: "Aprovados", value: stats.approved, color: "text-emerald-400", icon: CheckCircle2, bg: "bg-emerald-400/10", borderColor: "border-emerald-400/20" },
-              { label: "Negados", value: stats.denied, color: "text-red-400", icon: XCircle, bg: "bg-red-400/10", borderColor: "border-red-400/20" }
+              { label: "Pendentes", value: stats.pending, color: "text-red-600 dark:text-red-500", icon: AlertTriangle, bg: "bg-red-500/10", borderColor: "border-slate-200" },
+              { label: "Aprovados", value: stats.approved, color: "text-[#03440c]", icon: CheckCircle2, bg: "bg-[#03440c]/10", borderColor: "border-slate-200" },
+              { label: "Negados", value: stats.denied, color: "text-red-600 dark:text-red-500", icon: XCircle, bg: "bg-red-500/10", borderColor: "border-slate-200" }
             ].map((s, idx) => (
               <div 
                 key={idx} 
                 onClick={() => { setActiveTab("approvals"); setApprovalFilter(idx === 0 ? StatusAuditoria.PENDENTE : idx === 1 ? StatusAuditoria.APROVADO : StatusAuditoria.NEGADO); setSelectedSector(null); setSelectedUser(null); }}
-                className={`bg-white/10 dark:bg-white/5 border ${s.borderColor} p-6 rounded-[2.5rem] backdrop-blur-md cursor-pointer hover:bg-white/15 transition-all group relative overflow-hidden`}
+                className={`bg-white/80 border ${s.borderColor} p-6 rounded-[2.5rem] cursor-pointer hover:bg-white transition-all group relative overflow-hidden shadow-sm`}
               >
                 <div className="absolute -right-4 -bottom-4 size-24 bg-current opacity-[0.08] rounded-full blur-2xl transition-all group-hover:scale-150" style={{ color: idx === 0 ? '#fbbf24' : idx === 1 ? '#34d399' : '#f87171' }}></div>
-                <div className={`size-10 rounded-2xl ${s.bg} flex items-center justify-center ${s.color} mb-4 shadow-sm border border-white/10`}>
-                  <s.icon size={20} />
+                <div className={`size-10 rounded-2xl ${s.bg} flex items-center justify-center ${s.color} mb-4 shadow-sm border border-black/5`}>
+                   <s.icon size={20} />
                 </div>
-                <p className="text-4xl font-mono font-black text-white leading-none mb-1">{s.value.toString().padStart(2, '0')}</p>
-                <p className="text-[9px] font-black text-emerald-100/60 uppercase tracking-widest">{s.label}</p>
+                <p className="text-4xl font-mono font-black text-slate-900 leading-none mb-1">{s.value.toString().padStart(2, '0')}</p>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{s.label}</p>
               </div>
             ))}
           </div>
@@ -159,16 +186,16 @@ export default function AdminPanel({
       </section>
 
       {/* Admin Navigation */}
-      <div className="flex flex-col xl:flex-row items-center justify-between gap-6 bg-emerald-900 dark:bg-black/40 shadow-2xl p-3 rounded-[2.5rem] border border-emerald-800 dark:border-white/5 transition-all">
-        <div className="flex items-center gap-1 w-full xl:w-auto p-1 bg-emerald-950/30 dark:bg-white/5 rounded-2xl border border-emerald-800/30 dark:border-white/5">
+      <div className="flex flex-col xl:flex-row items-center justify-between gap-6 bg-white shadow-md p-3 rounded-[2.5rem] border-2 border-[#03440c] transition-all">
+        <div className="flex items-center gap-1 w-full xl:w-auto p-1 bg-slate-100 rounded-2xl border border-slate-200">
           {(["approvals", "sectors", "users"] as AdminTab[]).map(tab => (
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setSelectedSector(null); setSelectedUser(null); }}
               className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
                 activeTab === tab 
-                ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.4)]" 
-                : "text-white/60 dark:text-white/40 hover:text-white"
+                ? "bg-white text-[#03440c] shadow-sm border border-slate-200" 
+                : "text-slate-700 hover:text-slate-950"
               }`}
             >
               {tab === "approvals" ? "Solicitações" : tab === "sectors" ? "Setores" : "Usuários"}
@@ -178,7 +205,7 @@ export default function AdminPanel({
 
         {activeTab === "approvals" && (
           <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto px-4">
-            <div className="flex items-center gap-1 p-1.5 bg-emerald-950/40 dark:bg-black/40 rounded-2xl border border-emerald-800/50 dark:border-white/5">
+            <div className="flex items-center gap-1 p-1.5 bg-slate-100 rounded-2xl border border-slate-200">
               {[
                 { label: "Todos", value: "all" },
                 { label: "Pendentes", value: StatusAuditoria.PENDENTE },
@@ -190,8 +217,8 @@ export default function AdminPanel({
                   onClick={() => setApprovalFilter(opt.value as any)}
                   className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                     approvalFilter === opt.value 
-                    ? "bg-emerald-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.4)] scale-105" 
-                    : "text-white/40 hover:text-white hover:bg-white/10"
+                    ? "bg-white text-[#03440c] shadow-sm scale-105 border border-slate-200" 
+                    : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/50"
                   }`}
                 >
                   {opt.label}
@@ -199,13 +226,13 @@ export default function AdminPanel({
               ))}
             </div>
             <div className="relative flex-1 sm:w-64 group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-100/30 group-focus-within:text-emerald-400 transition-colors" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#03440c] transition-colors" size={16} />
               <input 
                 type="text"
                 placeholder="Buscar IA, ID ou Setor..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-emerald-950/50 dark:bg-black/20 border border-emerald-800/50 dark:border-white/10 rounded-xl text-xs text-white placeholder:text-emerald-100/20 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-500 focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 outline-none transition-all"
               />
             </div>
           </div>
@@ -519,17 +546,7 @@ export default function AdminPanel({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-emerald-100/30 dark:divide-white/5">
-                    {(profiles.length > 0 ? profiles : Array.from(new Set(records.map(r => r.responsavelPreenchimento))).map(name => ({ id: name, full_name: name, role: 'user' as const, setor: 'N/A' }))).map((userItem, i) => {
-                      const isProfile = profiles.length > 0;
-                      const userProfile = isProfile ? (userItem as UserProfile) : null;
-                      const userName = isProfile ? (userItem as UserProfile).full_name : (userItem as any).full_name;
-                      
-                      const userIAs = records.filter(r => 
-                        r.responsavelPreenchimento === userName
-                      );
-                      const hasPending = userIAs.some(r => (r.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE);
-                      const userId = userProfile?.id || userName;
-
+                    {usersWithStats.map(({ userItem, userProfile, userName, userIAs, hasPending, userId }, i) => {
                       return (
                         <tr key={userId + i} className="hover:bg-white/60 dark:hover:bg-white/[0.02] transition-colors group">
                           <td className="px-8 py-6">
@@ -875,62 +892,62 @@ export default function AdminPanel({
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-xl bg-emerald-900 dark:bg-emerald-950 rounded-[3rem] shadow-2xl border border-emerald-800/50 overflow-hidden"
+              className="relative w-full max-w-xl bg-gradient-to-br from-white via-[#006400] to-[#03440c] rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden"
             >
               <div className="p-10">
                 <div className="flex items-center gap-4 mb-8">
                   <div className={`size-16 rounded-2xl flex items-center justify-center shadow-lg ${
                     decisionModal.status === StatusAuditoria.APROVADO 
-                      ? "bg-brand-green text-black" 
+                      ? "bg-[#03440c] text-white" 
                       : decisionModal.status === StatusAuditoria.NEGADO 
-                        ? "bg-red-500 text-white" 
-                        : "bg-amber-500 text-white"
+                        ? "bg-red-700 text-white" 
+                        : "bg-amber-600 text-white"
                   }`}>
                     {decisionModal.status === StatusAuditoria.APROVADO ? <CheckCircle2 size={32} /> : 
                      decisionModal.status === StatusAuditoria.NEGADO ? <ShieldX size={32} /> : 
                      <AlertTriangle size={32} />}
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-white uppercase tracking-tight leading-tight">
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase leading-tight">
                       {decisionModal.status === StatusAuditoria.APROVADO ? "Aprovar IA para Uso" : 
                        decisionModal.status === StatusAuditoria.NEGADO ? "Negar Solicitação" : 
                        "Redefinir Resultado"}
                     </h3>
-                    <p className="text-emerald-400 dark:text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em]">{decisionModal.record.nomeFerramenta}</p>
+                    <p className="text-slate-700 text-[10px] font-black uppercase tracking-[0.2em]">{decisionModal.record.nomeFerramenta}</p>
                   </div>
                 </div>
 
                 <div className="space-y-6">
-                  <div className="bg-black/20 dark:bg-black/40 p-6 rounded-2xl border border-emerald-800/50 flex items-center gap-6">
+                  <div className="bg-black/5 dark:bg-black/15 p-6 rounded-2xl border border-black/5 flex items-center gap-6">
                     <div className="flex-1">
-                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Setor</p>
-                      <p className="text-xs font-black text-white uppercase">{decisionModal.record.unidadeSetor}</p>
-                      <p className="text-[10px] font-bold text-emerald-100/70 mt-0.5">{decisionModal.record.responsavelPreenchimento}</p>
+                      <p className="text-[8px] font-black text-[#03440c]/70 uppercase tracking-widest mb-1">Setor</p>
+                      <p className="text-xs font-black text-slate-900 uppercase">{decisionModal.record.unidadeSetor}</p>
+                      <p className="text-[10px] font-bold text-slate-800 mt-0.5">{decisionModal.record.responsavelPreenchimento}</p>
                     </div>
-                    <div className="h-10 w-px bg-emerald-800/50"></div>
+                    <div className="h-10 w-px bg-slate-200"></div>
                     <div className="flex-1">
-                      <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">Natureza de Uso</p>
-                      <p className="text-xs font-black text-white uppercase">{decisionModal.record.naturezaUso}</p>
-                      <p className="text-[10px] font-bold text-brand-orange mt-0.5 drop-shadow-[0_0_8px_rgba(255,165,0,0.4)]">{decisionModal.record.usaDadosSensiveis === 'Sim' ? 'DADOS SENSÍVEIS' : 'DADOS COMUNS'}</p>
+                      <p className="text-[8px] font-black text-[#03440c]/70 uppercase tracking-widest mb-1">Natureza de Uso</p>
+                      <p className="text-xs font-black text-slate-900 uppercase">{decisionModal.record.naturezaUso}</p>
+                      <p className="text-[10px] font-bold text-amber-700 mt-0.5 drop-shadow-[0_0_8px_rgba(255,165,0,0.4)]">{decisionModal.record.usaDadosSensiveis === 'Sim' ? 'DADOS SENSÍVEIS' : 'DADOS COMUNS'}</p>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                      <div className="size-1.5 rounded-full bg-brand-green shadow-[0_0_8px_rgba(0,255,101,0.5)]"></div> Parecer da Auditoria
+                    <label className="text-[10px] font-black text-[#03440c] uppercase tracking-[0.2em] flex items-center gap-2">
+                      <div className="size-1.5 rounded-full bg-[#03440c] shadow-[0_0_8px_rgba(3,68,12,0.5)]"></div> Parecer da Auditoria
                     </label>
                     <textarea 
                       value={auditComment}
                       onChange={(e) => setAuditComment(e.target.value)}
                       placeholder="Descreva aqui o motivo da aprovação ou reprovação, indicando possíveis ajustes técnicos ou restrições de uso..."
-                      className="w-full h-32 bg-black/20 dark:bg-black/40 border border-emerald-800 text-white placeholder:text-emerald-700/50 rounded-2xl p-4 text-xs font-medium focus:border-brand-green focus:ring-2 focus:ring-brand-green/10 outline-none transition-all resize-none"
+                      className="w-full h-32 bg-white border border-[#03440c]/20 text-slate-900 placeholder-slate-400 rounded-2xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-inner"
                     />
                   </div>
 
                   <div className="flex items-center gap-4 pt-4">
                     <button 
                       onClick={() => setDecisionModal({ isOpen: false, record: null, status: null })}
-                      className="flex-1 py-4 text-emerald-100/50 hover:text-white font-black uppercase text-[10px] tracking-[0.2em] transition-all hover:bg-white/5 rounded-2xl"
+                      className="flex-1 py-4 text-[#03440c] hover:text-[#006400] font-black uppercase text-[10px] tracking-[0.2em] transition-all hover:bg-black/5 rounded-2xl"
                     >
                       Cancelar Operação
                     </button>
@@ -942,7 +959,7 @@ export default function AdminPanel({
                           setAuditComment("");
                         }
                       }}
-                      className="flex-[2] py-5 rounded-2xl font-black uppercase text-[12px] tracking-[0.1em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3 bg-brand-green text-black hover:bg-white hover:text-black shadow-brand-green/20"
+                      className="flex-[2] py-5 rounded-2xl font-black uppercase text-[12px] tracking-[0.1em] shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3 bg-[#03440c] text-white hover:bg-[#03440c]/90 shadow-[#03440c]/10"
                     >
                       {decisionModal.status === StatusAuditoria.APROVADO ? <CheckCircle2 size={20} /> : 
                        decisionModal.status === StatusAuditoria.NEGADO ? <XCircle size={20} /> : 

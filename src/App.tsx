@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, Sun, Moon, MessageSquare, UserCircle } from "lucide-react";
+import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, Sun, Moon, MessageSquare, UserCircle, Building2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusUso, UserProfile, StatusAuditoria } from "./types";
 import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles, updateUserProfile } from "./storage";
@@ -13,6 +13,7 @@ import Dashboard from "./components/Dashboard";
 import Inventory from "./components/Inventory";
 import SectorMap from "./components/SectorMap";
 import AdminPanel from "./components/AdminPanel";
+import SectorsManager from "./components/SectorsManager";
 import RegistrationForm from "./components/RegistrationForm";
 import ReportView from "./components/ReportView";
 import LabBackground from "./components/LabBackground";
@@ -106,7 +107,7 @@ function playNotificationSound(type: "chat" | "success" | "info" | "warning") {
 export default function App() {
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr">("dashboard");
   const [records, setRecords] = useState<IARecord[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<"online" | "offline" | "checking">("checking");
@@ -559,6 +560,7 @@ export default function App() {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "inventory", label: "Inventário de IA", icon: ClipboardList },
     { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
+    { id: "sectors_mgr", label: "Setores", icon: Building2, adminOnly: true },
     { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: true },
     { id: "new", label: "Novo Cadastro", icon: PlusCircle },
     { id: "report", label: "Relatórios", icon: FileText },
@@ -729,7 +731,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar bg-slate-50 dark:bg-[#020617]">
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -738,7 +740,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="max-w-[90rem] mx-auto"
+              className="max-w-[90rem] mx-auto bg-white dark:bg-[#060b13] border-4 border-[#03440c] dark:border-emerald-700 rounded-[3rem] p-6 md:p-10 shadow-2xl relative text-slate-900 dark:text-slate-100"
             >
               {activeTab === "dashboard" && (
                 <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={isCurrentUserAdmin} />
@@ -759,6 +761,9 @@ export default function App() {
               )}
               {activeTab === "sectors" && isCurrentUserAdmin && (
                 <SectorMap records={records} profiles={profiles} />
+              )}
+              {activeTab === "sectors_mgr" && isCurrentUserAdmin && (
+                <SectorsManager records={records} profiles={profiles} onRefresh={refreshRecords} />
               )}
               {activeTab === "admin" && isCurrentUserAdmin && (
                 <AdminPanel 
