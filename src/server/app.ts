@@ -161,13 +161,14 @@ router.post("/workflow/decide", async (req, res) => {
   try {
     const token = authHeader.replace("Bearer ", "");
     const supabase = getSupabase();
+    const supabaseAdmin = getSupabaseAdmin();
 
     // 1. Verificar quem está fazendo a requisição
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return res.status(401).json({ error: "Token inválido" });
 
     // 2. Verificar se é admin ou moderador
-    const { data: requesterProfile } = await supabase
+    const { data: requesterProfile } = await supabaseAdmin
       .from("profiles")
       .select("role, full_name")
       .eq("id", user.id)
@@ -180,7 +181,7 @@ router.post("/workflow/decide", async (req, res) => {
 
     // 3. Buscar workflow da IA
     let wfData = null;
-    const { data: existingWf } = await supabase
+    const { data: existingWf } = await supabaseAdmin
       .from("approval_workflows")
       .select("id, current_step, final_status")
       .eq("ia_record_id", recordId)
@@ -191,13 +192,13 @@ router.post("/workflow/decide", async (req, res) => {
     } else {
       console.log(`Workflow não encontrado para a IA ${recordId}. Inicializando on-the-fly...`);
       // Buscar configuração atual das etapas de aprovação
-      const { data: configRows } = await supabase
+      const { data: configRows } = await supabaseAdmin
         .from("approval_config")
         .select("*")
         .order("step_number");
 
       // Criar entrada no approval_workflows
-      const { data: newWf, error: newWfErr } = await supabase
+      const { data: newWf, error: newWfErr } = await supabaseAdmin
         .from("approval_workflows")
         .insert({
           ia_record_id: recordId,
@@ -244,7 +245,7 @@ router.post("/workflow/decide", async (req, res) => {
             is_opinion_only: s.is_opinion_only,
           }));
 
-      const { error: stepsInsertErr } = await supabase
+      const { error: stepsInsertErr } = await supabaseAdmin
         .from("approval_steps")
         .insert(stepsToInsert);
 
@@ -258,7 +259,7 @@ router.post("/workflow/decide", async (req, res) => {
     }
 
     // 4. Verificar se o usuário é o responsável pela etapa atual
-    const { data: currentStepData } = await supabase
+    const { data: currentStepData } = await supabaseAdmin
       .from("approval_steps")
       .select("id, is_opinion_only, assigned_user_id")
       .eq("workflow_id", wfData.id)
@@ -284,7 +285,7 @@ router.post("/workflow/decide", async (req, res) => {
     const isOpinionOnly = currentStepData.is_opinion_only;
     const decisionStatus = isOpinionOnly ? "opiniao" : decision;
 
-    await supabase
+    await supabaseAdmin
       .from("approval_steps")
       .update({
         status: decisionStatus,
@@ -296,7 +297,7 @@ router.post("/workflow/decide", async (req, res) => {
       .eq("id", currentStepData.id);
 
     // 6. Contar total de etapas
-    const { data: allSteps } = await supabase
+    const { data: allSteps } = await supabaseAdmin
       .from("approval_steps")
       .select("step_number")
       .eq("workflow_id", wfData.id);
@@ -312,7 +313,7 @@ router.post("/workflow/decide", async (req, res) => {
       finalStatus = "negado";
       newAuditStatus = "Negado";
       newStatusUso = "Não aprovado";
-      await supabase
+      await supabaseAdmin
         .from("approval_workflows")
         .update({ current_step: wfData.current_step, final_status: "negado", completed_at: new Date().toISOString() })
         .eq("id", wfData.id);
@@ -320,19 +321,19 @@ router.post("/workflow/decide", async (req, res) => {
       finalStatus = "aprovado";
       newAuditStatus = "Aprovado";
       newStatusUso = "Aprovado";
-      await supabase
+      await supabaseAdmin
         .from("approval_workflows")
         .update({ current_step: nextStep, final_status: "aprovado", completed_at: new Date().toISOString() })
         .eq("id", wfData.id);
     } else {
-      await supabase
+      await supabaseAdmin
         .from("approval_workflows")
         .update({ current_step: nextStep })
         .eq("id", wfData.id);
     }
 
     // 7. Atualizar o registro da IA no banco
-    const { data: iaRecord } = await supabase
+    const { data: iaRecord } = await supabaseAdmin
       .from("ia_records")
       .select("data")
       .eq("id", recordId)
@@ -356,7 +357,7 @@ router.post("/workflow/decide", async (req, res) => {
         }, ...(recordData.historico || [])]
       };
 
-      await supabase
+      await supabaseAdmin
         .from("ia_records")
         .update({
           data: updatedData,

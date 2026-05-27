@@ -77,16 +77,26 @@ export default function ApprovalPage({
         if (!isPending) return false;
 
         const wf = getRecordWf(r.id);
+        const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
+        if (isWfFinished) return false;
+
         const currentStepNum = wf ? wf.currentStep : 1;
         const stepDef = approvalConfig?.steps.find(s => s.stepNumber === currentStepNum);
 
-        // Se o usuário logado é o responsável por esta etapa
-        return stepDef?.userId === currentUserId;
+        const currentUserProfile = profiles.find(p => p.id === currentUserId);
+        const isUserAdmin = isAdmin;
+        const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
+        const isUserPrivileged = isUserAdmin || isUserModerator;
+
+        const isStepUnassigned = !stepDef?.userId;
+        const isAssignedToMe = stepDef?.userId === currentUserId;
+
+        return (isAssignedToMe || (isStepUnassigned && isUserPrivileged));
       });
     }
 
     return list;
-  }, [records, queueFilter, searchTerm, workflows, approvalConfig, currentUserId]);
+  }, [records, queueFilter, searchTerm, workflows, approvalConfig, currentUserId, profiles, isAdmin]);
 
   const stats = useMemo(() => {
     const total = records.length;
@@ -96,15 +106,27 @@ export default function ApprovalPage({
       const isPending = (r.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE;
       if (!isPending) return false;
       const wf = workflows.find(w => w.iaRecordId === r.id);
+      const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
+      if (isWfFinished) return false;
+
       const currentStepNum = wf ? wf.currentStep : 1;
       const stepDef = approvalConfig?.steps.find(s => s.stepNumber === currentStepNum);
-      return stepDef?.userId === currentUserId;
+
+      const currentUserProfile = profiles.find(p => p.id === currentUserId);
+      const isUserAdmin = isAdmin;
+      const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
+      const isUserPrivileged = isUserAdmin || isUserModerator;
+
+      const isStepUnassigned = !stepDef?.userId;
+      const isAssignedToMe = stepDef?.userId === currentUserId;
+
+      return (isAssignedToMe || (isStepUnassigned && isUserPrivileged));
     }).length;
 
     const totalPending = records.filter(r => (r.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE).length;
 
     return { total, myTurnCount, totalPending };
-  }, [records, workflows, approvalConfig, currentUserId]);
+  }, [records, workflows, approvalConfig, currentUserId, profiles, isAdmin]);
 
   return (
     <div className="space-y-8">
@@ -223,7 +245,8 @@ export default function ApprovalPage({
                   const isStepUnassigned = !activeStepDef?.userId;
                   const isAssignedToMe = activeStepDef?.userId === currentUserId;
 
-                  const isMyTurn = (isAssignedToMe || (isStepUnassigned && isUserPrivileged)) && record.statusAuditoria === StatusAuditoria.PENDENTE;
+                  const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
+                  const isMyTurn = !isWfFinished && (isAssignedToMe || (isStepUnassigned && isUserPrivileged)) && record.statusAuditoria === StatusAuditoria.PENDENTE;
 
                   return (
                     <div 

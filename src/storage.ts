@@ -51,21 +51,29 @@ export const getGlobalRecords = async (): Promise<IARecord[]> => {
         .filter(item => item.id !== 'METADATA-SECTORS')
         .map(item => {
           let record: IARecord;
-        if (item.data) {
-          record = item.data as IARecord;
-          record.id = item.id;
-          record.unidadeSetor = item.unidade_setor || record.unidadeSetor || '';
-          record.ownerId = item.owner_id || record.ownerId || '';
-        } else {
-          record = {
-            id: item.id,
-            unidadeSetor: item.unidade_setor || '',
-            ownerId: item.owner_id || '',
-            nomeFerramenta: item.nome_ferramenta || '',
-          } as any as IARecord;
-        }
-        return record;
-      });
+          if (item.data) {
+            record = item.data as IARecord;
+            record.id = item.id;
+            record.unidadeSetor = item.unidade_setor || record.unidadeSetor || '';
+            record.ownerId = item.owner_id || record.ownerId || '';
+          } else {
+            record = {
+              id: item.id,
+              unidadeSetor: item.unidade_setor || '',
+              ownerId: item.owner_id || '',
+              nomeFerramenta: item.nome_ferramenta || '',
+            } as any as IARecord;
+          }
+
+          // Force sync with database columns to prevent stale client JSON state
+          if (item.status) {
+            record.statusAuditoria = item.status as StatusAuditoria;
+          }
+          if (item.status_uso) {
+            record.statusUso = item.status_uso as StatusUso;
+          }
+          return record;
+        });
     }
     return [];
   } catch (error) {
@@ -166,6 +174,14 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
             ownerId: item.owner_id || '',
             historico: []
           } as any as IARecord;
+        }
+
+        // Force sync with database columns to prevent stale client JSON state
+        if (item.status) {
+          record.statusAuditoria = item.status as StatusAuditoria;
+        }
+        if (item.status_uso) {
+          record.statusUso = item.status_uso as StatusUso;
         }
 
         // Ensure statusAuditoria is never undefined for filtering purposes
