@@ -15,6 +15,9 @@ interface DashboardProps {
   records: IARecord[];
   onNavigate: (tab: "inventory" | "new" | "report") => void;
   isAdmin?: boolean;
+  workflows?: any;
+  approvalConfig?: any;
+  currentUserId?: string;
 }
 
 export default function Dashboard({ records, onNavigate, isAdmin }: DashboardProps) {

@@ -17,7 +17,7 @@ import {
   Layers,
   ArrowRight
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, UserProfile } from "../types";
 import { getSectors, saveSectors } from "../storage";
 
@@ -25,6 +25,8 @@ interface SectorsProps {
   records: IARecord[];
   profiles: UserProfile[];
   onRefresh?: () => void;
+  approvalConfig?: any;
+  onSaveApprovalConfig?: any;
 }
 
 export default function SectorsManager({ records, profiles, onRefresh }: SectorsProps) {

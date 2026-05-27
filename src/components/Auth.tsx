@@ -1,15 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { motion, AnimatePresence } from "motion/react";
-import { Mail, Lock, User, ArrowRight, Loader2, LogIn, UserPlus, Database } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Mail, Lock, User, ArrowRight, Loader2, Building } from "lucide-react";
+import { getSectors } from "../storage";
 
-export const Auth: React.FC = () => {
+interface AuthProps {
+  onAuthSuccess?: () => void;
+}
+
+export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [setor, setSetor] = useState("");
+  const [sectors, setSectors] = useState<string[]>([]);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    getSectors().then(setSectors);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,30 +37,32 @@ export const Auth: React.FC = () => {
           password: cleanPassword 
         });
         if (error) throw error;
+        if (onAuthSuccess) onAuthSuccess();
       } else {
+        if (!setor) {
+          setMessage({ type: "error", text: "Por favor, selecione seu setor." });
+          setLoading(false);
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({ 
           email: cleanEmail, 
           password: cleanPassword,
-          options: {
-            data: { full_name: fullName }
-          }
+          options: { data: { full_name: fullName } }
         });
         if (error) throw error;
         
         if (data.user) {
-          // Manually create profile if trigger is not set in Supabase
           const { error: profileError } = await supabase
             .from("profiles")
             .insert({ 
               id: data.user.id, 
               full_name: fullName,
-              setor: "Não definido",
+              setor: setor,
               cargo: "Colaborador"
             });
           
           if (profileError) console.error("Erro ao criar perfil:", profileError);
-          
-          setMessage({ type: "success", text: "Cadastro realizado! Verifique seu e-mail (se habilitado) ou faça login." });
+          setMessage({ type: "success", text: "Cadastro realizado! Faça login para continuar." });
           setMode("login");
         }
       }
@@ -62,7 +75,6 @@ export const Auth: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)] p-6 relative overflow-hidden">
-      {/* Abstract Background Decor */}
       <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-lab-cyan/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[30%] h-[30%] bg-brand-green/10 rounded-full blur-[100px] pointer-events-none" />
 
@@ -88,7 +100,7 @@ export const Auth: React.FC = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
+                className="overflow-hidden space-y-4"
               >
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
@@ -98,8 +110,22 @@ export const Auth: React.FC = () => {
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm"
+                    className="w-full pl-12 pr-4 py-4 bg-black/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm"
                   />
+                </div>
+                <div className="relative">
+                  <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" size={18} />
+                  <select
+                    required
+                    value={setor}
+                    onChange={(e) => setSetor(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-black/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm appearance-none"
+                  >
+                    <option value="">Selecione seu setor *</option>
+                    {sectors.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </div>
               </motion.div>
             )}
@@ -113,7 +139,7 @@ export const Auth: React.FC = () => {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm"
+              className="w-full pl-12 pr-4 py-4 bg-black/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm"
             />
           </div>
 
@@ -125,7 +151,7 @@ export const Auth: React.FC = () => {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm"
+              className="w-full pl-12 pr-4 py-4 bg-black/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm"
             />
           </div>
 
@@ -157,7 +183,7 @@ export const Auth: React.FC = () => {
           <p className="text-[var(--text-muted)] text-sm">
             {mode === "login" ? "Ainda não tem acesso?" : "Já possui uma conta?"}
             <button
-              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+              onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(null); }}
               className="ml-2 text-lab-cyan font-bold hover:underline"
             >
               {mode === "login" ? "Cadastre-se" : "Faça Login"}

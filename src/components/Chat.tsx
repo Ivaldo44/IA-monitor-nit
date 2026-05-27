@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { ChatMessage, UserProfile } from "../types";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Send, User, Hash, MoreVertical, MessageSquare, ShieldCheck, X, Briefcase, Building, Phone, Mail } from "lucide-react";
 
 const ProfileModal: React.FC<{ profile: UserProfile; onClose: () => void }> = ({ profile, onClose }) => (

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Search, Filter, Eye, Edit, Trash2, FileOutput, ArrowUpDown, AlertCircle, CheckCircle2, AlertTriangle, XCircle, Download, ClipboardList, PlusCircle, Database, FileSpreadsheet } from "lucide-react";
 import { IARecord, StatusUso, Criticidade, ClassificacaoRisco, StatusAuditoria } from "../types";
 import ExcelJS from "exceljs";
@@ -18,6 +18,8 @@ interface InventoryProps {
   onAdd: () => void;
   onRefresh: () => void;
   isAdmin?: boolean;
+  approvalConfig?: any;
+  onSaveApprovalConfig?: any;
 }
 
 export default function Inventory({ records, onEdit, onView, onDelete, onAdd, onRefresh, isAdmin }: InventoryProps) {

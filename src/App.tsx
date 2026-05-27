@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, Sun, Moon, MessageSquare, UserCircle, Building2 } from "lucide-react";
+import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { IARecord, StatusUso, UserProfile, StatusAuditoria } from "./types";
+import { IARecord, StatusUso, UserProfile, StatusAuditoria, ApprovalWorkflow, ApprovalConfig } from "./types";
 import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles, updateUserProfile } from "./storage";
 import { supabase } from "./lib/supabase";
 import Dashboard from "./components/Dashboard";
@@ -21,6 +21,7 @@ import { Auth } from "./components/Auth";
 import { UserProfileView } from "./components/UserProfileView";
 import { Chat } from "./components/Chat";
 import { useAuth } from "./contexts/AuthContext";
+import ApprovalPage from "./components/ApprovalPage";
 
 export interface NotificationToast {
   id: string;
@@ -107,16 +108,25 @@ function playNotificationSound(type: "chat" | "success" | "info" | "warning") {
 export default function App() {
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr">("dashboard");
+  const isCurrentUserModerator = profile?.role?.toLowerCase().trim() === "moderator";
+  const isCurrentUserPrivileged = isCurrentUserAdmin || isCurrentUserModerator;
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr" | "approval_queue">("profile"); // sempre inicia no perfil após login
   const [records, setRecords] = useState<IARecord[]>([]);
+  const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>([]);
+  const [approvalConfig, setApprovalConfig] = useState<ApprovalConfig>({
+    steps: [
+      { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false },
+      { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false },
+      { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false },
+      { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true },
+      { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false },
+    ]
+  });
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<"online" | "offline" | "checking">("checking");
   const [selectedRecord, setSelectedRecord] = useState<IARecord | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    return saved ? saved === "dark" : false;
-  });
+  const isDarkMode = false; // Modo escuro removido - apenas modo claro
 
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
   const [toasts, setToasts] = useState<NotificationToast[]>([]);
@@ -134,16 +144,48 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  useEffect(() => {
-    localStorage.setItem("theme", isDarkMode ? "dark" : "light");
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
+  // Dark mode removido - garantir que a classe dark nunca seja aplicada
+  useEffect(() => { document.documentElement.classList.remove("dark"); }, []);
 
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const loadApprovalData = async () => {
+    try {
+      const { data: configData } = await supabase.from("approval_config").select("*").order("step_number");
+      if (configData && configData.length > 0) {
+        setApprovalConfig({
+          steps: configData.map((c: any) => ({
+            stepNumber: c.step_number,
+            roleName: c.role_name,
+            userId: c.assigned_user_id,
+            userName: c.assigned_user_name,
+            isOpinionOnly: c.is_opinion_only,
+          }))
+        });
+      }
+      const { data: wfData } = await supabase.from("approval_workflows").select(`*, steps:approval_steps(*)`);
+      if (wfData) {
+        setWorkflows(wfData.map((wf: any) => ({
+          iaRecordId: wf.ia_record_id,
+          currentStep: wf.current_step,
+          finalStatus: wf.final_status,
+          completedAt: wf.completed_at,
+          steps: (wf.steps || []).map((s: any) => ({
+            stepNumber: s.step_number,
+            roleName: s.role_name,
+            assignedUserId: s.assigned_user_id,
+            assignedUserName: s.assigned_user_name,
+            status: s.status,
+            comment: s.comment,
+            decidedAt: s.decided_at,
+            isOpinionOnly: s.is_opinion_only,
+          }))
+        })));
+      }
+    } catch (e) {
+      console.error("Erro ao carregar dados de aprovação:", e);
+    }
+  };
 
   const refreshRecords = async () => {
     setIsSyncing(true);
@@ -152,12 +194,15 @@ export default function App() {
       setSupabaseStatus(isOnline ? "online" : "offline");
       
       const isAdmin = profile?.role?.toLowerCase().trim() === "admin";
-      const data = await getRecords(user?.id, isAdmin, profile?.setor);
+      const isModerator = profile?.role?.toLowerCase().trim() === "moderator";
+      const isPrivileged = isAdmin || isModerator;
+      
+      const data = await getRecords(user?.id, isPrivileged, profile?.setor);
       setRecords(data);
       
       // Sempre buscar perfis para que o chat e outros componentes tenham os dados correspondentes
       const usersData = await getProfiles();
-      if (isAdmin) {
+      if (isPrivileged) {
         setProfiles(usersData);
       } else {
         const userSector = profile?.setor?.toLowerCase().trim();
@@ -404,10 +449,35 @@ export default function App() {
     try {
       if (isNew) {
         await addRecord(record, user?.id, isAdmin);
+        // Criar workflow de aprovação automaticamente
+        try {
+          const { data: wfData } = await supabase.from("approval_workflows").insert({
+            ia_record_id: record.id,
+            current_step: 1,
+            final_status: "pendente",
+          }).select().single();
+
+          if (wfData) {
+            const stepsToInsert = approvalConfig.steps.map(step => ({
+              workflow_id: wfData.id,
+              ia_record_id: record.id,
+              step_number: step.stepNumber,
+              role_name: step.roleName,
+              assigned_user_id: step.userId || null,
+              assigned_user_name: step.userName || null,
+              status: "aguardando",
+              is_opinion_only: step.isOpinionOnly || false,
+            }));
+            await supabase.from("approval_steps").insert(stepsToInsert);
+          }
+        } catch (wfErr) {
+          console.error("Erro ao criar workflow:", wfErr);
+        }
       } else {
         await updateRecord(record, user?.id, isAdmin);
       }
       await refreshRecords();
+      await loadApprovalData();
       setActiveTab("inventory");
       setSelectedRecord(null);
     } catch (error: any) {
@@ -416,46 +486,97 @@ export default function App() {
     }
   };
 
+  const handleSaveApprovalConfig = async (config: ApprovalConfig) => {
+    try {
+      for (const step of config.steps) {
+        await supabase.from("approval_config").upsert({
+          step_number: step.stepNumber,
+          role_name: step.roleName,
+          assigned_user_id: step.userId || null,
+          assigned_user_name: step.userName || null,
+          is_opinion_only: step.isOpinionOnly || false,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id,
+        }, { onConflict: "step_number" });
+      }
+      setApprovalConfig(config);
+    } catch (e) {
+      console.error("Erro ao salvar config de aprovação:", e);
+    }
+  };
+
   const handleUpdateStatus = async (recordId: string, status: any, comment?: string) => {
+    // Somente admin ou moderador pode chamar esta função
+    if (!isCurrentUserPrivileged) {
+      alert("Apenas administradores e moderadores podem participar do fluxo de aprovação.");
+      return;
+    }
+
     const record = records.find(r => r.id === recordId);
     if (!record) return;
 
-    const isAdmin = isCurrentUserAdmin;
-    const historyEntry = {
-      date: new Date().toISOString(),
-      user: profile?.full_name || "Admin",
-      action: status === StatusAuditoria.APROVADO ? "Aprovação Técnica" : status === StatusAuditoria.NEGADO ? "Reprovação/Bloqueio" : "Reversão de Status",
-      message: comment || `Status de auditoria atualizado para ${status}`
-    };
+    const decision = status === StatusAuditoria.APROVADO ? "aprovado" : "negado";
 
-    // Keep statusUso in sync with statusAuditoria so it updates the Status view for users
-    const newStatusUso = status === StatusAuditoria.APROVADO 
-      ? StatusUso.APROVADO 
-      : status === StatusAuditoria.NEGADO 
-      ? StatusUso.NAO_APROVADO 
-      : StatusUso.EM_AVALIACAO;
-
-    const updatedRecord = { 
-      ...record, 
-      statusAuditoria: status,
-      statusUso: newStatusUso,
-      historico: [historyEntry, ...(record.historico || [])]
-    };
-    
-    // Optimistic update
-    setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
-    
     try {
-      await updateRecord(updatedRecord, user?.id, isAdmin);
+      // Chamar a rota segura do backend — ela valida se o usuário é o responsável da etapa atual
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch("/api/workflow/decide", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ recordId, decision, comment })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        // Mostrar mensagem clara se não for a vez do usuário
+        alert(`⚠️ ${result.error || "Erro ao processar decisão"}`);
+        return;
+      }
+
+      // Atualizar estado local otimisticamente após confirmação do backend
+      const newAuditStatus = result.finalStatus === "aprovado" 
+        ? StatusAuditoria.APROVADO 
+        : result.finalStatus === "negado" 
+          ? StatusAuditoria.NEGADO 
+          : StatusAuditoria.PENDENTE;
+
+      const newStatusUso = result.finalStatus === "aprovado"
+        ? StatusUso.APROVADO
+        : result.finalStatus === "negado"
+          ? StatusUso.NAO_APROVADO
+          : StatusUso.EM_AVALIACAO;
+
+      const updatedRecord = {
+        ...record,
+        statusAuditoria: newAuditStatus,
+        statusUso: newStatusUso,
+      };
+
+      setRecords(prev => prev.map(r => r.id === recordId ? updatedRecord : r));
+
+      // Mostrar feedback
+      if (result.finalStatus === "aprovado") {
+        addToast({ title: "IA Aprovada!", message: result.message, type: "success" });
+      } else if (result.finalStatus === "negado") {
+        addToast({ title: "IA Indeferida", message: result.message, type: "warning" });
+      } else {
+        addToast({ title: "Etapa Concluída", message: result.message, type: "info" });
+      }
+
       await refreshRecords();
+      await loadApprovalData();
     } catch (error) {
       console.error("Erro ao atualizar status:", error);
-      alert("Erro ao atualizar o status da auditoria.");
+      alert("Erro ao comunicar com o servidor.");
       await refreshRecords();
     }
   };
 
-  const handleUpdateUserRole = async (userId: string, newRole: "admin" | "user") => {
+  const handleUpdateUserRole = async (userId: string, newRole: "admin" | "moderator" | "user") => {
     // Check if it's a real GUID/UUID (Fallback names are not UUIDs)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
     
@@ -514,7 +635,8 @@ export default function App() {
         await refreshProfile();
       }
       await refreshRecords();
-      alert(`✅ Sucesso! O usuário agora tem acesso de ${newRole === "admin" ? "ADMINISTRADOR" : "USUÁRIO COMUM"}.`);
+      const roleLabel = newRole === "admin" ? "ADMINISTRADOR" : newRole === "moderator" ? "MODERADOR" : "USUÁRIO COMUM";
+      alert(`✅ Sucesso! O usuário agora tem acesso de ${roleLabel}.`);
     } catch (error: any) {
       console.error("❌ Erro fatal ao atualizar role do usuário:", error);
       // Rollback
@@ -559,14 +681,15 @@ export default function App() {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "inventory", label: "Inventário de IA", icon: ClipboardList },
+    { id: "approval_queue", label: "Aprovação de IAs", icon: ShieldCheck, privilegedOnly: true },
     { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
     { id: "sectors_mgr", label: "Setores", icon: Building2, adminOnly: true },
-    { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: true },
+    { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: false, privilegedOnly: true },
     { id: "new", label: "Novo Cadastro", icon: PlusCircle },
     { id: "report", label: "Relatórios", icon: FileText },
     { id: "chat", label: "Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
-  ].filter(item => !item.adminOnly || isCurrentUserAdmin);
+  ].filter(item => (!item.adminOnly || isCurrentUserAdmin) && (!("privilegedOnly" in item && item.privilegedOnly) || isCurrentUserPrivileged));
 
   if (authLoading) {
     return (
@@ -593,9 +716,7 @@ export default function App() {
           <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA Logo" className="h-10 w-auto [filter:var(--logo-filter)]" />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors">
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors">
             {isSidebarOpen ? <X /> : <Menu />}
           </button>
@@ -691,9 +812,7 @@ export default function App() {
                   </div>
                 </button>
              </div>
-             <button onClick={() => setIsDarkMode(!isDarkMode)} className="hidden sm:flex p-2 glass rounded-xl text-slate-500 hover:text-brand-green transition-all hover:scale-105 active:scale-95">
-                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-             </button>
+
              <div className="hidden sm:flex items-center gap-8 px-5 py-2 glass rounded-2xl">
                <div className="flex flex-col items-end">
                  <div className="flex items-center gap-1.5">
@@ -731,7 +850,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar bg-slate-50 dark:bg-[#020617]">
+        <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar bg-[var(--bg-content)]">
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -740,10 +859,10 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="max-w-[90rem] mx-auto bg-white dark:bg-[#060b13] border-4 border-[#03440c] dark:border-emerald-700 rounded-[3rem] p-6 md:p-10 shadow-2xl relative text-slate-900 dark:text-slate-100"
+              className="max-w-[90rem] mx-auto bg-[var(--bg-card-page)] border-4 border-[var(--border-page)] rounded-[3rem] p-6 md:p-10 shadow-2xl relative text-[var(--text-bright)]"
             >
               {activeTab === "dashboard" && (
-                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={isCurrentUserAdmin} />
+                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={isCurrentUserAdmin} workflows={workflows} approvalConfig={approvalConfig} currentUserId={user?.id} />
               )}
               {activeTab === "inventory" && (
                 <Inventory 
@@ -755,7 +874,7 @@ export default function App() {
                     setSelectedRecord(null);
                     setActiveTab("new");
                   }}
-                  onRefresh={refreshRecords}
+                  onRefresh={refreshRecords} approvalConfig={approvalConfig} onSaveApprovalConfig={handleSaveApprovalConfig}
                   isAdmin={isCurrentUserAdmin}
                 />
               )}
@@ -763,9 +882,22 @@ export default function App() {
                 <SectorMap records={records} profiles={profiles} />
               )}
               {activeTab === "sectors_mgr" && isCurrentUserAdmin && (
-                <SectorsManager records={records} profiles={profiles} onRefresh={refreshRecords} />
+                <SectorsManager records={records} profiles={profiles} onRefresh={refreshRecords} approvalConfig={approvalConfig} onSaveApprovalConfig={handleSaveApprovalConfig} />
               )}
-              {activeTab === "admin" && isCurrentUserAdmin && (
+              {activeTab === "approval_queue" && isCurrentUserPrivileged && (
+                <ApprovalPage 
+                  records={records}
+                  profiles={profiles}
+                  workflows={workflows}
+                  approvalConfig={approvalConfig}
+                  currentUserId={user?.id}
+                  onUpdateStatus={handleUpdateStatus}
+                  onSaveApprovalConfig={handleSaveApprovalConfig}
+                  onViewRecord={handleView}
+                  isAdmin={isCurrentUserAdmin}
+                />
+              )}
+              {activeTab === "admin" && isCurrentUserPrivileged && (
                 <AdminPanel 
                   records={records} 
                   profiles={profiles}
@@ -773,6 +905,10 @@ export default function App() {
                   onViewRecord={handleView} 
                   onUpdateUserRole={handleUpdateUserRole}
                   onDeleteUser={handleDeleteUser}
+                  approvalConfig={approvalConfig}
+                  onSaveApprovalConfig={handleSaveApprovalConfig}
+                  currentUserId={user?.id}
+                  workflows={workflows}
                 />
               )}
               {activeTab === "chat" && (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { User, Mail, Briefcase, Building, Phone, Save, Loader2, Camera, LogOut, ShieldCheck } from "lucide-react";
 import { getSectors } from "../storage";
 
@@ -213,26 +213,37 @@ export const UserProfileView: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1">Setor</label>
+                  <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1">
+                    Setor
+                  </label>
                   <div className="relative">
                     <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" size={18} />
-                    <select
-                      value={formData.setor}
-                      onChange={(e) => setFormData({ ...formData, setor: e.target.value })}
-                      className="w-full pl-12 pr-10 py-4 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm appearance-none cursor-pointer text-[var(--text-bright)] dark:text-white font-semibold"
-                    >
-                      <option value="" className="text-slate-500 bg-white dark:bg-slate-950">Selecione um setor...</option>
-                      {sectors.map((sec) => (
-                        <option key={sec} value={sec} className="text-slate-900 dark:text-white bg-white dark:bg-slate-950">
-                          {sec}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]">
-                      <svg className="size-4 fill-current" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
+                    {profile?.role === "admin" ? (
+                      <>
+                        <select
+                          value={formData.setor}
+                          onChange={(e) => setFormData({ ...formData, setor: e.target.value })}
+                          className="w-full pl-12 pr-10 py-4 bg-black/5 border border-[var(--border-lab)] rounded-2xl focus:border-lab-cyan outline-none transition-all text-sm appearance-none cursor-pointer text-[var(--text-bright)] font-semibold"
+                        >
+                          <option value="">Selecione um setor...</option>
+                          {sectors.map((sec) => (
+                            <option key={sec} value={sec}>{sec}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-muted)]">
+                          <svg className="size-4 fill-current" viewBox="0 0 20 20">
+                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                          </svg>
+                        </div>
+                      </>
+                    ) : (
+                      <input
+                        type="text"
+                        value={formData.setor}
+                        disabled
+                        className="w-full pl-12 pr-4 py-4 bg-black/5 border border-[var(--border-lab)] rounded-2xl text-sm text-[var(--text-bright)] font-semibold opacity-70 cursor-not-allowed"
+                      />
+                    )}
                   </div>
                 </div>
 

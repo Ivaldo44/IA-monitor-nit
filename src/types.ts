@@ -194,7 +194,7 @@ export interface UserProfile {
   cargo?: string;
   setor?: string;
   contato?: string;
-  role?: "admin" | "user";
+  role?: "admin" | "moderator" | "user";
   status: "Pendente" | "Autorizado" | "Rejeitado";
   last_seen?: string;
   authorized_by?: string;
@@ -210,4 +210,51 @@ export interface ChatMessage {
   is_private: boolean;
   recipient_id?: string;
   sender_profile?: UserProfile;
+}
+
+// ============================================================
+// SISTEMA DE APROVAÇÃO EM ETAPAS
+// ============================================================
+
+export interface ApprovalStep {
+  stepNumber: number;        // 1-5
+  roleName: string;          // "Coordenador NIT", "Gerente NIT", etc
+  assignedUserId?: string;   // ID do usuário responsável por esta etapa
+  assignedUserName?: string; // Nome para exibição
+  status: "aguardando" | "aprovado" | "negado" | "opiniao";
+  comment?: string;
+  decidedAt?: string;
+  isOpinionOnly?: boolean;   // true para etapa 4 (Análise Financeira)
+}
+
+export interface ApprovalWorkflow {
+  iaRecordId: string;
+  currentStep: number;       // 1-5, 0 = concluído
+  steps: ApprovalStep[];
+  finalStatus?: "aprovado" | "negado" | "pendente";
+  completedAt?: string;
+}
+
+export interface ApprovalConfig {
+  steps: {
+    stepNumber: number;
+    roleName: string;
+    userId?: string;       // ID do usuário responsável (admin ou moderador)
+    userName?: string;     // Nome para exibição
+    isOpinionOnly?: boolean;
+  }[];
+}
+
+// Papéis do sistema
+export type UserRole = "admin" | "moderator" | "user";
+
+// Verificação de permissão de aprovação
+export function canUserApprove(
+  userId: string,
+  workflow: ApprovalWorkflow,
+  config: ApprovalConfig
+): boolean {
+  if (!workflow || workflow.finalStatus !== "pendente") return false;
+  const currentStepConfig = config.steps.find(s => s.stepNumber === workflow.currentStep);
+  return currentStepConfig?.userId === userId;
 }

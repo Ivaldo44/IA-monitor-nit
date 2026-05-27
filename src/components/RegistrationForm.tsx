@@ -257,15 +257,18 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
   const sections = [
     { label: "Identificação", icon: FileText },
     { label: "Uso da IA", icon: Zap },
-    { label: "Finalidade", icon: Info },
+    { label: "Objetivo", icon: Info },
     { label: "Dados", icon: Database },
     { label: "Integração", icon: Share2 },
     { label: "Riscos", icon: AlertTriangle },
     { label: "Conformidade", icon: ShieldCheck },
     { label: "Classificação", icon: Scale },
-    { label: "Aprovação", icon: ClipboardCheck },
     { label: "Obs", icon: FileText },
+    { label: "Aprovação", icon: ClipboardCheck },
   ];
+
+  // Fase 10 (Aprovação, índice 9) só visível para admins
+  const visibleSections = isAdmin ? sections : sections.slice(0, 9);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,7 +314,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
       {/* Sidebar Stepper - AI Lab Navigation */}
       <div className="bg-[var(--bg-sidebar)] md:w-72 p-6 space-y-2 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible shrink-0 border-b md:border-b-0 md:border-r border-[var(--border-lab)] scrollbar-hide relative z-10">
         <div className="hidden md:block text-xs text-[var(--text-muted)] font-bold uppercase tracking-wide mb-6 px-4">Processo de Registro</div>
-        {sections.map((sec, i) => (
+        {visibleSections.map((sec, i) => (
           <button
             key={i}
             type="button"
@@ -346,7 +349,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
              <div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="px-3 py-1 bg-brand-orange/10 border border-brand-orange/30 rounded-full">
-                    <p className="text-[10px] font-bold text-brand-orange uppercase tracking-wide">Etapa {activeSection + 1} de {sections.length}</p>
+                    <p className="text-[10px] font-bold text-brand-orange uppercase tracking-wide">Etapa {activeSection + 1} de {visibleSections.length}</p>
                   </div>
                   <div className="size-1 rounded-full bg-[var(--text-muted)]/20"></div>
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-tight">Conexão Segura Ativa</span>
@@ -470,15 +473,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   onToggle={(val) => handleArrayToggle("objetivos", val)}
                   required 
                 />
-                <InputGroup label="Etapa do processo" required>
-                  <select 
-                    className={sharedInputClass}
-                    value={formData.etapaProcesso}
-                    onChange={(e) => updateField("etapaProcesso", e.target.value)}
-                  >
-                    {Object.values(EtapaProcesso).map(e => <option key={e} value={e} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{e}</option>)}
-                  </select>
-                </InputGroup>
+
                 <TextArea 
                   label="Benefícios esperados" 
                   value={formData.beneficiosEsperados as string}
@@ -776,6 +771,27 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
             {activeSection === 8 && (
               <div className="space-y-6">
+                <TextArea 
+                  label="Observações Gerais" 
+                  value={formData.observacoesGerais as string}
+                  onChange={(val) => updateField("observacoesGerais", val)}
+                  className={`${sharedInputClass} min-h-[100px]`}
+                />
+                <TextArea 
+                  label="Anexos/Documentos Relacionados" 
+                  value={formData.anexos as string}
+                  onChange={(val) => updateField("anexos", val)}
+                  className={`${sharedInputClass} min-h-[100px]`}
+                  placeholder="Descreva links, evidências ou referências a documentos físicos." 
+                />
+                
+                <div className="bg-black/5 dark:bg-slate-50 rounded-3xl p-6 border border-[var(--border-lab)] italic text-[var(--text-muted)] text-sm">
+                   Dica: O histórico de alterações é registrado automaticamente ao salvar este formulário.
+                </div>
+              </div>
+            )}
+{activeSection === 9 && (
+              <div className="space-y-6">
                 {!isAdmin ? (
                   <div className="glass p-10 rounded-[2.5rem] border border-[var(--border-lab)] space-y-6 text-center max-w-2xl mx-auto shadow-inner bg-black/5 dark:bg-white/[0.02]">
                     <div className="size-20 mx-auto bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-[2rem] flex items-center justify-center shadow-lg shadow-brand-green/10">
@@ -863,28 +879,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
               </div>
             )}
 
-            {activeSection === 9 && (
-              <div className="space-y-6">
-                <TextArea 
-                  label="Observações Gerais" 
-                  value={formData.observacoesGerais as string}
-                  onChange={(val) => updateField("observacoesGerais", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                />
-                <TextArea 
-                  label="Anexos/Documentos Relacionados" 
-                  value={formData.anexos as string}
-                  onChange={(val) => updateField("anexos", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                  placeholder="Descreva links, evidências ou referências a documentos físicos." 
-                />
-                
-                <div className="bg-black/5 dark:bg-slate-50 rounded-3xl p-6 border border-[var(--border-lab)] italic text-[var(--text-muted)] text-sm">
-                   Dica: O histórico de alterações é registrado automaticamente ao salvar este formulário.
-                </div>
-              </div>
-            )}
-          </div>
+                      </div>
         </div>
 
         {/* Footer Actions */}
@@ -902,7 +897,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                  Voltar
                </button>
              )}
-             {activeSection < sections.length - 1 ? (
+             {activeSection < visibleSections.length - 1 ? (
                <button 
                  type="button" 
                  onClick={() => setActiveSection(s => s + 1)} 

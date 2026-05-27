@@ -5,16 +5,20 @@ import {
   Database, ArrowUpRight, TrendingUp, AlertTriangle, Activity,
   ChevronLeft, ExternalLink
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
-import { IARecord, StatusAuditoria, StatusUso, UserProfile } from "../types";
+import { motion, AnimatePresence } from "framer-motion";
+import { IARecord, StatusAuditoria, StatusUso, UserProfile, ApprovalConfig, ApprovalWorkflow } from "../types";
 
 interface AdminPanelProps {
   records: IARecord[];
   profiles: UserProfile[];
   onUpdateStatus: (recordId: string, status: StatusAuditoria, comment?: string) => void;
   onViewRecord: (record: IARecord) => void;
-  onUpdateUserRole?: (userId: string, newRole: "admin" | "user") => void;
+  onUpdateUserRole?: (userId: string, newRole: "admin" | "moderator" | "user") => void;
   onDeleteUser?: (userId: string) => void;
+  approvalConfig?: ApprovalConfig;
+  onSaveApprovalConfig?: (config: ApprovalConfig) => void;
+  currentUserId?: string;
+  workflows?: ApprovalWorkflow[];
 }
 
 type AdminTab = "approvals" | "sectors" | "users";
@@ -25,9 +29,29 @@ export default function AdminPanel({
   onUpdateStatus, 
   onViewRecord, 
   onUpdateUserRole,
-  onDeleteUser
+  onDeleteUser,
+  approvalConfig,
+  onSaveApprovalConfig,
+  currentUserId,
+  workflows = []
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("approvals");
+  const [workflowConfig, setWorkflowConfig] = useState<ApprovalConfig["steps"]>(
+    approvalConfig?.steps ?? [
+      { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false },
+      { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false },
+      { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false },
+      { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true },
+      { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false },
+    ]
+  );
+  const [workflowSaved, setWorkflowSaved] = useState(false);
+
+  // Apenas admins e moderadores podem participar do fluxo de aprovação
+  const privilegedProfiles = profiles.filter(p => {
+    const role = p.role?.toLowerCase().trim();
+    return role === "admin" || role === "moderator";
+  });
   const [approvalFilter, setApprovalFilter] = useState<StatusAuditoria | "all">(StatusAuditoria.PENDENTE);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
@@ -164,9 +188,9 @@ export default function AdminPanel({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
-              { label: "Pendentes", value: stats.pending, color: "text-red-600 dark:text-red-500", icon: AlertTriangle, bg: "bg-red-500/10", borderColor: "border-slate-200" },
+              { label: "Pendentes", value: stats.pending, color: "text-red-600", icon: AlertTriangle, bg: "bg-red-500/10", borderColor: "border-slate-200" },
               { label: "Aprovados", value: stats.approved, color: "text-[#03440c]", icon: CheckCircle2, bg: "bg-[#03440c]/10", borderColor: "border-slate-200" },
-              { label: "Negados", value: stats.denied, color: "text-red-600 dark:text-red-500", icon: XCircle, bg: "bg-red-500/10", borderColor: "border-slate-200" }
+              { label: "Negados", value: stats.denied, color: "text-red-600", icon: XCircle, bg: "bg-red-500/10", borderColor: "border-slate-200" }
             ].map((s, idx) => (
               <div 
                 key={idx} 
@@ -192,13 +216,13 @@ export default function AdminPanel({
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setSelectedSector(null); setSelectedUser(null); }}
-              className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+              className={`px-4 xl:px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                 activeTab === tab 
                 ? "bg-white text-[#03440c] shadow-sm border border-slate-200" 
                 : "text-slate-700 hover:text-slate-950"
               }`}
             >
-              {tab === "approvals" ? "Solicitações" : tab === "sectors" ? "Setores" : "Usuários"}
+              {tab === "approvals" ? "Cadastro de IAs" : tab === "sectors" ? "Setores" : "Usuários"}
             </button>
           ))}
         </div>
@@ -251,7 +275,7 @@ export default function AdminPanel({
             <div className="grid grid-cols-1 gap-4">
               {filteredRecords.length > 0 ? (
                 filteredRecords.map((record) => (
-                  <div key={record.id} className="bg-white dark:bg-white/5 p-6 rounded-[2.5rem] border border-emerald-200/60 dark:border-emerald-700/40 shadow-xl shadow-emerald-200/5 dark:shadow-none hover:border-emerald-500/50 hover:shadow-emerald-400/10 transition-all group flex flex-col md:flex-row items-center gap-6 relative overflow-hidden">
+                  <div key={record.id} className="bg-white dark:bg-white/5 p-6 rounded-[2.5rem] border border-emerald-200/60/40 shadow-xl shadow-emerald-200/5 dark:shadow-none hover:border-emerald-500/50 hover:shadow-emerald-400/10 transition-all group flex flex-col md:flex-row items-center gap-6 relative overflow-hidden">
                     <div className={`absolute top-0 left-0 w-1.5 h-full ${
                       record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-emerald-500" :
                       record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-lab-red" :
@@ -265,7 +289,7 @@ export default function AdminPanel({
                     <div className="flex-1 space-y-1 min-w-0">
                       <div className="flex items-center gap-3">
                         <h3 className="text-xl font-black text-emerald-700 dark:text-brand-green uppercase tracking-tight truncate">{record.nomeFerramenta}</h3>
-                        <span className="text-[10px] font-mono text-emerald-900 dark:text-white bg-white/50 dark:bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-200/50 dark:border-emerald-700/30 whitespace-nowrap">{record.id}</span>
+                        <span className="text-[10px] font-mono text-emerald-900 dark:text-white bg-white/50 dark:bg-emerald-900/40 px-2 py-0.5 rounded border border-emerald-200/50/30 whitespace-nowrap">{record.id}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
                         <button 
@@ -274,8 +298,8 @@ export default function AdminPanel({
                         >
                           <LayoutGrid size={12} /> {record.unidadeSetor}
                         </button>
-                        <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400/70 group-hover:text-emerald-600 dark:group-hover:text-brand-green transition-colors"><Users size={12} /> {record.responsavelPreenchimento}</span>
-                        <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400/70"><AlertTriangle size={12} /> {new Date(record.createdAt).toLocaleDateString()}</span>
+                        <span className="flex items-center gap-1.5 text-emerald-600 group-hover:text-emerald-600 dark:group-hover:text-brand-green transition-colors"><Users size={12} /> {record.responsavelPreenchimento}</span>
+                        <span className="flex items-center gap-1.5 text-emerald-600"><AlertTriangle size={12} /> {new Date(record.createdAt).toLocaleDateString()}</span>
                         <span className={`flex items-center gap-1 mt-1 sm:mt-0 ${record.usaDadosSensiveis === "Sim" ? "text-amber-600 dark:text-amber-400" : "text-emerald-600/60 dark:text-emerald-500/60"}`}>
                           <ShieldAlert size={12} /> {record.usaDadosSensiveis === "Sim" ? "Dados Sensíveis" : "Dados Comuns"}
                         </span>
@@ -292,8 +316,8 @@ export default function AdminPanel({
                     </div>
 
                     <div className="flex items-center gap-4 border-l border-emerald-100 dark:border-emerald-800/20 pl-6">
-                      <div className="text-right mr-4 hidden sm:block">
-                         <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase mb-1">Resultado Final</p>
+                      <div className="text-right mr-4 hidden sm:block space-y-1.5">
+                         <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Resultado Final</p>
                          <span className={`text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-widest border shadow-sm ${
                            record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-brand-green/10 text-brand-green border-brand-green/20" :
                            record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-lab-red/10 text-lab-red border-lab-red/20" :
@@ -301,39 +325,34 @@ export default function AdminPanel({
                          }`}>
                            {record.statusAuditoria || "Pendente"}
                          </span>
+                         {approvalConfig?.steps && (
+                           <div className="flex items-center gap-1 justify-end flex-wrap">
+                             {approvalConfig.steps.map((step) => {
+                               const recordWorkflow = workflows.find(wf => wf.iaRecordId === record.id);
+                               const currentStepNum = recordWorkflow ? recordWorkflow.currentStep : 1;
+                               const isPassed = step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO;
+                               const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
+                               return (
+                                 <div key={step.stepNumber} title={step.roleName} className={`size-4 rounded-full flex items-center justify-center text-[7px] font-black border ${
+                                   isPassed ? "bg-brand-green/20 border-brand-green text-brand-green" :
+                                   isCurrent ? "bg-[#03440c] border-[#03440c] text-white animate-pulse" : "bg-black/5 border-black/10 text-slate-400"
+                                 }`}>
+                                   {step.stepNumber}
+                                 </div>
+                                );
+                             })}
+                           </div>
+                         )}
                       </div>
 
                       <div className="flex flex-col sm:flex-row items-center gap-3">
-                        {(record.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE ? (
-                          <>
-                            <button 
-                              onClick={() => setDecisionModal({ isOpen: true, record, status: StatusAuditoria.APROVADO })}
-                              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition-all flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-green-500/20 active:scale-95"
-                            >
-                              <CheckCircle2 size={16} /> Aprovar Uso
-                            </button>
-                            <button 
-                              onClick={() => setDecisionModal({ isOpen: true, record, status: StatusAuditoria.NEGADO })}
-                              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-red-500 text-white hover:bg-red-600 transition-all flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-red-500/20 active:scale-95"
-                            >
-                              <ShieldX size={16} /> IA indeferida
-                            </button>
-                          </>
-                        ) : (
-                          <button 
-                             onClick={() => setDecisionModal({ isOpen: true, record, status: StatusAuditoria.PENDENTE })}
-                             className="size-11 rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all flex items-center justify-center border border-amber-600/20 group-hover:scale-110 active:scale-90 shadow-lg shadow-amber-500/20"
-                             title="Redefinir Resultado"
-                          >
-                             <AlertTriangle size={20} />
-                          </button>
-                        )}
                         <button 
                           onClick={() => onViewRecord(record)}
-                          className="size-11 rounded-xl bg-brand-orange/10 dark:bg-brand-orange/20 text-brand-orange hover:bg-brand-orange hover:text-white transition-all flex items-center justify-center border border-brand-orange/20 dark:border-brand-orange/40 group-hover:scale-110 active:scale-90"
+                          className="px-6 py-3 rounded-xl bg-[#03440c]/10 text-[#03440c] hover:bg-[#03440c] hover:text-white transition-all flex items-center justify-center gap-2 border border-[#03440c]/20"
                           title="Ficha Técnica Completa"
                         >
-                          <MoreHorizontal size={20} />
+                          <MoreHorizontal size={18} />
+                          <span className="text-[10px] font-black uppercase tracking-wider">Ver Ficha</span>
                         </button>
                       </div>
                     </div>
@@ -357,7 +376,7 @@ export default function AdminPanel({
                 <div 
                   key={i} 
                   onClick={() => setSelectedSector(sector)}
-                  className="bg-white dark:bg-white/5 p-8 rounded-[2.5rem] border border-emerald-200/50 dark:border-emerald-700/30 shadow-lg shadow-emerald-200/5 dark:shadow-none relative overflow-hidden group hover:border-emerald-400/40 hover:shadow-emerald-400/10 transition-all hover:-translate-y-1 cursor-pointer"
+                  className="bg-white dark:bg-white/5 p-8 rounded-[2.5rem] border border-emerald-200/50/30 shadow-lg shadow-emerald-200/5 dark:shadow-none relative overflow-hidden group hover:border-emerald-400/40 hover:shadow-emerald-400/10 transition-all hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="absolute -top-4 -right-4 size-32 bg-emerald-400/5 rounded-full blur-2xl group-hover:bg-emerald-400/10 transition-colors"></div>
                   <div className="relative z-10">
@@ -412,7 +431,7 @@ export default function AdminPanel({
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Stats Sidebar */}
                 <div className="lg:col-span-1 space-y-6">
-                  <div className="bg-white dark:bg-white/5 p-8 rounded-[2.5rem] border border-emerald-200/60 dark:border-emerald-700/40 shadow-xl shadow-slate-200/30 dark:shadow-none">
+                  <div className="bg-white dark:bg-white/5 p-8 rounded-[2.5rem] border border-emerald-200/60/40 shadow-xl shadow-slate-200/30 dark:shadow-none">
                     <div className="size-16 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 flex items-center justify-center text-lab-cyan shadow-sm mb-6">
                       <LayoutGrid size={32} />
                     </div>
@@ -463,7 +482,7 @@ export default function AdminPanel({
                 {/* Main Content Area */}
                 <div className="lg:col-span-3 space-y-6">
                   {selectedSectorInfo.records.map((record) => (
-                    <div key={record.id} className="bg-white dark:bg-white/5 p-6 rounded-[2rem] border border-emerald-200/60 dark:border-emerald-700/40 shadow-xl shadow-emerald-200/5 dark:shadow-none hover:border-emerald-500/50 transition-all flex flex-col sm:flex-row items-center gap-6 relative overflow-hidden group">
+                    <div key={record.id} className="bg-white dark:bg-white/5 p-6 rounded-[2rem] border border-emerald-200/60/40 shadow-xl shadow-emerald-200/5 dark:shadow-none hover:border-emerald-500/50 transition-all flex flex-col sm:flex-row items-center gap-6 relative overflow-hidden group">
                       <div className={`absolute top-0 left-0 w-1.5 h-full ${
                         record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-emerald-500" :
                         record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-lab-red" :
@@ -525,14 +544,14 @@ export default function AdminPanel({
           )}
 
           {activeTab === "users" && !selectedUser && (
-            <div className="bg-white dark:bg-white/5 rounded-[3rem] border border-emerald-200/60 dark:border-emerald-700/40 overflow-hidden shadow-xl shadow-emerald-200/5 dark:shadow-none">
+            <div className="bg-white dark:bg-white/5 rounded-[3rem] border border-emerald-200/60/40 overflow-hidden shadow-xl shadow-emerald-200/5 dark:shadow-none">
                <div className="p-8 border-b border-emerald-100/30 dark:border-emerald-900/30 bg-white/50 dark:bg-black/20 flex justify-between items-center">
                   <div>
                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Responsáveis</h3>
                     <p className="text-[10px] text-emerald-600/60 dark:text-emerald-500/60 font-extrabold uppercase tracking-[0.2em] mt-1">Gestão de acessos e responsabilidade técnica</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="px-4 py-1.5 bg-white dark:bg-white/10 rounded-full text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest border border-emerald-100/50 dark:border-emerald-700/20 shadow-sm">Total: {stats.uniqueUsers} Usuários</span>
+                    <span className="px-4 py-1.5 bg-white dark:bg-white/10 rounded-full text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest border border-emerald-100/50/20 shadow-sm">Total: {stats.uniqueUsers} Usuários</span>
                   </div>
                </div>
                <table className="w-full text-left">
@@ -605,7 +624,7 @@ export default function AdminPanel({
                           </td>
                           <td className="px-8 py-6">
                             {hasPending ? (
-                              <span className="flex items-center gap-2 text-red-600 dark:text-red-500 text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-full border border-red-200 dark:border-red-500/20">
+                              <span className="flex items-center gap-2 text-red-600 text-[10px] font-black uppercase tracking-widest bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-full border border-red-200 dark:border-red-500/20">
                                 <AlertTriangle size={12} /> Ação Necessária
                               </span>
                             ) : (
@@ -617,33 +636,59 @@ export default function AdminPanel({
                           <td className="px-8 py-6 text-right">
                             <div className="flex items-center justify-end gap-2">
                           {onUpdateUserRole && (
-                            <button 
-                              disabled={updatingUserId === userId || !userProfile}
-                              onClick={async () => {
-                                if (!userProfile) return;
-                                console.log("Updating role for user:", userProfile.id, userProfile.full_name);
-                                setUpdatingUserId(userProfile.id);
-                                try {
-                                  const isUserAdmin = userProfile?.role?.toLowerCase().trim() === "admin";
-                                  await onUpdateUserRole(userProfile.id, isUserAdmin ? "user" : "admin");
-                                } finally {
-                                  setUpdatingUserId(null);
-                                }
-                              }}
-                              className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
-                                !userProfile
-                                ? "bg-slate-100 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10 cursor-not-allowed"
-                                : userProfile?.role?.toLowerCase().trim() === "admin" 
-                                ? "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500 hover:text-white" 
-                                : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green hover:text-black"
-                              } ${updatingUserId === (userProfile?.id || "") ? "opacity-50 cursor-wait" : ""}`}
-                              title={!userProfile ? "Este usuário não possui conta no sistema" : userProfile?.role?.toLowerCase().trim() === "admin" ? "Remover Admin" : "Tornar Admin"}
-                            >
-                              {updatingUserId === (userProfile?.id || "") ? (
-                                <span className="animate-spin size-3 border-2 border-current border-t-transparent rounded-full" />
-                              ) : null}
-                              {userProfile?.role?.toLowerCase().trim() === "admin" ? "Revogar Admin" : "Tornar Admin"}
-                            </button>
+                            <div className="flex gap-2 flex-wrap">
+                              {/* Botão Admin */}
+                              <button 
+                                disabled={updatingUserId === userId || !userProfile}
+                                onClick={async () => {
+                                  if (!userProfile) return;
+                                  setUpdatingUserId(userProfile.id);
+                                  try {
+                                    const role = userProfile?.role?.toLowerCase().trim();
+                                    await onUpdateUserRole(userProfile.id, role === "admin" ? "user" : "admin");
+                                  } finally {
+                                    setUpdatingUserId(null);
+                                  }
+                                }}
+                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
+                                  !userProfile
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                                  : userProfile?.role?.toLowerCase().trim() === "admin" 
+                                  ? "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500 hover:text-white" 
+                                  : "bg-brand-green/10 text-brand-green border-brand-green/20 hover:bg-brand-green hover:text-black"
+                                } ${updatingUserId === (userProfile?.id || "") ? "opacity-50 cursor-wait" : ""}`}
+                                title={!userProfile ? "Usuário sem conta" : userProfile?.role?.toLowerCase().trim() === "admin" ? "Remover Admin" : "Tornar Admin"}
+                              >
+                                {updatingUserId === (userProfile?.id || "") ? (
+                                  <span className="animate-spin size-3 border-2 border-current border-t-transparent rounded-full" />
+                                ) : null}
+                                {userProfile?.role?.toLowerCase().trim() === "admin" ? "Revogar Admin" : "Admin"}
+                              </button>
+                              {/* Botão Moderador */}
+                              <button 
+                                disabled={updatingUserId === userId || !userProfile || userProfile?.role?.toLowerCase().trim() === "admin"}
+                                onClick={async () => {
+                                  if (!userProfile || userProfile?.role?.toLowerCase().trim() === "admin") return;
+                                  setUpdatingUserId(userProfile.id);
+                                  try {
+                                    const role = userProfile?.role?.toLowerCase().trim();
+                                    await onUpdateUserRole(userProfile.id, role === "moderator" ? "user" : "moderator");
+                                  } finally {
+                                    setUpdatingUserId(null);
+                                  }
+                                }}
+                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border flex items-center gap-2 ${
+                                  !userProfile || userProfile?.role?.toLowerCase().trim() === "admin"
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-40"
+                                  : userProfile?.role?.toLowerCase().trim() === "moderator" 
+                                  ? "bg-lab-cyan/10 text-lab-cyan border-lab-cyan/20 hover:bg-lab-cyan hover:text-white" 
+                                  : "bg-lab-blue/10 text-lab-blue border-lab-blue/20 hover:bg-lab-blue hover:text-white"
+                                } ${updatingUserId === (userProfile?.id || "") ? "opacity-50 cursor-wait" : ""}`}
+                                title={!userProfile ? "Usuário sem conta" : userProfile?.role?.toLowerCase().trim() === "admin" ? "Admins já têm acesso total" : userProfile?.role?.toLowerCase().trim() === "moderator" ? "Remover Moderador" : "Tornar Moderador"}
+                              >
+                                {userProfile?.role?.toLowerCase().trim() === "moderator" ? "Revogar Mod." : "Moderador"}
+                              </button>
+                            </div>
                           )}
                           <button 
                             onClick={() => setSelectedUser(userName)}
@@ -723,7 +768,7 @@ export default function AdminPanel({
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 {/* Profile Profile Sidebar */}
                 <div className="lg:col-span-1 space-y-6">
-                  <div className="bg-white dark:bg-white/5 p-8 rounded-[3rem] border border-emerald-200/60 dark:border-emerald-700/40 shadow-2xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
+                  <div className="bg-white dark:bg-white/5 p-8 rounded-[3rem] border border-emerald-200/60/40 shadow-2xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-lab-blue/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                     
                     <div className="relative z-10">
@@ -764,7 +809,7 @@ export default function AdminPanel({
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-white/5 p-8 rounded-[3rem] border border-emerald-200/60 dark:border-emerald-700/40 shadow-xl shadow-slate-200/30 dark:shadow-none">
+                  <div className="bg-white dark:bg-white/5 p-8 rounded-[3rem] border border-emerald-200/60/40 shadow-xl shadow-slate-200/30 dark:shadow-none">
                     <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] mb-6 border-b border-slate-100 dark:border-white/5 pb-2">Métricas de Atividade</h3>
                     <div className="grid grid-cols-1 gap-4">
                       <div className="flex justify-between items-center bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100 dark:border-white/10 group hover:border-lab-cyan/30 transition-colors">
@@ -797,7 +842,7 @@ export default function AdminPanel({
                   </div>
 
                   {selectedUserInfo.records.map((record) => (
-                    <div key={record.id} className="bg-white dark:bg-white/5 p-6 rounded-[2.5rem] border border-emerald-200/60 dark:border-emerald-700/40 shadow-xl shadow-emerald-200/5 dark:shadow-none hover:border-emerald-500/50 transition-all flex flex-col sm:flex-row items-center gap-8 relative overflow-hidden group">
+                    <div key={record.id} className="bg-white dark:bg-white/5 p-6 rounded-[2.5rem] border border-emerald-200/60/40 shadow-xl shadow-emerald-200/5 dark:shadow-none hover:border-emerald-500/50 transition-all flex flex-col sm:flex-row items-center gap-8 relative overflow-hidden group">
                       <div className={`absolute top-0 left-0 w-2 h-full ${
                         record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-emerald-500" :
                         record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-lab-red" :
@@ -875,8 +920,9 @@ export default function AdminPanel({
               </div>
             </div>
           )}
-        </motion.div>
-      </AnimatePresence>
+
+         </motion.div>
+       </AnimatePresence>
 
       <AnimatePresence>
         {decisionModal.isOpen && decisionModal.record && (
