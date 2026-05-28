@@ -54,6 +54,18 @@ export default function ApprovalPage({
     });
   }, [profiles]);
 
+  const currentSteps = useMemo(() => {
+    return approvalConfig?.steps && approvalConfig.steps.length > 0
+      ? approvalConfig.steps
+      : [
+          { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false, userId: "", userName: "" },
+          { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false, userId: "", userName: "" },
+          { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false, userId: "", userName: "" },
+          { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true, userId: "", userName: "" },
+          { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false, userId: "", userName: "" },
+        ];
+  }, [approvalConfig]);
+
   // Encontra o fluxo de processo real para cada IA
   const getRecordWf = (recordId: string) => {
     return workflows.find(wf => wf.iaRecordId === recordId);
@@ -81,22 +93,26 @@ export default function ApprovalPage({
         if (isWfFinished) return false;
 
         const currentStepNum = wf ? wf.currentStep : 1;
-        const stepDef = approvalConfig?.steps.find(s => s.stepNumber === currentStepNum);
+        const stepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
+        
+        // Live config assigned user with fallback to active workflow's step user
+        const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+        const stepUserId = stepDef?.userId || wfStep?.assignedUserId;
 
         const currentUserProfile = profiles.find(p => p.id === currentUserId);
         const isUserAdmin = isAdmin;
         const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
         const isUserPrivileged = isUserAdmin || isUserModerator;
 
-        const isStepUnassigned = !stepDef?.userId;
-        const isAssignedToMe = stepDef?.userId === currentUserId;
+        const isStepUnassigned = !stepUserId;
+        const isAssignedToMe = stepUserId === currentUserId;
 
         return (isAssignedToMe || (isStepUnassigned && isUserPrivileged));
       });
     }
 
     return list;
-  }, [records, queueFilter, searchTerm, workflows, approvalConfig, currentUserId, profiles, isAdmin]);
+  }, [records, queueFilter, searchTerm, workflows, currentSteps, currentUserId, profiles, isAdmin]);
 
   const stats = useMemo(() => {
     const total = records.length;
@@ -110,15 +126,18 @@ export default function ApprovalPage({
       if (isWfFinished) return false;
 
       const currentStepNum = wf ? wf.currentStep : 1;
-      const stepDef = approvalConfig?.steps.find(s => s.stepNumber === currentStepNum);
+      const stepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
+
+      const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+      const stepUserId = stepDef?.userId || wfStep?.assignedUserId;
 
       const currentUserProfile = profiles.find(p => p.id === currentUserId);
       const isUserAdmin = isAdmin;
       const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
       const isUserPrivileged = isUserAdmin || isUserModerator;
 
-      const isStepUnassigned = !stepDef?.userId;
-      const isAssignedToMe = stepDef?.userId === currentUserId;
+      const isStepUnassigned = !stepUserId;
+      const isAssignedToMe = stepUserId === currentUserId;
 
       return (isAssignedToMe || (isStepUnassigned && isUserPrivileged));
     }).length;
@@ -126,7 +145,7 @@ export default function ApprovalPage({
     const totalPending = records.filter(r => (r.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE).length;
 
     return { total, myTurnCount, totalPending };
-  }, [records, workflows, approvalConfig, currentUserId, profiles, isAdmin]);
+  }, [records, workflows, currentSteps, currentUserId, profiles, isAdmin]);
 
   return (
     <div className="space-y-8">
@@ -235,15 +254,20 @@ export default function ApprovalPage({
                 filteredRecords.map((record) => {
                   const wf = getRecordWf(record.id);
                   const currentStepNum = wf ? wf.currentStep : 1;
-                  const activeStepDef = approvalConfig?.steps.find(s => s.stepNumber === currentStepNum);
+                  const activeStepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
                   
+                  const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+                  const stepUserId = activeStepDef?.userId || wfStep?.assignedUserId;
+                  const displayedRoleName = activeStepDef?.roleName || wfStep?.roleName || "N/A";
+                  const displayedUserName = activeStepDef?.userName || wfStep?.assignedUserName;
+
                   const currentUserProfile = profiles.find(p => p.id === currentUserId);
                   const isUserAdmin = isAdmin;
                   const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
                   const isUserPrivileged = isUserAdmin || isUserModerator;
 
-                  const isStepUnassigned = !activeStepDef?.userId;
-                  const isAssignedToMe = activeStepDef?.userId === currentUserId;
+                  const isStepUnassigned = !stepUserId;
+                  const isAssignedToMe = stepUserId === currentUserId;
 
                   const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
                   const isMyTurn = !isWfFinished && (isAssignedToMe || (isStepUnassigned && isUserPrivileged)) && record.statusAuditoria === StatusAuditoria.PENDENTE;
@@ -300,49 +324,41 @@ export default function ApprovalPage({
                           <div className="w-full text-left xl:text-right">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">Fluxo de Assinaturas</p>
                             
-                            {isMyTurn || record.statusAuditoria !== StatusAuditoria.PENDENTE ? (
-                              <>
-                                <div className="flex items-center gap-1 w-full justify-start xl:justify-end mb-2">
-                                  {approvalConfig?.steps?.map((step) => {
-                                    const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
-                                    const isPassed = step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO;
-                                    const isFailed = record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum;
+                            <div className="flex items-center gap-1 w-full justify-start xl:justify-end mb-2">
+                              {currentSteps.map((step) => {
+                                const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
+                                const isPassed = step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO;
+                                const isFailed = record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum;
 
-                                    return (
-                                      <div 
-                                        key={step.stepNumber} 
-                                        title={`${step.stepNumber}. ${step.roleName}`}
-                                        className={`size-6 rounded-full flex items-center justify-center text-[9px] font-black border transition-all ${
-                                          isPassed 
-                                            ? "bg-brand-green/20 border-brand-green text-brand-green" 
-                                            : isFailed
-                                              ? "bg-lab-red/20 border-lab-red text-lab-red"
-                                              : isCurrent
-                                                ? "bg-amber-400 border-amber-500 text-white shadow-md animate-pulse scale-105" 
-                                                : "bg-black/5 border-slate-200 text-slate-400"
-                                        }`}
-                                      >
-                                        {step.stepNumber}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                return (
+                                  <div 
+                                    key={step.stepNumber} 
+                                    title={`${step.stepNumber}. ${step.roleName}`}
+                                    className={`size-6 rounded-full flex items-center justify-center text-[9px] font-black border transition-all ${
+                                      isPassed 
+                                        ? "bg-brand-green/20 border-brand-green text-brand-green" 
+                                        : isFailed
+                                          ? "bg-lab-red/20 border-lab-red text-lab-red"
+                                          : isCurrent
+                                            ? "bg-amber-400 border-amber-500 text-white shadow-md animate-pulse scale-105" 
+                                            : "bg-black/5 border-slate-200 text-slate-400"
+                                    }`}
+                                  >
+                                    {step.stepNumber}
+                                  </div>
+                                );
+                              })}
+                            </div>
 
-                                <p className="text-[10px] font-black text-slate-700 uppercase tracking-tighter">
-                                  {record.statusAuditoria === StatusAuditoria.APROVADO ? (
-                                    <span className="text-brand-green">✓ Aprovada em definitivo</span>
-                                  ) : record.statusAuditoria === StatusAuditoria.NEGADO ? (
-                                    <span className="text-lab-red">✕ Fluxo indeferido / Bloqueado</span>
-                                  ) : (
-                                    <span>Ativo na Etapa {currentStepNum}/{approvalConfig?.steps.length}: <strong className="text-amber-600 block sm:inline">{activeStepDef?.roleName || "N/A"}</strong></span>
-                                  )}
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-[10px] font-black text-slate-700 uppercase tracking-tighter">
-                                <span className="text-amber-500 font-extrabold uppercase">Pendente</span>
-                              </p>
-                            )}
+                            <p className="text-[10px] font-black text-slate-700 uppercase tracking-tighter">
+                              {record.statusAuditoria === StatusAuditoria.APROVADO ? (
+                                <span className="text-brand-green">✓ Aprovada em definitivo</span>
+                              ) : record.statusAuditoria === StatusAuditoria.NEGADO ? (
+                                <span className="text-lab-red">✕ Fluxo indeferido / Bloqueado</span>
+                              ) : (
+                                <span>Ativo na Etapa {currentStepNum}/{currentSteps.length}: <strong className="text-amber-600 block sm:inline">{displayedRoleName} {displayedUserName ? `(${displayedUserName})` : ""}</strong></span>
+                              )}
+                            </p>
                           </div>
 
                           {/* Action Buttons based on User Turn */}

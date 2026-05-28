@@ -40,17 +40,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.error("Erro na sessão inicial:", error);
+        // Se o erro for de token inválido/expirado, limpamos os tokens locais e forçamos logout
+        if (
+          error.message?.includes("Refresh Token") || 
+          error.message?.includes("not found") ||
+          error.status === 400 ||
+          error.status === 401
+        ) {
+          try {
+            // Limpa chaves do Supabase no localStorage para evitar loop infinito
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && (key.startsWith("sb-") || key.includes("supabase.auth"))) {
+                localStorage.removeItem(key);
+              }
+            }
+          } catch (e) {
+            console.error("Erro ao limpar localStorage:", e);
+          }
+          supabase.auth.signOut().catch(() => {});
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      const session = data?.session ?? null;
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id);
       }
       setLoading(false);
+    }).catch(err => {
+      console.error("Erro fatal ao carregar getSession:", err);
+      // Fallback em caso de erro grave (rejeição de Promise por exemplo)
+      setSession(null);
+      setUser(null);
+      setLoading(false);
     });
 
     // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {

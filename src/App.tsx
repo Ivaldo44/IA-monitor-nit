@@ -151,36 +151,45 @@ export default function App() {
 
   const loadApprovalData = async () => {
     try {
-      const { data: configData } = await supabase.from("approval_config").select("*").order("step_number");
-      if (configData && configData.length > 0) {
-        setApprovalConfig({
-          steps: configData.map((c: any) => ({
-            stepNumber: c.step_number,
-            roleName: c.role_name,
-            userId: c.assigned_user_id,
-            userName: c.assigned_user_name,
-            isOpinionOnly: c.is_opinion_only,
-          }))
-        });
+      // Carregar configurações de aprovação pela API segura do servidor
+      const configRes = await fetch("/api/workflow/config");
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        if (configData && configData.length > 0) {
+          setApprovalConfig({
+            steps: configData.map((c: any) => ({
+              stepNumber: c.step_number,
+              roleName: c.role_name,
+              userId: c.assigned_user_id,
+              userName: c.assigned_user_name,
+              isOpinionOnly: c.is_opinion_only,
+            }))
+          });
+        }
       }
-      const { data: wfData } = await supabase.from("approval_workflows").select(`*, steps:approval_steps(*)`);
-      if (wfData) {
-        setWorkflows(wfData.map((wf: any) => ({
-          iaRecordId: wf.ia_record_id,
-          currentStep: wf.current_step,
-          finalStatus: wf.final_status,
-          completedAt: wf.completed_at,
-          steps: (wf.steps || []).map((s: any) => ({
-            stepNumber: s.step_number,
-            roleName: s.role_name,
-            assignedUserId: s.assigned_user_id,
-            assignedUserName: s.assigned_user_name,
-            status: s.status,
-            comment: s.comment,
-            decidedAt: s.decided_at,
-            isOpinionOnly: s.is_opinion_only,
-          }))
-        })));
+
+      // Carregar fluxos ativos de aprovação e etapas associadas
+      const listRes = await fetch("/api/workflow/list");
+      if (listRes.ok) {
+        const wfData = await listRes.json();
+        if (wfData) {
+          setWorkflows(wfData.map((wf: any) => ({
+            iaRecordId: wf.ia_record_id,
+            currentStep: wf.current_step,
+            finalStatus: wf.final_status,
+            completedAt: wf.completed_at,
+            steps: (wf.steps || []).map((s: any) => ({
+              stepNumber: s.step_number,
+              roleName: s.role_name,
+              assignedUserId: s.assigned_user_id,
+              assignedUserName: s.assigned_user_name,
+              status: s.status,
+              comment: s.comment,
+              decidedAt: s.decided_at,
+              isOpinionOnly: s.is_opinion_only,
+            }))
+          })));
+        }
       }
     } catch (e) {
       console.error("Erro ao carregar dados de aprovação:", e);
@@ -213,6 +222,9 @@ export default function App() {
         });
         setProfiles(filteredUsers);
       }
+
+      // Carregar dados de conformidade e fluxos ativos de aprovação
+      await loadApprovalData();
     } catch (error) {
       console.error("Erro ao atualizar registros:", error);
     } finally {
@@ -499,7 +511,30 @@ export default function App() {
           updated_by: user?.id,
         }, { onConflict: "step_number" });
       }
+
+      // Sincronizar também os fluxos ativos (pendentes) com os novos responsáveis e nomes
+      const { data: activeWfs } = await supabase
+        .from("approval_workflows")
+        .select("id")
+        .eq("final_status", "pendente");
+
+      if (activeWfs && activeWfs.length > 0) {
+        const activeWfIds = activeWfs.map(w => w.id);
+        for (const step of config.steps) {
+          await supabase
+            .from("approval_steps")
+            .update({
+              role_name: step.roleName,
+              assigned_user_id: step.userId || null,
+              assigned_user_name: step.userName || null,
+            })
+            .in("workflow_id", activeWfIds)
+            .eq("step_number", step.stepNumber);
+        }
+      }
+
       setApprovalConfig(config);
+      await loadApprovalData(); // Recarrega os dados do workflow atualizados
     } catch (e) {
       console.error("Erro ao salvar config de aprovação:", e);
     }
@@ -519,7 +554,11 @@ export default function App() {
 
     try {
       // Chamar a rota segura do backend — ela valida se o usuário é o responsável da etapa atual
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) {
+        throw new Error(`Erro ao recuperar sessão: ${sessionErr.message}`);
+      }
+      const session = data?.session;
       const response = await fetch("/api/workflow/decide", {
         method: "POST",
         headers: {
@@ -599,7 +638,11 @@ export default function App() {
       console.log(`🚀 Solicitando alteração de cargo para usuário ${userId} para: ${newRole}`);
       
       // Get the session token for authentication
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) {
+        throw new Error(`Erro ao recuperar sessão: ${sessionErr.message}`);
+      }
+      const session = data?.session;
       
       const response = await fetch("/api/admin/update-role", {
         method: "POST",
@@ -647,7 +690,11 @@ export default function App() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) {
+        throw new Error(`Erro ao recuperar sessão: ${sessionErr.message}`);
+      }
+      const session = data?.session;
       const response = await fetch("/api/admin/delete-user", {
         method: "POST",
         headers: {

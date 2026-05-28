@@ -148,6 +148,41 @@ router.post("/admin/delete-user", async (req, res) => {
   }
 });
 
+// obter todas as configurações de aprovação via admin client para evitar RLS
+router.get("/workflow/config", async (req, res) => {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: configData, error } = await supabaseAdmin
+      .from("approval_config")
+      .select("*")
+      .order("step_number");
+    
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json(configData || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// obter todos os workflows ativos e suas etapas correspondentes via admin client para evitar RLS
+router.get("/workflow/list", async (req, res) => {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: wfData, error } = await supabaseAdmin
+      .from("approval_workflows")
+      .select(`*, steps:approval_steps(*)`);
+    
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json(wfData || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
 // Rota de aprovação/negação de IA com validação de fluxo
 router.post("/workflow/decide", async (req, res) => {
   const { recordId, decision, comment } = req.body;
