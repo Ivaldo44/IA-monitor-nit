@@ -541,14 +541,23 @@ export default function App() {
   };
 
   const handleUpdateStatus = async (recordId: string, status: any, comment?: string) => {
-    // Somente admin ou moderador pode chamar esta função
-    if (!isCurrentUserPrivileged) {
-      alert("Apenas administradores e moderadores podem participar do fluxo de aprovação.");
-      return;
-    }
-
     const record = records.find(r => r.id === recordId);
     if (!record) return;
+
+    // Verificar se o usuário atual é o responsável designado para a etapa atual, um admin ou moderador
+    const wf = workflows.find(w => w.iaRecordId === recordId);
+    const currentStepNum = wf ? wf.currentStep : 1;
+    const configStep = approvalConfig?.steps?.find(s => s.stepNumber === currentStepNum);
+    const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+    const assignedUserId = configStep?.userId || wfStep?.assignedUserId;
+
+    const isAssignedToMe = assignedUserId === user?.id;
+    const canParticipate = isCurrentUserAdmin || isCurrentUserModerator || isAssignedToMe || !assignedUserId;
+
+    if (!canParticipate) {
+      alert("Apenas o responsável designado para esta etapa (ou administradores) podem participar do fluxo de aprovação.");
+      return;
+    }
 
     const decision = status === StatusAuditoria.APROVADO ? "aprovado" : "negado";
 
@@ -732,7 +741,7 @@ export default function App() {
     { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
     { id: "sectors_mgr", label: "Setores", icon: Building2, adminOnly: true },
     { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: false, privilegedOnly: true },
-    { id: "new", label: "Novo Cadastro", icon: PlusCircle },
+    { id: "new", label: "Nova Solicitação", icon: PlusCircle },
     { id: "report", label: "Relatórios", icon: FileText },
     { id: "chat", label: "Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
@@ -860,40 +869,7 @@ export default function App() {
                 </button>
              </div>
 
-             <div className="hidden sm:flex items-center gap-8 px-5 py-2 glass rounded-2xl">
-               <div className="flex flex-col items-end">
-                 <div className="flex items-center gap-1.5">
-                   <ShieldAlert size={12} className="text-lab-cyan" />
-                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Privacidade LGPD</span>
-                 </div>
-                 <span className="text-[11px] font-black text-lab-cyan">ATIVO</span>
-               </div>
-               <div className="h-8 w-px bg-[var(--border-lab)]"></div>
-               <div className="flex flex-col items-end">
-                 <div className="flex items-center gap-1.5">
-                   <Activity size={12} className="text-brand-green" />
-                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Saúde do Sistema</span>
-                 </div>
-                 <span className="text-[11px] font-black text-brand-green">OTIMIZADO</span>
-               </div>
-               <div className="h-8 w-px bg-[var(--border-lab)]"></div>
-               <div className="flex flex-col items-end group relative">
-                 <div className="flex items-center gap-1.5">
-                   <Database size={12} className={supabaseStatus === "online" ? "text-brand-green" : "text-brand-orange"} />
-                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Nuvem</span>
-                 </div>
-                 <button 
-                  onClick={handleSync}
-                  disabled={isSyncing}
-                  className={`text-[11px] font-black flex items-center gap-1 hover:underline decoration-dotted ${
-                    supabaseStatus === "online" ? "text-brand-green" : supabaseStatus === "offline" ? "text-brand-orange" : "text-slate-400"
-                  }`}
-                 >
-                   {isSyncing ? "SINCRONIZANDO..." : supabaseStatus === "online" ? "ATIVO (SICRONIZAR)" : supabaseStatus === "offline" ? "OFFLINE" : "VERIFICANDO..."}
-                   {isSyncing && <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="size-2 border-t-2 border-brand-green rounded-full" />}
-                 </button>
-               </div>
-             </div>
+
           </div>
         </header>
 
@@ -956,6 +932,9 @@ export default function App() {
                   onSaveApprovalConfig={handleSaveApprovalConfig}
                   currentUserId={user?.id}
                   workflows={workflows}
+                  supabaseStatus={supabaseStatus}
+                  isSyncing={isSyncing}
+                  onSync={handleSync}
                 />
               )}
               {activeTab === "chat" && (

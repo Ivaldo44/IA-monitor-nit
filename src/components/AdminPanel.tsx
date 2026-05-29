@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusAuditoria, StatusUso, UserProfile, ApprovalConfig, ApprovalWorkflow } from "../types";
+import SystemControls from "./SystemControls";
 
 interface AdminPanelProps {
   records: IARecord[];
@@ -19,9 +20,12 @@ interface AdminPanelProps {
   onSaveApprovalConfig?: (config: ApprovalConfig) => void;
   currentUserId?: string;
   workflows?: ApprovalWorkflow[];
+  supabaseStatus?: "online" | "offline" | "checking";
+  isSyncing?: boolean;
+  onSync?: () => Promise<void>;
 }
 
-type AdminTab = "approvals" | "sectors" | "users";
+type AdminTab = "approvals" | "sectors" | "users" | "system_controls";
 
 export default function AdminPanel({ 
   records, 
@@ -33,7 +37,10 @@ export default function AdminPanel({
   approvalConfig,
   onSaveApprovalConfig,
   currentUserId,
-  workflows = []
+  workflows = [],
+  supabaseStatus = "checking",
+  isSyncing = false,
+  onSync
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("approvals");
   const [workflowConfig, setWorkflowConfig] = useState<ApprovalConfig["steps"]>(
@@ -212,7 +219,7 @@ export default function AdminPanel({
       {/* Admin Navigation */}
       <div className="flex flex-col xl:flex-row items-center justify-between gap-6 bg-white shadow-md p-3 rounded-[2.5rem] border-2 border-[#03440c] transition-all">
         <div className="flex items-center gap-1 w-full xl:w-auto p-1 bg-slate-100 rounded-2xl border border-slate-200">
-          {(["approvals", "sectors", "users"] as AdminTab[]).map(tab => (
+          {(["approvals", "sectors", "users", "system_controls"] as AdminTab[]).map(tab => (
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setSelectedSector(null); setSelectedUser(null); }}
@@ -222,7 +229,9 @@ export default function AdminPanel({
                 : "text-slate-700 hover:text-slate-950"
               }`}
             >
-              {tab === "approvals" ? "Cadastro de IAs" : tab === "sectors" ? "Setores" : "Usuários"}
+              {tab === "approvals" ? "Cadastro de IAs" : 
+               tab === "sectors" ? "Setores" : 
+               tab === "users" ? "Usuários" : "Controle do Sistema"}
             </button>
           ))}
         </div>
@@ -304,15 +313,21 @@ export default function AdminPanel({
                           <ShieldAlert size={12} /> {record.usaDadosSensiveis === "Sim" ? "Dados Sensíveis" : "Dados Comuns"}
                         </span>
                       </div>
-                      {record.historico && record.historico.length > 0 && (
-                        <div className="mt-3 flex items-start gap-2 bg-emerald-50/30 dark:bg-emerald-900/20 p-3 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/10 group-hover:bg-emerald-50/50 dark:group-hover:bg-emerald-900/30 transition-colors">
-                          <Activity size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                          <div className="space-y-0.5">
-                            <p className="text-[9px] font-black text-emerald-700 dark:text-white uppercase tracking-widest leading-none">{record.historico[0].action}</p>
-                            <p className="text-[10px] text-emerald-900 dark:text-white font-medium line-clamp-1">{record.historico[0].message}</p>
+                      {(() => {
+                        const h = record.historico?.find(
+                          item => item.action && !item.action.includes("Criação") && !item.action.includes("Atualização")
+                        );
+                        if (!h) return null;
+                        return (
+                          <div className="mt-3 flex items-start gap-2 bg-emerald-50/30 dark:bg-emerald-900/20 p-3 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/10 group-hover:bg-emerald-50/50 dark:group-hover:bg-emerald-900/30 transition-colors">
+                            <Activity size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                              <p className="text-[9px] font-black text-emerald-700 dark:text-white uppercase tracking-widest leading-none">{h.action}</p>
+                              <p className="text-[10px] text-emerald-900 dark:text-white font-medium line-clamp-1">{h.message || h.action}</p>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
 
                     <div className="flex items-center gap-4 border-l border-emerald-100 dark:border-emerald-800/20 pl-6">
@@ -330,12 +345,24 @@ export default function AdminPanel({
                              {approvalConfig.steps.map((step) => {
                                const recordWorkflow = workflows.find(wf => wf.iaRecordId === record.id);
                                const currentStepNum = recordWorkflow ? recordWorkflow.currentStep : 1;
-                               const isPassed = step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO;
+                               const wfStep = recordWorkflow?.steps?.find(s => s.stepNumber === step.stepNumber);
+                               const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
+
+                               const isPassed = hasWfStepDecision 
+                                 ? (wfStep.status === "aprovado" || wfStep.status === "opiniao") 
+                                 : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO);
+
+                               const isFailed = hasWfStepDecision
+                                 ? (wfStep.status === "negado")
+                                 : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
+
                                const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
+
                                return (
                                  <div key={step.stepNumber} title={step.roleName} className={`size-4 rounded-full flex items-center justify-center text-[7px] font-black border ${
                                    isPassed ? "bg-brand-green/20 border-brand-green text-brand-green" :
-                                   isCurrent ? "bg-[#03440c] border-[#03440c] text-white animate-pulse" : "bg-black/5 border-black/10 text-slate-400"
+                                   isFailed ? "bg-lab-red/20 border-lab-red text-lab-red" :
+                                   isCurrent ? "bg-amber-400 border-amber-500 text-white animate-pulse" : "bg-black/5 border-black/10 text-slate-400"
                                  }`}>
                                    {step.stepNumber}
                                  </div>
@@ -919,6 +946,15 @@ export default function AdminPanel({
                 </div>
               </div>
             </div>
+          )}
+
+          {activeTab === "system_controls" && (
+            <SystemControls
+              supabaseStatus={supabaseStatus}
+              isSyncing={isSyncing}
+              onSync={onSync}
+              records={records}
+            />
           )}
 
          </motion.div>

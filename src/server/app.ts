@@ -202,17 +202,15 @@ router.post("/workflow/decide", async (req, res) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) return res.status(401).json({ error: "Token inválido" });
 
-    // 2. Verificar se é admin ou moderador
+    // 2. Obter perfil do solicitante
     const { data: requesterProfile } = await supabaseAdmin
       .from("profiles")
       .select("role, full_name")
       .eq("id", user.id)
       .single();
 
-    const role = requesterProfile?.role?.toLowerCase().trim();
-    if (!["admin", "moderator"].includes(role)) {
-      return res.status(403).json({ error: "Apenas administradores e moderadores podem participar do fluxo" });
-    }
+    const role = requesterProfile?.role?.toLowerCase().trim() || "user";
+    const fullName = requesterProfile?.full_name || user.email || "Avaliador";
 
     // 3. Buscar workflow da IA
     let wfData = null;
@@ -327,7 +325,7 @@ router.post("/workflow/decide", async (req, res) => {
         comment: comment || null,
         decided_at: new Date().toISOString(),
         assigned_user_id: currentStepData.assigned_user_id || user.id,
-        assigned_user_name: currentStepData.assigned_user_name || requesterProfile.full_name,
+        assigned_user_name: currentStepData.assigned_user_name || fullName,
       })
       .eq("id", currentStepData.id);
 
@@ -377,8 +375,8 @@ router.post("/workflow/decide", async (req, res) => {
     if (iaRecord?.data) {
       const recordData = iaRecord.data as any;
       const actionLabel = decision === "aprovado"
-        ? `Etapa ${wfData.current_step}/${totalSteps} aprovada por ${requesterProfile.full_name}`
-        : `Etapa ${wfData.current_step}/${totalSteps} negada por ${requesterProfile.full_name}`;
+        ? `Etapa ${wfData.current_step}/${totalSteps} aprovada por ${fullName}`
+        : `Etapa ${wfData.current_step}/${totalSteps} negada por ${fullName}`;
 
       const updatedData = {
         ...recordData,
@@ -386,7 +384,7 @@ router.post("/workflow/decide", async (req, res) => {
         statusUso: newStatusUso,
         historico: [{
           date: new Date().toISOString(),
-          user: requesterProfile.full_name,
+          user: fullName,
           action: actionLabel,
           message: comment || actionLabel
         }, ...(recordData.historico || [])]

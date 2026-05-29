@@ -1,6 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
 
 @theme {
+  --font-sans: "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Lato", sans-serif;
   --color-brand-green: #00d136;
   --color-brand-orange: #d9a006;
   --color-brand-black: #06070a;
@@ -12,6 +15,10 @@
 }
 
 @layer base {
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display);
+  }
+
   /* =============================================
      MODO CLARO — fundo branco, verde e laranja
      ============================================= */
@@ -68,6 +75,7 @@
 
   body {
     @apply transition-colors duration-300 antialiased;
+    font-family: var(--font-sans);
     background-color: var(--bg-main);
     color: var(--text-main);
     font-size: 14px;

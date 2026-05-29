@@ -307,9 +307,8 @@ export default function Dashboard({ records, onNavigate, isAdmin }: DashboardPro
                             <Clock size={14} /> {record.statusUso === StatusUso.EM_AVALIACAO ? "Em Avaliação" : "Pendente"}
                           </span>
                         ) : record.statusAuditoria === StatusAuditoria.NEGADO ? (
-                          <span className="text-red-650 dark:text-red-400 flex items-center gap-2">
-                            <ShieldX size={14} /> {record.statusUso === StatusUso.NAO_APROVADO ? "Negado" : "Não Aprovado"}
-                          </span>
+                          <span className="text-red-600 dark:text-red-400 flex items-center gap-2">
+                            <ShieldX size={14} /> {record.statusUso === StatusUso.NAO_APROVADO ? "Negado" : "Não Aprovado"}</span>
                         ) : (
                           <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
                             <CheckCircle2 size={14} /> {record.statusUso === StatusUso.APROVADO ? "Aprovado" : record.statusUso}

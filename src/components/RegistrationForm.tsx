@@ -23,12 +23,15 @@ interface RegistrationFormProps {
 }
 
 // ... helper components defined outside to prevent re-mounting focus loss issues ...
-const InputGroup = ({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) => (
+const InputGroup = ({ label, required, children, infoAction }: { label: string; required?: boolean; children: React.ReactNode; infoAction?: React.ReactNode }) => (
   <div className="space-y-1.5 w-full group">
-    <label className="text-xs font-bold text-[var(--text-muted)] flex items-center gap-2 uppercase tracking-tight group-focus-within:text-brand-green transition-colors">
-      <div className="size-1 rounded-full bg-black/10 dark:bg-white/20 group-focus-within:bg-brand-green group-focus-within:shadow-sm"></div>
-      {label} {required && <span className="text-lab-red font-bold">*</span>}
-    </label>
+    <div className="flex items-center justify-between gap-2 w-full">
+      <label className="text-xs font-bold text-[var(--text-muted)] flex items-center gap-2 uppercase tracking-tight group-focus-within:text-brand-green transition-colors">
+        <div className="size-1 rounded-full bg-black/10 dark:bg-white/20 group-focus-within:bg-brand-green group-focus-within:shadow-sm"></div>
+        {label} {required && <span className="text-lab-red font-bold">*</span>}
+      </label>
+      {infoAction}
+    </div>
     {children}
   </div>
 );
@@ -38,15 +41,30 @@ const RadioGroup = ({
   value, 
   options, 
   onChange, 
-  required 
+  required,
+  onInfoClick
 }: { 
   label: string; 
   value: string; 
   options: string[]; 
   onChange: (val: string) => void; 
-  required?: boolean 
+  required?: boolean;
+  onInfoClick?: () => void;
 }) => (
-  <InputGroup label={label} required={required}>
+  <InputGroup 
+    label={label} 
+    required={required}
+    infoAction={onInfoClick ? (
+      <button
+        type="button"
+        onClick={onInfoClick}
+        className="px-2.5 py-1 rounded-md bg-brand-green/15 hover:bg-brand-green text-[#00d136] dark:text-brand-green hover:text-black border border-brand-green/35 hover:border-brand-green flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
+        title="Explicar"
+      >
+        <span className="text-[9px] font-black uppercase tracking-wider">Explicação</span>
+      </button>
+    ) : null}
+  >
     <div className="flex flex-wrap gap-3">
       {options.map(opt => (
         <button
@@ -71,15 +89,30 @@ const CheckboxGroup = ({
   value, 
   options, 
   onToggle, 
-  required 
+  required,
+  onInfoClick
 }: { 
   label: string; 
   value: string[]; 
   options: string[]; 
   onToggle: (val: string) => void; 
-  required?: boolean 
+  required?: boolean;
+  onInfoClick?: () => void;
 }) => (
-  <InputGroup label={label} required={required}>
+  <InputGroup 
+    label={label} 
+    required={required}
+    infoAction={onInfoClick ? (
+      <button
+        type="button"
+        onClick={onInfoClick}
+        className="px-2.5 py-1 rounded-md bg-brand-green/15 hover:bg-brand-green text-[#00d136] dark:text-brand-green hover:text-black border border-brand-green/35 hover:border-brand-green flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
+        title="Explicar tipos de IA"
+      >
+        <span className="text-[9px] font-black uppercase tracking-wider">Explicação</span>
+      </button>
+    ) : null}
+  >
     <div className="flex flex-wrap gap-3">
       {options.map(opt => {
          const isSelected = value.includes(opt);
@@ -169,6 +202,9 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
   });
 
   const [activeSection, setActiveSection] = useState(0);
+  const [showTypeIAPopup, setShowTypeIAPopup] = useState(false);
+  const [showDadosInfoPopup, setShowDadosInfoPopup] = useState(false);
+  const [showDadosAnonimizadosPopup, setShowDadosAnonimizadosPopup] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [sectors, setSectors] = useState<string[]>([]);
 
@@ -255,8 +291,8 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
   ]);
 
   const sections = [
-    { label: "Identificação", icon: FileText },
-    { label: "Uso da IA", icon: Zap },
+    { label: "Solicitante", icon: FileText },
+    { label: "Identificação", icon: Zap },
     { label: "Objetivo", icon: Info },
     { label: "Dados", icon: Database },
     { label: "Integração", icon: Share2 },
@@ -264,11 +300,9 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     { label: "Conformidade", icon: ShieldCheck },
     { label: "Classificação", icon: Scale },
     { label: "Obs", icon: FileText },
-    { label: "Aprovação", icon: ClipboardCheck },
   ];
 
-  // Fase 10 (Aprovação, índice 9) só visível para admins
-  const visibleSections = isAdmin ? sections : sections.slice(0, 9);
+  const visibleSections = sections;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -285,11 +319,12 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     }
     
     const now = new Date().toISOString();
-    const action = initialData ? "Atualização do registro" : "Criação do registro";
-    const history = [...(formData.historico || []), { date: now, action }];
+    const history = formData.historico || [];
     
     onSave({
       ...formData,
+      utilizaIA: formData.utilizaIA || "Sim",
+      fornecedor: formData.fornecedor || "Interno",
       createdAt: initialData ? initialData.createdAt : now,
       updatedAt: now,
       historico: history,
@@ -313,7 +348,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     <div className="bg-[var(--bg-main)] rounded-[2rem] shadow-xl dark:shadow-black/40 border border-[var(--border-lab)] overflow-hidden flex flex-col md:flex-row min-h-[700px] relative">
       {/* Sidebar Stepper - AI Lab Navigation */}
       <div className="bg-[var(--bg-sidebar)] md:w-72 p-6 space-y-2 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible shrink-0 border-b md:border-b-0 md:border-r border-[var(--border-lab)] scrollbar-hide relative z-10">
-        <div className="hidden md:block text-xs text-[var(--text-muted)] font-bold uppercase tracking-wide mb-6 px-4">Processo de Registro</div>
+        <div className="hidden md:block text-xs text-[var(--text-muted)] font-bold uppercase tracking-wide mb-6 px-4 font-display">NOVA SOLICITAÇÃO</div>
         {visibleSections.map((sec, i) => (
           <button
             key={i}
@@ -335,7 +370,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] opacity-40 font-mono tracking-tight text-[var(--text-muted)] uppercase text-left">Fase 0{i+1}</span>
-              <span className="text-[13px] tracking-tight">{sec.label}</span>
+              <span className="text-[13px] tracking-tight font-display font-medium text-left uppercase">{sec.label}</span>
             </div>
           </button>
         ))}
@@ -354,8 +389,8 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   <div className="size-1 rounded-full bg-[var(--text-muted)]/20"></div>
                   <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-tight">Conexão Segura Ativa</span>
                 </div>
-                <h2 className="text-4xl font-bold text-[var(--text-bright)] tracking-tight">
-                  {sections[activeSection].label}
+                <h2 className="text-4xl font-bold text-[var(--text-bright)] tracking-tight font-display uppercase">
+                  {sections[activeSection].label.toUpperCase()}
                 </h2>
              </div>
              <div className="px-6 py-3 glass rounded-2xl font-mono text-xs font-extrabold text-emerald-800 dark:text-brand-green border border-brand-green/30">
@@ -417,13 +452,6 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
             {activeSection === 1 && (
               <div className="space-y-6">
-                <RadioGroup 
-                  label="A atividade utiliza IA?" 
-                  options={["Sim", "Não"]} 
-                  value={formData.utilizaIA as string}
-                  onChange={(val) => updateField("utilizaIA", val)}
-                  required 
-                />
                 <InputGroup label="Nome da ferramenta / sistema / equipamento" required>
                   <input 
                     className={sharedInputClass}
@@ -431,28 +459,20 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     onChange={(e) => updateField("nomeFerramenta", e.target.value)}
                   />
                 </InputGroup>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InputGroup label="Fornecedor / Desenvolvedor" required>
-                    <input 
-                      className={sharedInputClass}
-                      value={formData.fornecedor || ""}
-                      onChange={(e) => updateField("fornecedor", e.target.value)}
-                    />
-                  </InputGroup>
-                  <InputGroup label="Versão / Plano / Modelo">
-                    <input 
-                      className={sharedInputClass}
-                      value={formData.versao || ""}
-                      onChange={(e) => updateField("versao", e.target.value)}
-                    />
-                  </InputGroup>
-                </div>
+                <InputGroup label="Versão / Plano / Modelo">
+                  <input 
+                    className={sharedInputClass}
+                    value={formData.versao || ""}
+                    onChange={(e) => updateField("versao", e.target.value)}
+                  />
+                </InputGroup>
                 <CheckboxGroup 
                   label="Tipo de IA" 
                   options={Object.values(TiposIA)} 
                   value={formData.tipoIA as any[]}
                   onToggle={(val) => handleArrayToggle("tipoIA", val)}
                   required 
+                  onInfoClick={() => setShowTypeIAPopup(true)}
                 />
               </div>
             )}
@@ -460,7 +480,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             {activeSection === 2 && (
               <div className="space-y-6">
                 <TextArea 
-                  label="Descrição da atividade onde a IA é utilizada" 
+                  label="Onde a ia será utilizada (Faça uma descrição)" 
                   value={formData.descricaoAtividade as string}
                   onChange={(val) => updateField("descricaoAtividade", val)}
                   className={`${sharedInputClass} min-h-[100px]`}
@@ -486,21 +506,37 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
             {activeSection === 3 && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <RadioGroup 
-                    label="Utiliza dados pessoais?" 
-                    options={["Sim", "Não"]} 
-                    value={formData.usaDadosPessoais as string}
-                    onChange={(val) => updateField("usaDadosPessoais", val)}
-                    required 
-                  />
-                  <RadioGroup 
-                    label="Utiliza dados sensíveis (saúde)?" 
-                    options={["Sim", "Não"]} 
-                    value={formData.usaDadosSensiveis as string}
-                    onChange={(val) => updateField("usaDadosSensiveis", val)}
-                    required 
-                  />
+                <div className="p-5 bg-black/5 dark:bg-white/[0.015] border border-[var(--border-lab)] rounded-2xl">
+                  <div className="flex items-center justify-between mb-4 border-b border-[var(--border-lab)] pb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-2">
+                      <ShieldCheck size={16} className="text-brand-green" />
+                      Uso de Dados Pessoais e Sensíveis
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowDadosInfoPopup(true)}
+                      className="px-2.5 py-1 rounded-md bg-brand-green/15 hover:bg-brand-green text-[#00d136] dark:text-brand-green hover:text-black border border-brand-green/35 hover:border-brand-green flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
+                      title="Explicar Dados Pessoais e Sensíveis"
+                    >
+                      <span className="text-[9px] font-black uppercase tracking-wider">Explicação</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <RadioGroup 
+                      label="Utiliza dados pessoais?" 
+                      options={["Sim", "Não"]} 
+                      value={formData.usaDadosPessoais as string}
+                      onChange={(val) => updateField("usaDadosPessoais", val)}
+                      required 
+                    />
+                    <RadioGroup 
+                      label="Utiliza dados sensíveis?" 
+                      options={["Sim", "Não"]} 
+                      value={formData.usaDadosSensiveis as string}
+                      onChange={(val) => updateField("usaDadosSensiveis", val)}
+                      required 
+                    />
+                  </div>
                 </div>
                 <TextArea 
                   label="Quais dados são utilizados?" 
@@ -515,26 +551,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   value={formData.dadosAnonimizados as string}
                   onChange={(val) => updateField("dadosAnonimizados", val)}
                   required 
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <RadioGroup 
-                    label="Envio para fornecedor externo?" 
-                    options={["Sim", "Não", "Não sei"]} 
-                    value={formData.envioFornecedorExterno as string}
-                    onChange={(val) => updateField("envioFornecedorExterno", val)}
-                  />
-                  <RadioGroup 
-                    label="Usados para treinamento do modelo?" 
-                    options={["Sim", "Não", "Não sei"]} 
-                    value={formData.dadosTreinamentoModelo as string}
-                    onChange={(val) => updateField("dadosTreinamentoModelo", val)}
-                  />
-                </div>
-                <TextArea 
-                  label="Observações sobre proteção de dados" 
-                  value={formData.obsProtecaoDados as string}
-                  onChange={(val) => updateField("obsProtecaoDados", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
+                  onInfoClick={() => setShowDadosAnonimizadosPopup(true)}
                 />
               </div>
             )}
@@ -598,7 +615,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             {activeSection === 5 && (
               <div className="space-y-6">
                 <RadioGroup 
-                  label="Riscos identificados?" 
+                  label="Possíveis riscos?" 
                   options={["Sim", "Não"]} 
                   value={formData.riscosIdentificados as string}
                   onChange={(val) => updateField("riscosIdentificados", val)}
@@ -660,13 +677,6 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   options={["Sim", "Não"]} 
                   value={formData.politicaInterna as string}
                   onChange={(val) => updateField("politicaInterna", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Treinamento colaboradores?" 
-                  options={["Sim", "Não"]} 
-                  value={formData.treinamentoColaboradores as string}
-                  onChange={(val) => updateField("treinamentoColaboradores", val)}
                   required 
                 />
                 <RadioGroup 
@@ -790,94 +800,6 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                 </div>
               </div>
             )}
-{activeSection === 9 && (
-              <div className="space-y-6">
-                {!isAdmin ? (
-                  <div className="glass p-10 rounded-[2.5rem] border border-[var(--border-lab)] space-y-6 text-center max-w-2xl mx-auto shadow-inner bg-black/5 dark:bg-white/[0.02]">
-                    <div className="size-20 mx-auto bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-[2rem] flex items-center justify-center shadow-lg shadow-brand-green/10">
-                      <ClipboardCheck size={36} />
-                    </div>
-                    <div className="space-y-3">
-                      <h3 className="text-2xl font-black text-[var(--text-bright)] uppercase tracking-tight">Fase de Aprovação e Auditoria</h3>
-                      <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-md mx-auto">
-                        Esta etapa é destinada exclusivamente aos auditores e administradores do NIT Cedro. Você pode avançar para a próxima etapa para adicionar observações gerais e finalizar o cadastro.
-                      </p>
-                    </div>
-                    
-                    <div className="pt-6 border-t border-[var(--border-lab)] max-w-sm mx-auto">
-                      <div className="flex justify-between items-center bg-black/10 dark:bg-black/30 p-4 rounded-2xl border border-[var(--border-lab)]">
-                        <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Status da Auditoria:</span>
-                        <span className="px-3 py-1.5 bg-brand-green/20 border border-brand-green/30 text-brand-green font-black uppercase rounded-xl text-[10px] tracking-wide">
-                          {formData.statusAuditoria || StatusAuditoria.PENDENTE}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <CheckboxGroup 
-                      label="Área Avaliadora" 
-                      options={["Qualidade", "TI", "Compliance", "Jurídico/LGPD", "Direção Técnica", "NIT", "Gestão", "Outra"]} 
-                      value={formData.areaAvaliadora as any[]}
-                      onToggle={(val) => handleArrayToggle("areaAvaliadora", val)}
-                      required 
-                    />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <InputGroup label="Status" required>
-                        <select className={sharedInputClass} value={formData.statusUso} onChange={(e) => updateField("statusUso", e.target.value)}>
-                          {Object.values(StatusUso).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
-                        </select>
-                      </InputGroup>
-                      <InputGroup label="Auditoria / Aprovação Admin" required>
-                        <select className={`${sharedInputClass} !border-brand-green/30 !bg-brand-green/5 text-brand-green`} value={formData.statusAuditoria} onChange={(e) => updateField("statusAuditoria", e.target.value)}>
-                          {Object.values(StatusAuditoria).map(s => <option key={s} value={s} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{s}</option>)}
-                        </select>
-                      </InputGroup>
-                      <RadioGroup 
-                        label="Necessita Plano de Ação?" 
-                        options={["Sim", "Não"]} 
-                        value={formData.necessitaPlanoAcao as string}
-                        onChange={(val) => updateField("necessitaPlanoAcao", val)}
-                        required 
-                      />
-                    </div>
-                    {formData.necessitaPlanoAcao === "Sim" && (
-                       <div className="p-6 bg-amber-50 border border-amber-100 rounded-xl space-y-4 shadow-sm">
-                          <TextArea 
-                            label="Descrição do Plano de Ação" 
-                            value={formData.descricaoPlanoAcao as string}
-                            onChange={(val) => updateField("descricaoPlanoAcao", val)}
-                            className={`${sharedInputClass} min-h-[100px]`}
-                          />
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <InputGroup label="Responsável">
-                               <input className={sharedInputClass} value={formData.responsavelPlanoAcao || ""} onChange={(e) => updateField("responsavelPlanoAcao", e.target.value)} />
-                            </InputGroup>
-                            <InputGroup label="Prazo">
-                               <input type="date" className={sharedInputClass} value={formData.prazoPlanoAcao || ""} onChange={(e) => updateField("prazoPlanoAcao", e.target.value)} />
-                            </InputGroup>
-                          </div>
-                       </div>
-                    )}
-                    <TextArea 
-                      label="Parecer técnico da área avaliadora" 
-                      value={formData.parecerTecnico as string}
-                      onChange={(val) => updateField("parecerTecnico", val)}
-                      className={`${sharedInputClass} min-h-[100px]`}
-                      required 
-                    />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <InputGroup label="Data Aprovação">
-                          <input type="date" className={sharedInputClass} value={formData.dataAprovacao || ""} onChange={(e) => updateField("dataAprovacao", e.target.value)} />
-                       </InputGroup>
-                       <InputGroup label="Próxima Revisão">
-                          <input type="date" className={sharedInputClass} value={formData.proximaRevisao || ""} onChange={(e) => updateField("proximaRevisao", e.target.value)} />
-                       </InputGroup>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
 
                       </div>
         </div>
@@ -916,6 +838,292 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
           </div>
         </div>
       </form>
+
+      {/* Styled Popup Informing AI Types */}
+      {showTypeIAPopup && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-[4px] z-50 flex items-center justify-center p-4" onClick={() => setShowTypeIAPopup(false)}>
+          <div className="bg-[var(--bg-main)] border border-[var(--border-lab)] rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-[var(--border-lab)] flex items-center justify-between bg-black/10 dark:bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-brand-green/10 text-brand-green flex items-center justify-center border border-brand-green/20">
+                  <Info size={18} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold font-display uppercase text-[var(--text-bright)] tracking-tight">Tipos de Inteligência Artificial</h3>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowTypeIAPopup(false)}
+                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-bright)]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar text-left font-sans">
+              <div className="grid grid-cols-1 gap-3.5">
+                {[
+                  {
+                    title: "Chatbot",
+                    description: "Chatbot é uma IA feita para conversar com pessoas, responder perguntas ou atender usuários.",
+                    color: "border-l-teal-500",
+                    tag: "Interação"
+                  },
+                  {
+                    title: "Machine Learning",
+                    description: "Machine Learning é uma IA que aprende com dados e melhora suas respostas ou previsões com o tempo.",
+                    color: "border-l-indigo-500",
+                    tag: "Aprendizado"
+                  },
+                  {
+                    title: "Automação",
+                    description: "Automação é uma IA usada para executar tarefas repetitivas, como preencher informações, enviar alertas ou organizar dados.",
+                    color: "border-l-amber-500",
+                    tag: "Processos"
+                  },
+                  {
+                    title: "Análise de Imagens",
+                    description: "Análise de Imagens é uma IA que consegue interpretar fotos, exames, documentos escaneados ou outros tipos de imagem.",
+                    color: "border-l-blue-500",
+                    tag: "Visão Computacional"
+                  },
+                  {
+                    title: "IA Generativa",
+                    description: "IA Generativa é uma IA que cria conteúdos, como textos, imagens, relatórios, respostas ou sugestões.",
+                    color: "border-l-fuchsia-500",
+                    tag: "Geração"
+                  },
+                  {
+                    title: "Algoritmo de Apoio à Decisão",
+                    description: "Algoritmo de Apoio à Decisão é uma IA que ajuda uma pessoa a escolher o melhor caminho, mostrando análises, riscos ou recomendações.",
+                    color: "border-l-rose-500",
+                    tag: "Decisão"
+                  },
+                  {
+                    title: "Equipamento com IA Embarcada",
+                    description: "Equipamento com IA Embarcada é quando a inteligência artificial já vem dentro de uma máquina, aparelho ou equipamento.",
+                    color: "border-l-cyan-500",
+                    tag: "Hardware"
+                  },
+                  {
+                    title: "Outro",
+                    description: "Outro é usado quando a IA não se encaixa bem em nenhuma das opções anteriores.",
+                    color: "border-l-slate-400",
+                    tag: "Geral"
+                  }
+                ].map((item, idx) => (
+                  <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
+                      <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/5 py-1 px-2.5 rounded-full border border-[var(--border-lab)] text-[var(--text-muted)] self-start shrink-0 font-sans">
+                      {item.tag}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-[var(--border-lab)] flex justify-end bg-black/10 dark:bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => setShowTypeIAPopup(false)}
+                className="px-6 py-2.5 bg-brand-green text-black hover:bg-brand-green/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md hover:shadow-brand-green/15 active:scale-95 duration-150 font-sans"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Styled Unified Popup Informing Personal & Sensitive Data */}
+      {showDadosInfoPopup && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-[4px] z-50 flex items-center justify-center p-4" onClick={() => setShowDadosInfoPopup(false)}>
+          <div className="bg-[var(--bg-main)] border border-[var(--border-lab)] rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-[var(--border-lab)] flex items-center justify-between bg-black/10 dark:bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-brand-green/10 text-brand-green flex items-center justify-center border border-brand-green/20">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold font-display uppercase text-[var(--text-bright)] tracking-tight">Dados Pessoais & Sensíveis</h3>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowDadosInfoPopup(false)}
+                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-bright)]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-6 custom-scrollbar text-left font-sans">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Personal Data Column */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-[var(--border-lab)] pb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-brand-green bg-brand-green/10 px-2.5 py-1 rounded-md">
+                      Dados Pessoais
+                    </span>
+                  </div>
+                  <div className="space-y-3.5">
+                    {[
+                      {
+                        title: "O que são?",
+                        description: "Dados pessoais são informações que ajudam a identificar uma pessoa.",
+                        color: "border-l-brand-green"
+                      },
+                      {
+                        title: "Exemplos",
+                        description: "Nome, CPF, telefone, e-mail, endereço, data de nascimento, matrícula, foto, número de prontuário ou qualquer informação que mostre quem é a pessoa.",
+                        color: "border-l-indigo-500"
+                      },
+                      {
+                        title: "Em uma IA",
+                        description: "Isso acontece quando o sistema usa, lê, guarda ou analisa informações de pessoas.",
+                        color: "border-l-teal-500"
+                      }
+                    ].map((item, idx) => (
+                      <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col gap-1 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
+                        <h4 className="text-xs font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
+                        <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sensitive Data Column */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-[var(--border-lab)] pb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-rose-500 bg-rose-500/10 px-2.5 py-1 rounded-md">
+                      Dados Sensíveis
+                    </span>
+                  </div>
+                  <div className="space-y-3.5">
+                    {[
+                      {
+                        title: "O que são?",
+                        description: "Dados sensíveis são dados pessoais mais delicados. São informações que precisam de mais cuidado, porque podem expor muito a vida da pessoa.",
+                        color: "border-l-rose-500"
+                      },
+                      {
+                        title: "Exemplos",
+                        description: "Dados de saúde, exames, diagnósticos, biometria, religião, raça, opinião política, dados genéticos e informações sobre vida sexual.",
+                        color: "border-l-amber-500"
+                      },
+                      {
+                        title: "Em uma IA",
+                        description: "Isso acontece quando o sistema usa informações mais privadas ou importantes sobre alguém.",
+                        color: "border-l-fuchsia-500"
+                      }
+                    ].map((item, idx) => (
+                      <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col gap-1 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
+                        <h4 className="text-xs font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
+                        <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-[var(--border-lab)] flex justify-end bg-black/10 dark:bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => setShowDadosInfoPopup(false)}
+                className="px-6 py-2.5 bg-brand-green text-black hover:bg-brand-green/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md hover:shadow-brand-green/15 active:scale-95 duration-150 font-sans"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Styled Popup Informing Anonimized Data */}
+      {showDadosAnonimizadosPopup && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-[4px] z-50 flex items-center justify-center p-4" onClick={() => setShowDadosAnonimizadosPopup(false)}>
+          <div className="bg-[var(--bg-main)] border border-[var(--border-lab)] rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-[var(--border-lab)] flex items-center justify-between bg-black/10 dark:bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-brand-green/10 text-brand-green flex items-center justify-center border border-brand-green/20">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold font-display uppercase text-[var(--text-bright)] tracking-tight">Dados Anonimizados</h3>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowDadosAnonimizadosPopup(false)}
+                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-bright)]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar text-left font-sans">
+              <div className="grid grid-cols-1 gap-3.5">
+                {[
+                  {
+                    title: "O que são dados anonimizados?",
+                    description: "Dados anonimizados são informações que foram modificadas para que não seja mais possível saber de quem são.",
+                    color: "border-l-brand-green",
+                    tag: "Conceito"
+                  },
+                  {
+                    title: "Analogia simples",
+                    description: "É como apagar a etiqueta com o nome da pessoa.",
+                    color: "border-l-indigo-500",
+                    tag: "Analogia"
+                  },
+                  {
+                    title: "Exemplo prático",
+                    description: "Em vez de exibir dados diretamente identificáveis (Ex: \"Maria Silva — CPF — telefone — resultado do exame\"), o sistema mostra apenas dados agregados ou desidentificados (Ex: \"Paciente 001 — idade — sexo — resultado do exame\").",
+                    color: "border-l-amber-500",
+                    tag: "Exemplo"
+                  }
+                ].map((item, idx) => (
+                  <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
+                      <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/5 py-1 px-2.5 rounded-full border border-[var(--border-lab)] text-[var(--text-muted)] self-start shrink-0 font-sans">
+                      {item.tag}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-[var(--border-lab)] flex justify-end bg-black/10 dark:bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => setShowDadosAnonimizadosPopup(false)}
+                className="px-6 py-2.5 bg-brand-green text-black hover:bg-brand-green/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md hover:shadow-brand-green/15 active:scale-95 duration-150 font-sans"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
