@@ -4,12 +4,13 @@
  */
 
 export enum TiposIA {
-  CHATBOT = "Chatbot",
-  MACHINE_LEARNING = "Machine learning",
-  AUTOMACAO = "Automação",
-  ANALISE_IMAGENS = "Análise de imagens",
+  CHATBOT = "Chatbot / assistente virtual",
   IA_GENERATIVA = "IA generativa",
-  ALGORITMO_APOIO_DECISAO = "Algoritmo de apoio à decisão",
+  AUTOMACAO = "Automação",
+  ANALISE_DADOS = "Análise de dados",
+  ANALISE_IMAGENS = "Análise de imagens",
+  MACHINE_LEARNING = "Machine Learning",
+  APOIO_DECISAO = "Apoio à decisão",
   EQUIPAMENTO_IA_EMBARCADA = "Equipamento com IA embarcada",
   OUTRO = "Outro"
 }
@@ -103,6 +104,7 @@ export interface IARecord {
   responsavelPreenchimento: string;
   cargo: string;
   dataRegistro: string;
+  contato?: string;
 
   // 2. IDENTIFICAÇÃO DO USO DE IA
   utilizaIA: "Sim" | "Não";

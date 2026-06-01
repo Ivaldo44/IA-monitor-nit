@@ -70,7 +70,7 @@ export const getGlobalRecords = async (): Promise<IARecord[]> => {
             record.statusAuditoria = item.status as StatusAuditoria;
           }
           if (item.status_uso) {
-            record.statusUso = item.status_uso as StatusUso;
+            record.statusUso = item.status_uso === "Negado" ? StatusUso.NAO_APROVADO : (item.status_uso as StatusUso);
           }
           return record;
         });
@@ -85,6 +85,21 @@ export const getGlobalRecords = async (): Promise<IARecord[]> => {
 export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?: string): Promise<IARecord[]> => {
   let finalIsAdmin = isAdmin;
   try {
+    // Clear old fallback localStorage keys related to records/inventory to avoid showing stale mock data
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("cedro_custom_sectors");
+      const keysToRemove = ["records", "inventory", "ia_records", "workflows", "approvals"];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && !key.startsWith("sb-") && keysToRemove.some(prefix => key.includes(prefix))) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao limpar localStorage de fallbacks:", e);
+    }
+
     if (userId && !finalIsAdmin) {
       try {
         const { data: prof, error: profErr } = await supabase
@@ -149,7 +164,7 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
     if (data && data.length > 0) {
       console.log(`✅ ${data.length} registros encontrados no Supabase.`);
       const filteredData = data.filter(item => item.id !== 'METADATA-SECTORS');
-      const mappedData = filteredData.map(item => {
+      resultRecords = filteredData.map(item => {
         let record: IARecord;
         
         if (item.data) {
@@ -168,7 +183,7 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
             utilizaIA: item.utiliza_ia || 'Sim',
             nomeFerramenta: item.nome_ferramenta || 'IA sem nome',
             fornecedor: item.fornecedor || 'Desconhecido',
-            statusUso: (item.status_uso as StatusUso) || StatusUso.EM_AVALIACAO,
+            statusUso: item.status_uso === "Negado" ? StatusUso.NAO_APROVADO : ((item.status_uso as StatusUso) || StatusUso.EM_AVALIACAO),
             createdAt: item.created_at || new Date().toISOString(),
             updatedAt: item.updated_at || new Date().toISOString(),
             ownerId: item.owner_id || '',
@@ -181,7 +196,7 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
           record.statusAuditoria = item.status as StatusAuditoria;
         }
         if (item.status_uso) {
-          record.statusUso = item.status_uso as StatusUso;
+          record.statusUso = item.status_uso === "Negado" ? StatusUso.NAO_APROVADO : (item.status_uso as StatusUso);
         }
 
         // Ensure statusAuditoria is never undefined for filtering purposes
@@ -191,25 +206,9 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
 
         return record;
       });
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedData));
-      resultRecords = mappedData;
     } else {
-      console.log('ℹ️ Supabase retornou 0 registros. Verificando fallback...');
-
-      const localDataStr = localStorage.getItem(STORAGE_KEY);
-      if (localDataStr) {
-        const localRecords: IARecord[] = JSON.parse(localDataStr);
-        const cleanLocalRecords = localRecords.filter(r => r.id !== "METADATA-SECTORS" && !["IA-CEDRO-0001", "IA-CEDRO-0002", "IA-CEDRO-0003", "IA-CEDRO-0004", "IA-CEDRO-0005", "IA-CEDRO-0006"].includes(r.id));
-        if (cleanLocalRecords.length > 0) {
-          console.log('📦 Carregando do LocalStorage:', cleanLocalRecords.length);
-          resultRecords = cleanLocalRecords;
-        } else {
-          resultRecords = [];
-        }
-      } else {
-        resultRecords = [];
-      }
+      console.log('ℹ️ Supabase retornou 0 registros.');
+      resultRecords = [];
     }
 
     if (!finalIsAdmin) {
@@ -227,26 +226,7 @@ export const getRecords = async (userId?: string, isAdmin?: boolean, userSector?
     return resultRecords;
   } catch (error) {
     console.error('💥 Erro crítico no getRecords:', error);
-    let fallbackRecords: IARecord[] = [];
-    const data = localStorage.getItem(STORAGE_KEY);
-    try {
-      if (data) {
-        const parsed = JSON.parse(data);
-        fallbackRecords = parsed.filter((r: any) => r.id !== "METADATA-SECTORS" && !["IA-CEDRO-0001", "IA-CEDRO-0002", "IA-CEDRO-0003", "IA-CEDRO-0004", "IA-CEDRO-0005", "IA-CEDRO-0006"].includes(r.id));
-      } else {
-        fallbackRecords = [];
-      }
-    } catch (e) {
-      fallbackRecords = [];
-    }
-    
-    if (!finalIsAdmin) {
-      const activeSector = (userSector || '').trim().toLowerCase();
-      fallbackRecords = fallbackRecords.filter(r => 
-        r.unidadeSetor && r.unidadeSetor.trim().toLowerCase() === activeSector
-      );
-    }
-    return fallbackRecords;
+    return [];
   }
 };
 

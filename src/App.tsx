@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck, Bell, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusUso, UserProfile, StatusAuditoria, ApprovalWorkflow, ApprovalConfig } from "./types";
 import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles, updateUserProfile } from "./storage";
@@ -110,7 +110,7 @@ export default function App() {
   const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
   const isCurrentUserModerator = profile?.role?.toLowerCase().trim() === "moderator";
   const isCurrentUserPrivileged = isCurrentUserAdmin || isCurrentUserModerator;
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr" | "approval_queue">("profile"); // sempre inicia no perfil após login
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr" | "approval_queue" | "alerts">("profile"); // sempre inicia no perfil após login
   const [records, setRecords] = useState<IARecord[]>([]);
   const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>([]);
   const [approvalConfig, setApprovalConfig] = useState<ApprovalConfig>({
@@ -125,7 +125,9 @@ export default function App() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<"online" | "offline" | "checking">("checking");
   const [selectedRecord, setSelectedRecord] = useState<IARecord | null>(null);
+  const [originTab, setOriginTab] = useState<string | null>("inventory");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const isDarkMode = false; // Modo escuro removido - apenas modo claro
 
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
@@ -431,6 +433,7 @@ export default function App() {
   };
 
   const handleView = (record: IARecord) => {
+    setOriginTab(activeTab);
     setSelectedRecord(record);
     setActiveTab("report");
   };
@@ -450,7 +453,6 @@ export default function App() {
       console.error("Erro ao excluir:", error);
       setRecords(previousRecords);
       alert("Houve um erro ao excluir o registro. Por favor, tente novamente.");
-      await refreshRecords();
     }
   };
 
@@ -461,29 +463,31 @@ export default function App() {
     try {
       if (isNew) {
         await addRecord(record, user?.id, isAdmin);
-        // Criar workflow de aprovação automaticamente
+        // Criar workflow de aprovação automaticamente e de forma consistente no Backend (Evitando problemas de RLS)
         try {
-          const { data: wfData } = await supabase.from("approval_workflows").insert({
-            ia_record_id: record.id,
-            current_step: 1,
-            final_status: "pendente",
-          }).select().single();
-
-          if (wfData) {
-            const stepsToInsert = approvalConfig.steps.map(step => ({
-              workflow_id: wfData.id,
-              ia_record_id: record.id,
-              step_number: step.stepNumber,
-              role_name: step.roleName,
-              assigned_user_id: step.userId || null,
-              assigned_user_name: step.userName || null,
-              status: "aguardando",
-              is_opinion_only: step.isOpinionOnly || false,
-            }));
-            await supabase.from("approval_steps").insert(stepsToInsert);
+          const { data, error: sessionErr } = await supabase.auth.getSession();
+          if (sessionErr) throw new Error(sessionErr.message);
+          const session = data?.session;
+          if (!session?.access_token) {
+            throw new Error("Sessão ou token de acesso de autenticação não encontrado.");
+          }
+          
+          const initRes = await fetch("/api/workflow/init", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ recordId: record.id })
+          });
+          
+          if (!initRes.ok) {
+            const errBody = await initRes.json();
+            throw new Error(errBody?.error || "Erro desconhecido ao iniciar fluxo de aprovação no backend");
           }
         } catch (wfErr) {
           console.error("Erro ao criar workflow:", wfErr);
+          throw wfErr;
         }
       } else {
         await updateRecord(record, user?.id, isAdmin);
@@ -540,7 +544,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateStatus = async (recordId: string, status: any, comment?: string) => {
+  const handleUpdateStatus = async (recordId: string, status: any, comment?: string, extraFields?: any) => {
     const record = records.find(r => r.id === recordId);
     if (!record) return;
 
@@ -552,10 +556,14 @@ export default function App() {
     const assignedUserId = configStep?.userId || wfStep?.assignedUserId;
 
     const isAssignedToMe = assignedUserId === user?.id;
-    const canParticipate = isCurrentUserAdmin || isCurrentUserModerator || isAssignedToMe || !assignedUserId;
 
-    if (!canParticipate) {
-      alert("Apenas o responsável designado para esta etapa (ou administradores) podem participar do fluxo de aprovação.");
+    if (!assignedUserId) {
+      alert("Esta etapa ainda não possui responsável definido. Configure o fluxo antes de aprovar ou negar.");
+      return;
+    }
+
+    if (!isAssignedToMe) {
+      alert("Apenas o responsável designado para esta etapa pode aprovar ou negar.");
       return;
     }
 
@@ -574,7 +582,7 @@ export default function App() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ recordId, decision, comment })
+        body: JSON.stringify({ recordId, decision, comment, coordinatorData: extraFields })
       });
 
       const result = await response.json();
@@ -742,10 +750,39 @@ export default function App() {
     { id: "sectors_mgr", label: "Setores", icon: Building2, adminOnly: true },
     { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: false, privilegedOnly: true },
     { id: "new", label: "Nova Solicitação", icon: PlusCircle },
-    { id: "report", label: "Relatórios", icon: FileText },
+    { id: "alerts", label: "Alertas", icon: Bell },
     { id: "chat", label: "Chat", icon: MessageSquare },
     { id: "profile", label: "Meu Perfil", icon: UserCircle },
   ].filter(item => (!item.adminOnly || isCurrentUserAdmin) && (!("privilegedOnly" in item && item.privilegedOnly) || isCurrentUserPrivileged));
+
+  const sidebarGroupConfigs = [
+    {
+      title: "IA e Inventário",
+      itemIds: ["dashboard", "inventory", "new"]
+    },
+    {
+      title: "Administração e Governança",
+      itemIds: ["approval_queue", "sectors", "sectors_mgr", "admin"],
+      show: isCurrentUserAdmin
+    },
+    {
+      title: "Auxiliares",
+      itemIds: ["alerts", "chat", "profile"]
+    }
+  ];
+
+  const sidebarGroups = sidebarGroupConfigs
+    .filter(g => g.show === undefined || g.show)
+    .map(g => {
+      const items = g.itemIds
+        .map(id => menuItems.find(item => item.id === id))
+        .filter((item): item is typeof menuItems[number] => !!item);
+      return {
+        title: g.title,
+        items
+      };
+    })
+    .filter(g => g.items.length > 0);
 
   if (authLoading) {
     return (
@@ -767,14 +804,13 @@ export default function App() {
       <div className={`min-h-screen flex flex-col md:flex-row font-sans selection:bg-brand-green selection:text-black transition-colors duration-300 bg-[var(--bg-main)] ${isDarkMode ? "dark" : ""}`}>
       <LabBackground />
       {/* Mobile Header */}
-      <div className="md:hidden bg-[var(--bg-sidebar)] backdrop-blur-md p-4 flex justify-between items-center border-b border-[var(--border-lab)] sticky top-0 z-50">
+      <div className="md:hidden bg-gradient-to-r from-[#075618] to-[#04330e] p-4 flex justify-between items-center border-b border-emerald-950 sticky top-0 z-50 text-white">
         <div className="flex items-center gap-2">
-          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA Logo" className="h-10 w-auto [filter:var(--logo-filter)]" />
+          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA Logo" className="h-8 w-auto brightness-0 invert" />
         </div>
         <div className="flex items-center gap-2">
-
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors">
-            {isSidebarOpen ? <X /> : <Menu />}
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white">
+            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
@@ -783,92 +819,186 @@ export default function App() {
       <aside 
         className={`${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        } fixed md:static inset-y-0 left-0 z-40 w-72 bg-[var(--bg-sidebar)] border-r border-[var(--border-lab)] transition-transform duration-300 ease-in-out md:flex flex-col shrink-0 overflow-hidden shadow-xl shadow-black/5 dark:shadow-black/50`}
+        } ${
+          isSidebarCollapsed ? "md:w-20" : "md:w-72"
+        } fixed md:static inset-y-0 left-0 z-40 bg-gradient-to-b from-[#075618] via-[#053d10] to-[#022108] text-white border-r border-[#021d06] transition-all duration-300 ease-in-out md:flex flex-col shrink-0 overflow-hidden shadow-xl shadow-black/20 animate-fade-in`}
       >
-        <div className="p-8 hidden md:block border-b border-[var(--border-lab)] bg-gradient-to-b from-brand-green/10 to-transparent">
-          <div className="flex items-center justify-center relative group">
-            <div className="absolute inset-0 bg-brand-green/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA Logo" className="h-16 w-auto [filter:var(--logo-filter)] relative z-10" />
+        <div className={`hidden md:block border-b border-emerald-950 bg-[#042A0D]/30 transition-all duration-300 overflow-hidden relative ${isSidebarCollapsed ? "h-20 p-3" : "h-28 p-6"}`}>
+          <div className="absolute inset-0 bg-[#00d136]/5 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          
+          <div className="relative w-full h-full flex items-center justify-center">
+            {/* Logo Completa (Visible when NOT collapsed) */}
+            <div className={`transition-all duration-300 absolute inset-0 flex items-center justify-center px-4 ${
+              isSidebarCollapsed ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
+            }`}>
+              <img 
+                src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
+                alt="Laboratório Cedro" 
+                className="h-10 w-auto brightness-0 invert object-contain"
+              />
+            </div>
+
+            {/* Logo Símbolo (Visible when collapsed) */}
+            <div className={`transition-all duration-300 absolute inset-0 flex items-center justify-center ${
+              isSidebarCollapsed ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none"
+            }`}>
+              <img 
+                src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
+                alt="Símbolo Laboratório Cedro" 
+                className="h-9 w-auto brightness-0 invert object-contain" 
+              />
+            </div>
           </div>
         </div>
 
-        <nav className="mt-8 flex-1 px-4 space-y-2">
-          <div className="text-xs font-black uppercase tracking-[0.05em] mb-4 px-4 text-[var(--text-muted)]">Navegação Principal</div>
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                if (item.id === "new") setSelectedRecord(null);
-                setActiveTab(item.id as any);
-                if (window.innerWidth < 768) setIsSidebarOpen(false);
-              }}
-              className={`w-full group flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-300 relative overflow-hidden ${
-                activeTab === item.id 
-                  ? "bg-brand-green/10 text-brand-green" 
-                  : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5"
-              }`}
-            >
-              {activeTab === item.id && (
-                <motion.div 
-                  layoutId="active-indicator"
-                  className="absolute left-0 top-0 bottom-0 w-1 bg-brand-green"
-                />
+        <nav className={`mt-8 flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar transition-all duration-300 ${isSidebarCollapsed ? "px-2" : ""}`}>
+          {sidebarGroups.map((group, groupIdx) => (
+            <div key={groupIdx} className="space-y-2 transition-all duration-300 relative">
+              {/* Discrete divider when collapsed */}
+              {groupIdx > 0 && (
+                <div className={`border-t border-emerald-900/10 transition-all duration-300 mx-3 ${
+                  isSidebarCollapsed ? "my-4" : "hidden h-0"
+                }`} />
               )}
-              <item.icon size={20} className={`${
-                activeTab === item.id ? "text-brand-green" : "text-slate-600 group-hover:text-slate-400"
-              }`} />
-              <span className="tracking-tight">{item.label}</span>
-              {activeTab === item.id && (
-                <div className="ml-auto flex items-center gap-1">
-                  <div className="size-1 rounded-full bg-brand-green animate-pulse"></div>
-                  <div className="size-1 rounded-full bg-brand-green/40"></div>
-                </div>
-              )}
-            </button>
+              
+              <div className={`text-[10px] font-black uppercase tracking-[0.1em] text-emerald-200/50 transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 h-0 my-0 overflow-hidden pointer-events-none" : "px-4 mb-3 opacity-100 h-auto mt-2"
+              }`}>
+                {group.title}
+              </div>
+              
+              <div className="space-y-1.5">
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (item.id === "new") setSelectedRecord(null);
+                      setActiveTab(item.id as any);
+                      if (window.innerWidth < 768) setIsSidebarOpen(false);
+                    }}
+                    title={isSidebarCollapsed ? item.label : undefined}
+                    className={`w-full group flex items-center rounded-xl font-medium transition-all duration-300 relative overflow-hidden ${
+                      isSidebarCollapsed ? "justify-center p-3.5 gap-0" : "gap-3.5 px-4 py-3"
+                    } ${
+                      activeTab === item.id 
+                        ? "bg-white/10 text-white font-extrabold border-l-4 border-l-emerald-400" 
+                        : "text-emerald-100/70 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <item.icon size={20} className={`shrink-0 transition-all duration-300 ${
+                      activeTab === item.id ? "text-emerald-300" : "text-emerald-100/50 group-hover:text-emerald-50/90"
+                    } ${isSidebarCollapsed ? "mx-auto" : ""}`} />
+                    
+                    <span className={`tracking-tight transition-all duration-300 text-xs whitespace-nowrap origin-left ${
+                      isSidebarCollapsed 
+                        ? "opacity-0 translate-x-3 w-0 max-w-0 overflow-hidden pointer-events-none" 
+                        : "opacity-100 translate-x-0 w-auto max-w-[200px]"
+                    }`}>
+                      {item.label}
+                    </span>
+                    
+                    {!isSidebarCollapsed && activeTab === item.id && (
+                      <div className="ml-auto flex items-center gap-1 shrink-0 transition-opacity duration-300">
+                        <div className="size-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
+        {/* Sidebar Collapse Footer Toggle */}
+        <div className="p-4 border-t border-emerald-950/60 bg-[#021f07]/50 hidden md:block">
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className={`w-full flex items-center hover:bg-white/5 text-emerald-100/65 hover:text-white rounded-lg transition-all duration-300 text-xs font-semibold cursor-pointer active:scale-95 ${
+              isSidebarCollapsed ? "justify-center p-2" : "justify-start gap-2.5 px-3 py-2"
+            }`}
+            title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            <div className={`transition-transform duration-300 ${isSidebarCollapsed ? "rotate-180" : "rotate-0"}`}>
+              <ChevronLeft size={18} className="shrink-0" />
+            </div>
+            
+            <span className={`tracking-tight transition-all duration-300 whitespace-nowrap overflow-hidden ${
+              isSidebarCollapsed ? "opacity-0 w-0 pointer-events-none" : "opacity-100 w-auto ml-1"
+            }`}>
+              Recolher menu
+            </span>
+          </button>
+        </div>
 
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="bg-[var(--bg-main)]/60 backdrop-blur-md border-b border-[var(--border-lab)] px-8 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#FAF9F6]">
+        <header className="bg-white/85 backdrop-blur-md border-b border-slate-100 px-8 py-4.5 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-brand-green/5 border border-brand-green/20 rounded-full">
-              <div className="size-1.5 rounded-full bg-brand-green"></div>
-              <span className="text-[11px] font-bold text-brand-green uppercase tracking-wide">Status: Online</span>
+            {/* Online Status Bullet */}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
+              <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest">Status: Online</span>
             </div>
-            <h2 className="text-xl font-bold text-[var(--text-bright)] flex items-center gap-3">
-              <span className="text-brand-green/40 opacity-50 font-mono text-sm leading-none tabular-nums">/0{menuItems.findIndex(m => m.id === activeTab) + 1}</span>
-              {menuItems.find(m => m.id === activeTab)?.label}
+            
+            {/* Title Block with dynamic index indicator */}
+            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2.5">
+              <span className="text-slate-300 font-mono text-xs font-bold leading-none">
+                / 0{Math.max(1, menuItems.findIndex(m => m.id === activeTab) + 1)}
+              </span>
+              Mapeamento IA
+              <span className="text-[10px] px-2.5 py-1 bg-slate-50 border border-slate-200/60 text-slate-500 font-bold rounded-lg uppercase tracking-wider shrink-0">
+                {menuItems.find(m => m.id === activeTab)?.label}
+              </span>
             </h2>
           </div>
-          <div className="flex items-center gap-6">
-              <div className="hidden sm:flex items-center gap-3 mr-4">
-                <div className="text-right">
-                  <div className="flex items-center gap-2 justify-end">
-                    {isCurrentUserAdmin && (
-                      <span className="text-[9px] font-black bg-brand-green/20 text-brand-green px-1.5 py-0.5 rounded border border-brand-green/30">ADMIN</span>
-                    )}
-                    <p className="text-[11px] font-bold text-[var(--text-bright)] leading-tight">{profile?.full_name || "Usuário"}</p>
-                  </div>
-                  <p className="text-[9px] text-[var(--text-muted)] font-medium uppercase tracking-wider">{profile?.cargo || "Colaborador"}</p>
-                </div>
-                <button 
-                  onClick={() => setActiveTab("profile")}
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-green to-lab-cyan p-0.5"
-                >
-                  <div className="w-full h-full rounded-[10px] bg-[var(--bg-card)] overflow-hidden flex items-center justify-center">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <UserCircle size={20} className="text-[var(--text-muted)]" />
-                    )}
-                  </div>
-                </button>
-             </div>
 
+          <div className="flex items-center gap-5">
+            
+            {/* Interactive Alerts Bell */}
+            <button 
+              onClick={() => setActiveTab("alerts")} 
+              className="p-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl relative transition-all active:scale-95 text-slate-500 hover:text-[#075618] shrink-0 cursor-pointer shadow-sm"
+              title="Central de Alertas"
+            >
+              <Bell size={18} />
+              <span className="absolute -top-1 -right-1 size-4.5 bg-rose-500 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow">
+                3
+              </span>
+            </button>
+
+            {/* User Logged Block */}
+            <div 
+              onClick={() => setActiveTab("profile")}
+              className="hidden sm:flex items-center gap-3.5 pl-3.5 border-l border-slate-100 cursor-pointer group"
+              title="Visualizar Perfil"
+            >
+              <div className="text-right">
+                <div className="flex items-center gap-1.5 justify-end">
+                  {isCurrentUserAdmin && (
+                    <span className="text-[8px] font-black bg-emerald-500/10 border border-emerald-500/10 text-emerald-700 px-1.5 py-0.5 rounded uppercase shrink-0">
+                      ADMIN
+                    </span>
+                  )}
+                  <p className="text-[11px] font-black text-slate-700 group-hover:text-[#075618] transition-colors leading-tight">
+                    {profile?.full_name || "Usuário"}
+                  </p>
+                </div>
+                <p className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">
+                  {profile?.cargo || "Colaborador"}
+                </p>
+              </div>
+              
+              <div className="w-9.5 h-9.5 rounded-xl border border-slate-100 overflow-hidden flex items-center justify-center p-0.5 bg-white group-hover:border-[#075618] transition-colors shadow-sm shrink-0">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-[8px]" />
+                ) : (
+                  <UserCircle size={22} className="text-slate-400" />
+                )}
+              </div>
+              <ChevronDown size={14} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+            </div>
 
           </div>
         </header>
@@ -882,7 +1012,11 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="max-w-[90rem] mx-auto bg-[var(--bg-card-page)] border-4 border-[var(--border-page)] rounded-[3rem] p-6 md:p-10 shadow-2xl relative text-[var(--text-bright)]"
+              className={`max-w-[95rem] mx-auto relative ${
+                activeTab === "dashboard" || activeTab === "alerts"
+                  ? "p-0 bg-transparent border-0 shadow-none text-slate-800" 
+                  : "bg-[var(--bg-card-page)] border-4 border-[var(--border-page)] rounded-[3rem] p-6 md:p-10 shadow-2xl text-[var(--text-bright)]"
+              }`}
             >
               {activeTab === "dashboard" && (
                 <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={isCurrentUserAdmin} workflows={workflows} approvalConfig={approvalConfig} currentUserId={user?.id} />
@@ -943,6 +1077,105 @@ export default function App() {
               {activeTab === "profile" && (
                 <UserProfileView />
               )}
+              {activeTab === "alerts" && (
+                <div className="space-y-6 bg-white p-8 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] text-slate-800 animate-fade-in max-w-6xl mx-auto">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
+                    <div>
+                      <h3 className="text-xl font-black uppercase text-[#075618] tracking-tight">Central de Alertas Críticos</h3>
+                      <p className="text-xs text-slate-400 font-medium">Monitoramento regulatório, privacidade LGPD e limites de conformidade</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-[#075618] hover:bg-emerald-50 px-2.5 py-1 bg-[#075618]/5 rounded-full uppercase tracking-widest font-mono">Status: Monitorando</span>
+                  </div>
+                  
+                  {records.length === 0 ? (
+                    <div className="py-20 text-center space-y-3">
+                      <div className="inline-flex p-4 bg-slate-50 border border-slate-100 rounded-full text-slate-400">
+                        <Bell size={24} />
+                      </div>
+                      <p className="text-[#111111] font-bold text-xs uppercase tracking-wider">Nenhum sistema cadastrado</p>
+                      <p className="text-[11px] text-slate-400">Cadastre ferramentas no inventário para acionar os triggers de segurança.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(() => {
+                        const itemsWithAlerts = records.filter(r => 
+                          r.criticidade?.includes("ALTA") || 
+                          r.usaDadosSensiveis === "Sim" || 
+                          r.statusUso === StatusUso.NAO_APROVADO || 
+                          r.statusUso === StatusUso.SUSPENSO
+                        );
+                        
+                        if (itemsWithAlerts.length === 0) {
+                          return (
+                            <div className="py-20 text-center space-y-3">
+                              <div className="inline-flex p-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
+                                <CheckCircle2 size={24} />
+                              </div>
+                              <p className="text-[#111111] font-bold text-xs uppercase tracking-wider">Nenhum alerta ativo</p>
+                              <p className="text-[11px] text-slate-400">Todos os sistemas de IA mapeados estão operando sob conformidade regulatória normal.</p>
+                            </div>
+                          );
+                        }
+                        
+                        return records.map((r) => {
+                          const subAlerts = [];
+                          if (r.criticidade?.toUpperCase().includes("ALTA") || r.criticidade?.toUpperCase().includes("CRITICA")) {
+                            subAlerts.push({
+                              id: `${r.id}-risk`,
+                              title: "Certificação de Risco Alto",
+                              desc: `A ferramenta "${r.nomeFerramenta}" incorporada pelo setor "${r.unidadeSetor}" apresenta criticidade de nível alto. É imprescindível realizar auditoria técnica e mitigação de vieses anualmente.`,
+                              level: "CRÍTICO",
+                              style: "bg-rose-50 border-rose-100 text-rose-800",
+                              badge: "bg-rose-200 text-rose-800 font-extrabold"
+                            });
+                          }
+                          if (r.usaDadosSensiveis === "Sim") {
+                            subAlerts.push({
+                              id: `${r.id}-sens`,
+                              title: "Fluxo de Dados Sensíveis ativo",
+                              desc: `A inteligência "${r.nomeFerramenta}" processa ou transfere dados pessoais sensíveis protegidos pela LGPD. Proteja canais de comunicação para prevenir vazamentos.`,
+                              level: "Privacidade",
+                              style: "bg-amber-50 border-amber-100 text-amber-800",
+                              badge: "bg-amber-200 text-amber-800 font-bold"
+                            });
+                          }
+                          if (r.statusUso === StatusUso.NAO_APROVADO || r.statusUso === StatusUso.SUSPENSO) {
+                            subAlerts.push({
+                              id: `${r.id}-denied`,
+                              title: "Uso de Tecnologia Rejeitada",
+                              desc: `O comitê diretor ou NIT indeferiu o uso da ferramenta "${r.nomeFerramenta}". O uso operacional corporativo está proibido de forma explícita.`,
+                              level: "BLOQUEIO",
+                              style: "bg-red-50 border-red-200 text-red-800",
+                              badge: "bg-red-550 text-white font-extrabold"
+                            });
+                          }
+
+                          return subAlerts.map(sa => (
+                            <div key={sa.id} className={`p-5 rounded-2xl border ${sa.style} flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-200 hover:translate-x-1`}>
+                              <div className="space-y-1.5 min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider ${sa.badge}`}>{sa.level}</span>
+                                  <h4 className="font-extrabold text-sm tracking-tight uppercase">{sa.title}</h4>
+                                </div>
+                                <p className="text-xs opacity-90 leading-relaxed">{sa.desc}</p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedRecord(r);
+                                  setActiveTab("report");
+                                }}
+                                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-[#075618] hover:text-[#075618] text-[10px] font-all font-black uppercase rounded-xl transition-all duration-150 active:scale-95 shrink-0 shadow-sm cursor-pointer"
+                              >
+                                Auditar IA
+                              </button>
+                            </div>
+                          ));
+                        });
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
               {activeTab === "new" && (
                 <RegistrationForm 
                   initialData={selectedRecord} 
@@ -957,8 +1190,14 @@ export default function App() {
                     record={selectedRecord} 
                     onBack={() => {
                       setSelectedRecord(null);
-                      setActiveTab("report");
+                      if (originTab && originTab !== "report") {
+                        setActiveTab(originTab as any);
+                      } else {
+                        setActiveTab("inventory");
+                      }
                     }} 
+                    onEdit={handleEdit}
+                    isAdmin={isCurrentUserAdmin}
                   />
                 ) : (
                   <div className="space-y-8 pb-20">

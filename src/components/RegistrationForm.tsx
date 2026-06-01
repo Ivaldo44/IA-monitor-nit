@@ -23,12 +23,48 @@ interface RegistrationFormProps {
 }
 
 // ... helper components defined outside to prevent re-mounting focus loss issues ...
-const InputGroup = ({ label, required, children, infoAction }: { label: string; required?: boolean; children: React.ReactNode; infoAction?: React.ReactNode }) => (
+const BadgePerfil = () => (
+  <span className="ml-2 inline-flex items-center gap-1 text-[9px] font-black bg-[#E8E7E7] text-[#111111]/80 border border-slate-300 px-2 py-0.5 rounded-full uppercase tracking-wider select-none">
+    👤 Perfil
+  </span>
+);
+
+const BadgeAutomatico = () => (
+  <span className="ml-2 inline-flex items-center gap-1 text-[9px] font-black bg-[#075618]/10 text-[#075618] border border-[#075618]/25 px-2 py-0.5 rounded-full uppercase tracking-wider select-none">
+    ⚙️ Automático
+  </span>
+);
+
+const getInputClass = (val: any, disabled?: boolean) => {
+  const base = "w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all placeholder:text-slate-400/80 shadow-sm";
+  if (disabled) {
+    return `${base} bg-[#E8E7E7] text-[#111111]/70 border border-[#E8E7E7] cursor-not-allowed select-none`;
+  }
+  const isFilled = Array.isArray(val) ? val.length > 0 : !!val;
+  const borderClass = isFilled ? "border-[#075618]/45" : "border-[#E8E7E7]";
+  return `${base} bg-white text-[#111111] border ${borderClass} focus:ring-2 focus:ring-[#075618]/15 focus:border-[#075618] focus:shadow-[0_0_8px_rgba(7,86,24,0.15)]`;
+};
+
+const InputGroup = ({ 
+  label, 
+  required, 
+  children, 
+  infoAction,
+  badge
+}: { 
+  label: string; 
+  required?: boolean; 
+  children: React.ReactNode; 
+  infoAction?: React.ReactNode;
+  badge?: React.ReactNode;
+}) => (
   <div className="space-y-1.5 w-full group">
     <div className="flex items-center justify-between gap-2 w-full">
-      <label className="text-xs font-bold text-[var(--text-muted)] flex items-center gap-2 uppercase tracking-tight group-focus-within:text-brand-green transition-colors">
-        <div className="size-1 rounded-full bg-black/10 dark:bg-white/20 group-focus-within:bg-brand-green group-focus-within:shadow-sm"></div>
-        {label} {required && <span className="text-lab-red font-bold">*</span>}
+      <label className="text-xs font-bold text-[#111111] flex items-center gap-1.5 uppercase tracking-tight group-focus-within:text-[#075618] transition-colors">
+        <div className="size-1.5 rounded-full bg-slate-300 group-focus-within:bg-[#075618] group-focus-within:shadow-[0_0_6px_rgba(7,86,24,0.5)] transition-all"></div>
+        <span>{label}</span>
+        {required && <span className="text-red-500 font-bold ml-0.5">*</span>}
+        {badge}
       </label>
       {infoAction}
     </div>
@@ -58,7 +94,7 @@ const RadioGroup = ({
       <button
         type="button"
         onClick={onInfoClick}
-        className="px-2.5 py-1 rounded-md bg-brand-green/15 hover:bg-brand-green text-[#00d136] dark:text-brand-green hover:text-black border border-brand-green/35 hover:border-brand-green flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
+        className="px-2.5 py-1 rounded-md bg-[#075618]/10 hover:bg-[#075618] text-[#075618] hover:text-white border border-[#075618]/30 hover:border-[#075618] flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
         title="Explicar"
       >
         <span className="text-[9px] font-black uppercase tracking-wider">Explicação</span>
@@ -73,8 +109,8 @@ const RadioGroup = ({
           onClick={() => onChange(opt)}
           className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border ${
             value === opt 
-              ? "bg-brand-green text-black border-brand-green shadow-sm scale-[1.05]" 
-              : "bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border-brand-green/35 dark:border-brand-green/20 hover:border-brand-green/60 hover:text-[var(--text-bright)]"
+              ? "bg-[#075618] text-white border-[#075618] shadow-sm scale-[1.05]" 
+              : "bg-white text-[#111111] border-[#E8E7E7] hover:border-[#075618]/50 hover:text-[#075618]"
           }`}
         >
           {opt}
@@ -106,7 +142,7 @@ const CheckboxGroup = ({
       <button
         type="button"
         onClick={onInfoClick}
-        className="px-2.5 py-1 rounded-md bg-brand-green/15 hover:bg-brand-green text-[#00d136] dark:text-brand-green hover:text-black border border-brand-green/35 hover:border-brand-green flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
+        className="px-2.5 py-1 rounded-md bg-[#075618]/10 hover:bg-[#075618] text-[#075618] hover:text-white border border-[#075618]/30 hover:border-[#075618] flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
         title="Explicar tipos de IA"
       >
         <span className="text-[9px] font-black uppercase tracking-wider">Explicação</span>
@@ -123,8 +159,8 @@ const CheckboxGroup = ({
             onClick={() => onToggle(opt)}
             className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border ${
               isSelected 
-                ? "bg-lab-cyan text-white border-lab-cyan shadow-sm scale-[1.05]" 
-                : "bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border-brand-green/35 dark:border-brand-green/20 hover:border-brand-green/60 hover:text-[var(--text-bright)]"
+                ? "bg-[#075618] text-white border-[#075618] shadow-sm scale-[1.05]" 
+                : "bg-white text-[#111111] border-[#E8E7E7] hover:border-[#075618]/50 hover:text-[#075618]"
             }`}
           >
             {opt}
@@ -149,16 +185,21 @@ const TextArea = ({
   required?: boolean; 
   placeholder?: string;
   className?: string;
-}) => (
-  <InputGroup label={label} required={required}>
-    <textarea 
-      className={className}
-      value={value || ""}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-    />
-  </InputGroup>
-);
+}) => {
+  const isFilled = !!value;
+  const borderClass = isFilled ? "border-[#075618]/45" : "border-[#E8E7E7]";
+  const combinedClass = `w-full p-4 rounded-2xl font-bold text-sm outline-none transition-all placeholder:text-slate-400 bg-white text-[#111111] border ${borderClass} focus:ring-2 focus:ring-[#075618]/15 focus:border-[#075618] focus:shadow-[0_0_8px_rgba(7,86,24,0.15)] min-h-[100px]`;
+  return (
+    <InputGroup label={label} required={required}>
+      <textarea 
+        className={combinedClass}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </InputGroup>
+  );
+};
 
 export default function RegistrationForm({ initialData, onSave, onCancel, isAdmin }: RegistrationFormProps) {
   const { profile } = useAuth();
@@ -225,15 +266,65 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
         setFormData(prev => ({ 
           ...prev, 
           id: generateId(records),
-          unidadeSetor: profile.setor && profile.setor !== "Não definido" ? profile.setor : prev.unidadeSetor,
-          responsavelPreenchimento: profile.full_name || prev.responsavelPreenchimento,
-          cargo: profile.cargo && profile.cargo !== "Colaborador" ? profile.cargo : prev.cargo
+          unidadeSetor: (profile.setor && profile.setor !== "Não definido" && profile.setor !== "Não informado") ? profile.setor : (prev.unidadeSetor || ""),
+          responsavelPreenchimento: profile.full_name || prev.responsavelPreenchimento || "",
+          cargo: (profile.cargo && profile.cargo !== "Colaborador" && profile.cargo !== "Não definido" && profile.cargo !== "Não informado") ? profile.cargo : (prev.cargo || ""),
+          contato: (profile.contato && profile.contato !== "Não definido" && profile.contato !== "Não informado") ? profile.contato : (prev.contato || ""),
+          dataRegistro: prev.dataRegistro || new Date().toISOString().split('T')[0]
         }));
         setIsInitialized(true);
       };
       fetchAndSetId();
     }
   }, [initialData, profile, isInitialized]);
+
+  const isProfileIncompleteForStep1 = !profile || 
+    !profile.setor || 
+    profile.setor === "Não definido" || 
+    profile.setor.trim() === "" || 
+    !profile.full_name || 
+    profile.full_name.trim() === "" ||
+    !profile.cargo || 
+    profile.cargo.trim() === "" || 
+    profile.cargo === "Colaborador" || 
+    profile.cargo === "Não definido" || 
+    profile.cargo === "Não informado" ||
+    !profile.contato || 
+    profile.contato.trim() === "" || 
+    profile.contato === "Não definido" || 
+    profile.contato === "Não informado";
+
+  const isStep1Incomplete = !formData.unidadeSetor || 
+    formData.unidadeSetor.trim() === "" || 
+    formData.unidadeSetor.trim() === "Não definido" || 
+    formData.unidadeSetor.trim() === "Nao definido" || 
+    !formData.responsavelPreenchimento || 
+    formData.responsavelPreenchimento.trim() === "" || 
+    !formData.cargo || 
+    formData.cargo.trim() === "" || 
+    formData.cargo.trim() === "Colaborador" || 
+    formData.cargo.trim() === "Não definido" || 
+    formData.cargo.trim() === "Não informado" || 
+    !formData.contato || 
+    formData.contato.trim() === "" || 
+    formData.contato.trim() === "Não definido" || 
+    formData.contato.trim() === "Não informado" || 
+    !formData.dataRegistro || 
+    formData.dataRegistro.trim() === "";
+
+  const isStep2Incomplete = !formData.nomeFerramenta || 
+    formData.nomeFerramenta.trim() === "" ||
+    !formData.tipoIA || 
+    formData.tipoIA.length === 0 ||
+    (formData.tipoIA.includes(TiposIA.OUTRO) && (!formData.tipoIAOutro || formData.tipoIAOutro.trim() === ""));
+
+  const isStep3Incomplete = !formData.descricaoAtividade || 
+    formData.descricaoAtividade.trim() === "" ||
+    !formData.objetivos || 
+    formData.objetivos.length === 0 ||
+    (formData.objetivos.includes(ObjetivosIA.OUTRO) && (!formData.objetivoOutro || formData.objetivoOutro.trim() === "")) ||
+    !formData.beneficiosEsperados || 
+    formData.beneficiosEsperados.trim() === "";
 
   const updateField = (field: keyof IARecord, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -244,7 +335,16 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     const newVal = current.includes(value) 
       ? current.filter(v => v !== value) 
       : [...current, value];
-    updateField(field, newVal);
+    
+    if (field === "objetivos") {
+      setFormData(prev => ({
+        ...prev,
+        objetivos: newVal,
+        ...(newVal.includes(ObjetivosIA.OUTRO) ? {} : { objetivoOutro: "" })
+      }));
+    } else {
+      updateField(field, newVal);
+    }
   };
 
   // Automatic Risk Classification Logic
@@ -292,29 +392,37 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
   const sections = [
     { label: "Solicitante", icon: FileText },
-    { label: "Identificação", icon: Zap },
+    { label: "Identificação da IA", icon: Zap },
     { label: "Objetivo", icon: Info },
-    { label: "Dados", icon: Database },
-    { label: "Integração", icon: Share2 },
-    { label: "Riscos", icon: AlertTriangle },
-    { label: "Conformidade", icon: ShieldCheck },
-    { label: "Classificação", icon: Scale },
-    { label: "Obs", icon: FileText },
+    { label: "Observações e Envio", icon: ClipboardCheck },
   ];
 
   const visibleSections = sections;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Rule 5: Não permitir salvar a solicitação se a Etapa 1 estiver incompleta
+    if (isStep1Incomplete || isProfileIncompleteForStep1) {
+      alert("Complete seu perfil para continuar. Informe cargo/função e contato antes de abrir uma solicitação de IA.");
+      setActiveSection(0);
+      return;
+    }
+
     const cleanSector = (formData.unidadeSetor || "").trim();
     if (!cleanSector || cleanSector.toLowerCase() === "não definido" || cleanSector.toLowerCase() === "nao definido") {
       alert("Por favor, preencha o campo obrigatório 'Setor' na primeira seção. Ele não pode ser vazio ou 'Não definido'.");
       setActiveSection(0);
       return;
     }
-    if (!formData.nomeFerramenta || !formData.responsavelPreenchimento) {
-      alert("Por favor, preencha todos os campos obrigatórios da primeira seção.");
-      setActiveSection(0);
+    if (isStep2Incomplete) {
+      alert("Por favor, preencha todos os campos obrigatórios da Identificação da IA (Etapa 2).");
+      setActiveSection(1);
+      return;
+    }
+    if (isStep3Incomplete) {
+      alert("Por favor, preencha todos os campos obrigatórios da Etapa 3 — Objetivo.");
+      setActiveSection(2);
       return;
     }
     
@@ -356,20 +464,22 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             onClick={() => setActiveSection(i)}
             className={`flex items-center gap-4 w-full p-4 rounded-2xl transition-all whitespace-nowrap text-left group relative overflow-hidden border ${
               activeSection === i 
-                ? "bg-brand-green/10 text-brand-green font-bold border-brand-green" 
-                : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border-lab)]"
+                ? "bg-[#075618]/10 text-[#075618] font-bold border-[#075618]/35" 
+                : "text-[var(--text-muted)] hover:text-[#111111] hover:bg-black/5 border-[var(--border-lab)]"
             }`}
           >
             {activeSection === i && (
-              <motion.div layoutId="form-active" className="absolute left-0 top-0 bottom-0 w-1 bg-brand-green" />
+              <motion.div layoutId="form-active" className="absolute left-0 top-0 bottom-0 w-1 bg-[#075618]" />
             )}
             <div className={`p-2 rounded-xl border transition-colors ${
-              activeSection === i ? "bg-brand-green/20 border-brand-green/30" : "bg-black/5 dark:bg-white/5 border-[var(--border-lab)] group-hover:border-[var(--text-muted)]"
+              activeSection === i ? "bg-[#075618]/15 border-[#075618]/30" : "bg-black/5 dark:bg-white/5 border-[var(--border-lab)] group-hover:border-[#111111]/30"
             }`}>
-              <sec.icon size={16} className={activeSection === i ? "text-brand-green" : "text-[var(--text-muted)]"} />
+              <sec.icon size={16} className={activeSection === i ? "text-[#075618]" : "text-[var(--text-muted)]"} />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] opacity-40 font-mono tracking-tight text-[var(--text-muted)] uppercase text-left">Fase 0{i+1}</span>
+              <span className={`text-[10px] font-mono tracking-tight uppercase text-left transition-colors ${
+                activeSection === i ? "text-[#F29222] font-black opacity-100" : "text-[var(--text-muted)] opacity-60"
+              }`}>Fase 0{i+1}</span>
               <span className="text-[13px] tracking-tight font-display font-medium text-left uppercase">{sec.label}</span>
             </div>
           </button>
@@ -383,17 +493,17 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
           <div className="mb-12 flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b border-[var(--border-lab)] pb-8">
              <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="px-3 py-1 bg-brand-orange/10 border border-brand-orange/30 rounded-full">
-                    <p className="text-[10px] font-bold text-brand-orange uppercase tracking-wide">Etapa {activeSection + 1} de {visibleSections.length}</p>
+                  <div className="px-3 py-1 bg-[#F29222]/10 border border-[#F29222]/35 rounded-full">
+                    <p className="text-[10px] font-bold text-[#F29222] uppercase tracking-wide">Etapa {activeSection + 1} de {visibleSections.length}</p>
                   </div>
-                  <div className="size-1 rounded-full bg-[var(--text-muted)]/20"></div>
-                  <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-tight">Conexão Segura Ativa</span>
+                  <div className="size-1 rounded-full bg-slate-300"></div>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase tracking-tight">Conexão Segura Ativa</span>
                 </div>
-                <h2 className="text-4xl font-bold text-[var(--text-bright)] tracking-tight font-display uppercase">
+                <h2 className="text-4xl font-bold text-[#111111] tracking-tight font-display uppercase">
                   {sections[activeSection].label.toUpperCase()}
                 </h2>
              </div>
-             <div className="px-6 py-3 glass rounded-2xl font-mono text-xs font-extrabold text-emerald-800 dark:text-brand-green border border-brand-green/30">
+             <div className="px-6 py-3 bg-[#E8E7E7]/40 rounded-2xl font-mono text-xs font-extrabold text-[#075618] border border-[#075618]/20">
                Protocolo: {formData.id}
              </div>
           </div>
@@ -401,9 +511,17 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
           <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {activeSection === 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <InputGroup label="Setor" required>
+                {isProfileIncompleteForStep1 && (
+                  <div className="col-span-1 md:col-span-2 p-5 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 rounded-2xl flex items-start gap-3">
+                    <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                    <span className="text-xs font-bold uppercase tracking-wide leading-relaxed">
+                      Complete seu perfil para continuar. Informe cargo/função e contato antes de abrir uma solicitação de IA.
+                    </span>
+                  </div>
+                )}
+                <InputGroup label="Setor" required badge={!isAdmin ? <BadgePerfil /> : null}>
                   <input 
-                    className={`${sharedInputClass} disabled:opacity-60 disabled:cursor-not-allowed`}
+                    className={getInputClass(formData.unidadeSetor, !isAdmin)}
                     value={formData.unidadeSetor || ""}
                     onChange={(e) => updateField("unidadeSetor", e.target.value)}
                     placeholder={isAdmin ? "Ex: NIT, TI, Marketing, Hematologia..." : ""}
@@ -419,7 +537,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                 </InputGroup>
                 <InputGroup label="Responsável pelo Preenchimento" required>
                   <input 
-                    className={sharedInputClass}
+                    className={getInputClass(formData.responsavelPreenchimento)}
                     value={formData.responsavelPreenchimento || ""}
                     onChange={(e) => updateField("responsavelPreenchimento", e.target.value)}
                     placeholder="Nome Completo"
@@ -428,20 +546,30 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                 </InputGroup>
                 <InputGroup label="Cargo" required>
                   <input 
-                    className={sharedInputClass}
+                    className={getInputClass(formData.cargo)}
                     value={formData.cargo || ""}
                     onChange={(e) => updateField("cargo", e.target.value)}
                     placeholder="Seu cargo atual"
                     required
                   />
                 </InputGroup>
-                <InputGroup label="Data do Registro" required>
+                <InputGroup label="Contato" required>
+                  <input 
+                    className={getInputClass(formData.contato)}
+                    value={formData.contato || ""}
+                    onChange={(e) => updateField("contato", e.target.value)}
+                    placeholder="Ex: (21) 9999-9999"
+                    required
+                  />
+                </InputGroup>
+                <InputGroup label="Data do Registro" required badge={<BadgeAutomatico />}>
                   <input 
                     type="date"
-                    className={sharedInputClass}
+                    className={getInputClass(formData.dataRegistro, true)}
                     value={formData.dataRegistro || ""}
                     onChange={(e) => updateField("dataRegistro", e.target.value)}
                     required
+                    disabled
                   />
                 </InputGroup>
               </div>
@@ -452,18 +580,21 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
             {activeSection === 1 && (
               <div className="space-y-6">
-                <InputGroup label="Nome da ferramenta / sistema / equipamento" required>
+                <InputGroup label="Nome da IA, sistema ou ferramenta" required>
                   <input 
-                    className={sharedInputClass}
+                    className={getInputClass(formData.nomeFerramenta)}
                     value={formData.nomeFerramenta || ""}
                     onChange={(e) => updateField("nomeFerramenta", e.target.value)}
+                    placeholder="Ex: Gemini, Copilot, ChatGPT..."
+                    required
                   />
                 </InputGroup>
-                <InputGroup label="Versão / Plano / Modelo">
+                <InputGroup label="Versão, plano ou modelo">
                   <input 
-                    className={sharedInputClass}
+                    className={getInputClass(formData.versao)}
                     value={formData.versao || ""}
                     onChange={(e) => updateField("versao", e.target.value)}
+                    placeholder="Informe a versão, plano ou modelo, se souber."
                   />
                 </InputGroup>
                 <CheckboxGroup 
@@ -474,17 +605,28 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   required 
                   onInfoClick={() => setShowTypeIAPopup(true)}
                 />
+                {formData.tipoIA?.includes(TiposIA.OUTRO) && (
+                  <InputGroup label="Descreva o tipo de IA" required>
+                    <input 
+                      className={getInputClass(formData.tipoIAOutro)}
+                      value={formData.tipoIAOutro || ""}
+                      onChange={(e) => updateField("tipoIAOutro", e.target.value)}
+                      placeholder="Descreva o tipo de IA"
+                      required
+                    />
+                  </InputGroup>
+                )}
               </div>
             )}
 
             {activeSection === 2 && (
               <div className="space-y-6">
                 <TextArea 
-                  label="Onde a ia será utilizada (Faça uma descrição)" 
+                  label="Descreva onde e como a IA será utilizada" 
                   value={formData.descricaoAtividade as string}
                   onChange={(val) => updateField("descricaoAtividade", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
                   required 
+                  placeholder="Exemplo: A IA será utilizada no setor de atendimento para auxiliar na organização de mensagens, respostas frequentes and triagem inicial de solicitações."
                 />
                 <CheckboxGroup 
                   label="Objetivos do uso" 
@@ -494,308 +636,48 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   required 
                 />
 
+                {formData.objetivos?.includes(ObjetivosIA.OUTRO) && (
+                  <InputGroup label="Descreva o outro objetivo" required>
+                    <input 
+                      type="text"
+                      className={getInputClass(formData.objetivoOutro)}
+                      value={formData.objetivoOutro || ""}
+                      onChange={(e) => updateField("objetivoOutro", e.target.value)}
+                      placeholder="Descreva o outro objetivo"
+                      required
+                    />
+                  </InputGroup>
+                )}
+
                 <TextArea 
-                  label="Benefícios esperados" 
+                  label="Quais benefícios são esperados com o uso da IA?" 
                   value={formData.beneficiosEsperados as string}
                   onChange={(val) => updateField("beneficiosEsperados", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
+                  required
+                  placeholder="Exemplo: Reduzir tempo de atendimento, padronizar respostas, diminuir retrabalho, apoiar a equipe na análise de informações e melhorar a produtividade do setor."
                 />
               </div>
             )}
-
 
             {activeSection === 3 && (
-              <div className="space-y-6">
-                <div className="p-5 bg-black/5 dark:bg-white/[0.015] border border-[var(--border-lab)] rounded-2xl">
-                  <div className="flex items-center justify-between mb-4 border-b border-[var(--border-lab)] pb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-2">
-                      <ShieldCheck size={16} className="text-brand-green" />
-                      Uso de Dados Pessoais e Sensíveis
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowDadosInfoPopup(true)}
-                      className="px-2.5 py-1 rounded-md bg-brand-green/15 hover:bg-brand-green text-[#00d136] dark:text-brand-green hover:text-black border border-brand-green/35 hover:border-brand-green flex items-center justify-center transition-all cursor-pointer hover:scale-105 shadow-sm font-sans"
-                      title="Explicar Dados Pessoais e Sensíveis"
-                    >
-                      <span className="text-[9px] font-black uppercase tracking-wider">Explicação</span>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <RadioGroup 
-                      label="Utiliza dados pessoais?" 
-                      options={["Sim", "Não"]} 
-                      value={formData.usaDadosPessoais as string}
-                      onChange={(val) => updateField("usaDadosPessoais", val)}
-                      required 
-                    />
-                    <RadioGroup 
-                      label="Utiliza dados sensíveis?" 
-                      options={["Sim", "Não"]} 
-                      value={formData.usaDadosSensiveis as string}
-                      onChange={(val) => updateField("usaDadosSensiveis", val)}
-                      required 
-                    />
-                  </div>
-                </div>
-                <TextArea 
-                  label="Quais dados são utilizados?" 
-                  value={formData.quaisDados as string}
-                  onChange={(val) => updateField("quaisDados", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                  required 
-                />
-                <RadioGroup 
-                  label="Os dados são anonimizados?" 
-                  options={["Sim", "Não", "Parcial"]} 
-                  value={formData.dadosAnonimizados as string}
-                  onChange={(val) => updateField("dadosAnonimizados", val)}
-                  required 
-                  onInfoClick={() => setShowDadosAnonimizadosPopup(true)}
-                />
-              </div>
-            )}
-
-            {activeSection === 4 && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <RadioGroup 
-                    label="Integrada a sistema interno?" 
-                    options={["Sim", "Não"]} 
-                    value={formData.integradaSistemaInterno as string}
-                    onChange={(val) => updateField("integradaSistemaInterno", val)}
-                    required 
-                  />
-                  <InputGroup label="Qual sistema?">
-                    <input className={sharedInputClass} value={formData.qualSistema || ""} onChange={(e) => updateField("qualSistema", e.target.value)} />
-                  </InputGroup>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <RadioGroup 
-                    label="Impacta resultados laboratoriais?" 
-                    options={["Sim", "Não"]} 
-                    value={formData.impactoResultadosLaboratoriais as string}
-                    onChange={(val) => updateField("impactoResultadosLaboratoriais", val)}
-                    required 
-                  />
-                  <RadioGroup 
-                    label="Existe validação humana?" 
-                    options={["Sim", "Não"]} 
-                    value={formData.validacaoHumana as string}
-                    onChange={(val) => updateField("validacaoHumana", val)}
-                    required 
-                  />
-                </div>
-                <InputGroup label="Quem realiza a validação humana?">
-                  <input className={sharedInputClass} value={formData.quemValida || ""} onChange={(e) => updateField("quemValida", e.target.value)} />
-                </InputGroup>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <RadioGroup 
-                    label="Existe log da decisão?" 
-                    options={["Sim", "Não", "Não sei"]} 
-                    value={formData.registroLogDecisao as string}
-                    onChange={(val) => updateField("registroLogDecisao", val)}
-                  />
-                  <RadioGroup 
-                    label="Ambiente de homologação?" 
-                    options={["Sim", "Não", "Não sei"]} 
-                    value={formData.ambienteHomologacao as string}
-                    onChange={(val) => updateField("ambienteHomologacao", val)}
-                  />
-                </div>
-                <TextArea 
-                  label="Observações sobre integração" 
-                  value={formData.obsIntegracao as string}
-                  onChange={(val) => updateField("obsIntegracao", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                />
-              </div>
-            )}
-
-            {activeSection === 5 && (
-              <div className="space-y-6">
-                <RadioGroup 
-                  label="Possíveis riscos?" 
-                  options={["Sim", "Não"]} 
-                  value={formData.riscosIdentificados as string}
-                  onChange={(val) => updateField("riscosIdentificados", val)}
-                  required 
-                />
-                <TextArea 
-                  label="Se sim, quais riscos?" 
-                  value={formData.quaisRiscos as string}
-                  onChange={(val) => updateField("quaisRiscos", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                />
-                <RadioGroup 
-                  label="Controles implementados?" 
-                  options={["Sim", "Não"]} 
-                  value={formData.controlesImplementados as string}
-                  onChange={(val) => updateField("controlesImplementados", val)}
-                  required 
-                />
-                <CheckboxGroup 
-                  label="Quais controles existem?" 
-                  options={[
-                    "Revisão humana obrigatória", "Restrição de acesso", "Controle de dados inseridos",
-                    "Monitoramento de uso", "Logs e trilha de auditoria", "Validação técnica prévia",
-                    "Treinamento dos usuários", "Controle de versão", "Plano de contingência"
-                  ]} 
-                  value={formData.quaisControles as any[]}
-                  onToggle={(val) => handleArrayToggle("quaisControles", val)}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <InputGroup label="Risco Residual">
-                      <select className={sharedInputClass} value={formData.riscoResidual} onChange={(e) => updateField("riscoResidual", e.target.value)}>
-                        {Object.values(RiscoResidual).map(r => <option key={r} value={r} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{r}</option>)}
-                      </select>
-                   </InputGroup>
-                   <InputGroup label="Responsável pelo risco">
-                      <input className={sharedInputClass} value={formData.responsavelRisco || ""} onChange={(e) => updateField("responsavelRisco", e.target.value)} />
-                   </InputGroup>
-                </div>
-                <TextArea 
-                  label="Observações de riscos e controles" 
-                  value={formData.obsRiscosControles as string}
-                  onChange={(val) => updateField("obsRiscosControles", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                />
-              </div>
-            )}
-
-            {activeSection === 6 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RadioGroup 
-                  label="Alinhado com LGPD?" 
-                  options={["Sim", "Não", "Em avaliação"]} 
-                  value={formData.alinhadoLGPD as string}
-                  onChange={(val) => updateField("alinhadoLGPD", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Política interna?" 
-                  options={["Sim", "Não"]} 
-                  value={formData.politicaInterna as string}
-                  onChange={(val) => updateField("politicaInterna", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Documentação técnica?" 
-                  options={["Sim", "Não", "Não se aplica"]} 
-                  value={formData.documentacaoTecnica as string}
-                  onChange={(val) => updateField("documentacaoTecnica", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Contrato Termo Dados?" 
-                  options={["Sim", "Não", "Em avaliação", "Não se aplica"]} 
-                  value={formData.contratoProtecaoDados as string}
-                  onChange={(val) => updateField("contratoProtecaoDados", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Controle de acesso?" 
-                  options={["Sim", "Não", "Não sei"]} 
-                  value={formData.controleAcessoPerfil as string}
-                  onChange={(val) => updateField("controleAcessoPerfil", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Trilha de auditoria?" 
-                  options={["Sim", "Não", "Não sei"]} 
-                  value={formData.trilhaAuditoria as string}
-                  onChange={(val) => updateField("trilhaAuditoria", val)}
-                  required 
-                />
-                <RadioGroup 
-                  label="Procedimento incidente?" 
-                  options={["Sim", "Não"]} 
-                  value={formData.procedimentoIncidente as string}
-                  onChange={(val) => updateField("procedimentoIncidente", val)}
-                />
-              </div>
-            )}
-
-            {activeSection === 7 && (
-              <div className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <InputGroup label="Criticidade" required>
-                    <select className={sharedInputClass} value={formData.criticidade} onChange={(e) => updateField("criticidade", e.target.value)}>
-                      <option value="" className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">Selecione...</option>
-                      {Object.values(Criticidade).map(c => <option key={c} value={c} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{c}</option>)}
-                    </select>
-                  </InputGroup>
-                  <InputGroup label="Natureza do Uso" required>
-                    <select className={sharedInputClass} value={formData.naturezaUso} onChange={(e) => updateField("naturezaUso", e.target.value)}>
-                      <option value="" className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">Selecione...</option>
-                      {Object.values(NaturezaUso).map(n => <option key={n} value={n} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{n}</option>)}
-                    </select>
-                  </InputGroup>
-                  <InputGroup label="Grau de Autonomia" required>
-                    <select className={sharedInputClass} value={formData.grauAutonomia} onChange={(e) => updateField("grauAutonomia", e.target.value)}>
-                      <option value="" className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">Selecione...</option>
-                      {Object.values(GrauAutonomia).map(g => <option key={g} value={g} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{g}</option>)}
-                    </select>
-                  </InputGroup>
-                </div>
-                
-                <div className="p-8 bg-black/5 dark:bg-white/[0.03] rounded-xl text-[var(--text-main)] shadow-sm relative overflow-hidden border-2 border-[var(--border-lab)] border-l-brand-green border-l-8">
-                  <div className="relative z-10 space-y-6">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">Classificação Automática de Risco</h3>
-                    <div className="flex items-center gap-6">
-                      <div className={`px-6 py-3 rounded border-2 font-black text-xl uppercase ${
-                        formData.classificacaoRiscoAutomatico === ClassificacaoRisco.CRITICO ? "border-lab-red bg-lab-red/10 text-lab-red" :
-                        formData.classificacaoRiscoAutomatico === ClassificacaoRisco.ALTO ? "border-brand-orange bg-brand-orange/10 text-brand-orange" :
-                        formData.classificacaoRiscoAutomatico === ClassificacaoRisco.MEDIO ? "border-brand-orange bg-brand-orange/10 text-brand-orange" :
-                        "border-brand-green bg-brand-green/10 text-brand-green"
-                      }`}>
-                        {formData.classificacaoRiscoAutomatico || "Em avaliação"}
-                      </div>
-                      <p className="text-[10px] text-[var(--text-muted)] leading-relaxed max-w-sm uppercase font-black tracking-wider">
-                        Sistema de pontuação automática do núcleo de inovação tecnológica (NIT) baseado em impactos à assistência e dados sensíveis.
-                      </p>
-                    </div>
-                    
-                    <div className="h-px bg-[var(--border-lab)]" />
- 
-                    <InputGroup label="Classificação de Risco Manual (Ajuste Final)" required>
-                      <select 
-                        className="w-full p-3 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-lg text-[var(--text-bright)] font-bold outline-none focus:ring-2 focus:ring-brand-green/30" 
-                        value={formData.classificacaoRiscoManual} 
-                        onChange={(e) => updateField("classificacaoRiscoManual", e.target.value)}
-                      >
-                        {Object.values(ClassificacaoRisco).map(cr => <option key={cr} value={cr} className="bg-emerald-950 text-white dark:bg-emerald-950 dark:text-white font-semibold">{cr}</option>)}
-                      </select>
-                    </InputGroup>
-                    <TextArea 
-                      label="Justificativa para classificação manual" 
-                      value={formData.justificativaAlteracaoRisco || ""}
-                      onChange={(val) => updateField("justificativaAlteracaoRisco", val)}
-                      className={`${sharedInputClass} min-h-[100px]`}
-                    />
-                  </div>
-                  <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="" className="absolute right-[-30px] top-[-30px] size-56 opacity-5 -rotate-12 brightness-0 invert pointer-events-none" />
-                </div>
-              </div>
-            )}
-
-            {activeSection === 8 && (
               <div className="space-y-6">
                 <TextArea 
                   label="Observações Gerais" 
                   value={formData.observacoesGerais as string}
                   onChange={(val) => updateField("observacoesGerais", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
                 />
                 <TextArea 
-                  label="Anexos/Documentos Relacionados" 
+                  label="Referências, links ou documentos relacionados" 
                   value={formData.anexos as string}
                   onChange={(val) => updateField("anexos", val)}
-                  className={`${sharedInputClass} min-h-[100px]`}
-                  placeholder="Descreva links, evidências ou referências a documentos físicos." 
+                  placeholder="Informe links, nomes de arquivos, protocolos, pastas, documentos físicos ou outras referências relacionadas à solicitação. Exemplo: manual da ferramenta, link do fornecedor, contrato, e-mail de referência, pasta compartilhada ou documento físico arquivado." 
                 />
+                <p className="text-[11px] text-white font-medium -mt-4 p-2.5 rounded-xl bg-[#075618] border border-[#05340e] flex gap-1.5 items-center">
+                  <span className="text-base select-none">💡</span>
+                  <span>Use este campo para indicar materiais que ajudem na análise da solicitação. Não é necessário anexar arquivos neste momento.</span>
+                </p>
                 
-                <div className="bg-black/5 dark:bg-slate-50 rounded-3xl p-6 border border-[var(--border-lab)] italic text-[var(--text-muted)] text-sm">
+                <div className="bg-[#E8E7E7]/40 rounded-3xl p-6 border border-[#E8E7E7] italic text-[#111111]/75 text-sm">
                    Dica: O histórico de alterações é registrado automaticamente ao salvar este formulário.
                 </div>
               </div>
@@ -814,7 +696,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                <button 
                  type="button" 
                  onClick={() => setActiveSection(s => s - 1)} 
-                 className="px-8 py-3 bg-black/5 dark:bg-white/5 border border-brand-green/35 dark:border-brand-green/20 text-[var(--text-muted)] text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-black/10 dark:hover:bg-white/10 hover:border-brand-green/60 hover:text-[var(--text-bright)] transition-all active:scale-95"
+                 className="px-8 py-3 bg-white border border-[#E8E7E7] text-[#111111] text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-[#E8E7E7]/50 hover:text-[#075618] transition-all active:scale-95 shadow-sm"
                >
                  Voltar
                </button>
@@ -822,15 +704,40 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
              {activeSection < visibleSections.length - 1 ? (
                <button 
                  type="button" 
-                 onClick={() => setActiveSection(s => s + 1)} 
-                 className="px-10 py-3 bg-lab-blue text-white text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-lab-blue/80 transition-all shadow-xl active:scale-95 flex items-center gap-2"
+                 onClick={() => {
+                   if (activeSection === 0 && (isStep1Incomplete || isProfileIncompleteForStep1)) {
+                     alert("Complete seu perfil para continuar. Informe cargo/função e contato antes de abrir uma solicitação de IA.");
+                     return;
+                   }
+                   if (activeSection === 1 && isStep2Incomplete) {
+                     alert("Por favor, preencha todos os campos obrigatórios da Identificação da IA (Etapa 2).");
+                     return;
+                   }
+                   if (activeSection === 2 && isStep3Incomplete) {
+                     alert("Por favor, preencha todos os campos obrigatórios da Etapa 3 — Objetivo.");
+                     return;
+                   }
+                   setActiveSection(s => s + 1);
+                 }} 
+                 disabled={
+                   (activeSection === 0 && (isStep1Incomplete || isProfileIncompleteForStep1)) ||
+                   (activeSection === 1 && isStep2Incomplete) ||
+                   (activeSection === 2 && isStep3Incomplete)
+                 }
+                 className={`px-10 py-3 text-xs font-bold uppercase tracking-tight rounded-xl transition-all shadow-md flex items-center gap-2 border ${
+                   ((activeSection === 0 && (isStep1Incomplete || isProfileIncompleteForStep1)) ||
+                    (activeSection === 1 && isStep2Incomplete) ||
+                     (activeSection === 2 && isStep3Incomplete))
+                     ? "bg-[#E8E7E7] text-[#111111]/45 border-[#E8E7E7] cursor-not-allowed select-none"
+                     : "bg-[#075618] hover:bg-[#075618]/90 text-white border-[#075618] active:scale-95 cursor-pointer shadow-[0_4px_10px_rgba(7,86,24,0.15)]"
+                 }`}
                >
                  Próxima Etapa <ChevronRight size={14} />
                </button>
              ) : (
                <button 
                  type="submit" 
-                 className="px-10 py-3 bg-brand-green text-black text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-brand-green/80 transition-all shadow-xl active:scale-95 flex items-center gap-2"
+                 className="px-10 py-3 bg-[#075618] text-white text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-[#075618]/90 transition-all shadow-md shadow-[0_4px_10px_rgba(7,86,24,0.15)] active:scale-95 flex items-center gap-2"
                >
                  Salvar Registro <Save size={14} />
                </button>
@@ -842,28 +749,28 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
       {/* Styled Popup Informing AI Types */}
       {showTypeIAPopup && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-[4px] z-50 flex items-center justify-center p-4" onClick={() => setShowTypeIAPopup(false)}>
-          <div className="bg-[var(--bg-main)] border border-[var(--border-lab)] rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white border border-[#E8E7E7] rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="p-6 border-b border-[var(--border-lab)] flex items-center justify-between bg-black/10 dark:bg-white/[0.02]">
+            <div className="p-6 border-b border-[#E8E7E7] flex items-center justify-between bg-[#E8E7E7]/20">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-xl bg-brand-green/10 text-brand-green flex items-center justify-center border border-brand-green/20">
+                <div className="size-10 rounded-xl bg-[#075618]/10 text-[#075618] flex items-center justify-center border border-[#075618]/20">
                   <Info size={18} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold font-display uppercase text-[var(--text-bright)] tracking-tight">Tipos de Inteligência Artificial</h3>
+                  <h3 className="text-xl font-bold font-display uppercase text-[#111111] tracking-tight">Tipos de Inteligência Artificial</h3>
                 </div>
               </div>
               <button 
                 type="button"
                 onClick={() => setShowTypeIAPopup(false)}
-                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-bright)]"
+                className="p-2 hover:bg-black/5 rounded-full transition-colors text-slate-500 hover:text-slate-800"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar text-left font-sans">
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar text-left font-sans bg-white">
               <div className="grid grid-cols-1 gap-3.5">
                 {[
                   {
@@ -915,12 +822,12 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     tag: "Geral"
                   }
                 ].map((item, idx) => (
-                  <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
+                  <div key={idx} className={`p-4 bg-slate-50 border border-[#E8E7E7] border-l-4 ${item.color} rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 hover:bg-slate-100 transition-colors`}>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
-                      <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                      <h4 className="text-sm font-bold font-display uppercase tracking-tight text-[#111111]">{item.title}</h4>
+                      <p className="text-xs text-[#111111]/70 leading-relaxed font-sans font-medium">{item.description}</p>
                     </div>
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/5 py-1 px-2.5 rounded-full border border-[var(--border-lab)] text-[var(--text-muted)] self-start shrink-0 font-sans">
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-slate-200/50 py-1 px-2.5 rounded-full border border-[#E8E7E7] text-slate-600 self-start shrink-0 font-sans">
                       {item.tag}
                     </span>
                   </div>
@@ -929,11 +836,11 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             </div>
 
             {/* Footer */}
-            <div className="p-5 border-t border-[var(--border-lab)] flex justify-end bg-black/10 dark:bg-white/[0.02]">
+            <div className="p-5 border-t border-[#E8E7E7] flex justify-end bg-[#E8E7E7]/20">
               <button
                 type="button"
                 onClick={() => setShowTypeIAPopup(false)}
-                className="px-6 py-2.5 bg-brand-green text-black hover:bg-brand-green/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md hover:shadow-brand-green/15 active:scale-95 duration-150 font-sans"
+                className="px-6 py-2.5 bg-[#075618] text-white hover:bg-[#075618]/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 duration-150 font-sans"
               >
                 Entendido
               </button>
@@ -945,34 +852,34 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
       {/* Styled Unified Popup Informing Personal & Sensitive Data */}
       {showDadosInfoPopup && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-[4px] z-50 flex items-center justify-center p-4" onClick={() => setShowDadosInfoPopup(false)}>
-          <div className="bg-[var(--bg-main)] border border-[var(--border-lab)] rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white border border-[#E8E7E7] rounded-[2rem] w-full max-w-4xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="p-6 border-b border-[var(--border-lab)] flex items-center justify-between bg-black/10 dark:bg-white/[0.02]">
+            <div className="p-6 border-b border-[#E8E7E7] flex items-center justify-between bg-[#E8E7E7]/20">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-xl bg-brand-green/10 text-brand-green flex items-center justify-center border border-brand-green/20">
+                <div className="size-10 rounded-xl bg-[#075618]/10 text-[#075618] flex items-center justify-center border border-[#075618]/20">
                   <ShieldCheck size={18} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold font-display uppercase text-[var(--text-bright)] tracking-tight">Dados Pessoais & Sensíveis</h3>
+                  <h3 className="text-xl font-bold font-display uppercase text-[#111111] tracking-tight">Dados Pessoais & Sensíveis</h3>
                 </div>
               </div>
               <button 
                 type="button"
                 onClick={() => setShowDadosInfoPopup(false)}
-                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-bright)]"
+                className="p-2 hover:bg-black/5 rounded-full transition-colors text-slate-500 hover:text-slate-800"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-6 custom-scrollbar text-left font-sans">
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-6 custom-scrollbar text-left font-sans bg-white">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 {/* Personal Data Column */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[var(--border-lab)] pb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-brand-green bg-brand-green/10 px-2.5 py-1 rounded-md">
+                  <div className="flex items-center gap-2 border-b border-[#E8E7E7] pb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-[#075618] bg-[#075618]/10 px-2.5 py-1 rounded-md">
                       Dados Pessoais
                     </span>
                   </div>
@@ -981,7 +888,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                       {
                         title: "O que são?",
                         description: "Dados pessoais são informações que ajudam a identificar uma pessoa.",
-                        color: "border-l-brand-green"
+                        color: "border-l-[#075618]"
                       },
                       {
                         title: "Exemplos",
@@ -994,9 +901,9 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                         color: "border-l-teal-500"
                       }
                     ].map((item, idx) => (
-                      <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col gap-1 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
-                        <h4 className="text-xs font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
-                        <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                      <div key={idx} className={`p-4 bg-slate-50 border border-[#E8E7E7] border-l-4 ${item.color} rounded-2xl flex flex-col gap-1 hover:bg-slate-100 transition-colors`}>
+                        <h4 className="text-xs font-bold font-display uppercase tracking-tight text-[#111111]">{item.title}</h4>
+                        <p className="text-xs text-[#111111]/70 leading-relaxed font-sans font-medium">{item.description}</p>
                       </div>
                     ))}
                   </div>
@@ -1004,8 +911,8 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
                 {/* Sensitive Data Column */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[var(--border-lab)] pb-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-rose-500 bg-rose-500/10 px-2.5 py-1 rounded-md">
+                  <div className="flex items-center gap-2 border-b border-[#E8E7E7] pb-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md text-white">
                       Dados Sensíveis
                     </span>
                   </div>
@@ -1027,9 +934,9 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                         color: "border-l-fuchsia-500"
                       }
                     ].map((item, idx) => (
-                      <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col gap-1 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
-                        <h4 className="text-xs font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
-                        <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                      <div key={idx} className={`p-4 bg-slate-50 border border-[#E8E7E7] border-l-4 ${item.color} rounded-2xl flex flex-col gap-1 hover:bg-slate-100 transition-colors`}>
+                        <h4 className="text-xs font-bold font-display uppercase tracking-tight text-[#111111]">{item.title}</h4>
+                        <p className="text-xs text-[#111111]/70 leading-relaxed font-sans font-medium">{item.description}</p>
                       </div>
                     ))}
                   </div>
@@ -1039,11 +946,11 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             </div>
 
             {/* Footer */}
-            <div className="p-5 border-t border-[var(--border-lab)] flex justify-end bg-black/10 dark:bg-white/[0.02]">
+            <div className="p-5 border-t border-[#E8E7E7] flex justify-end bg-[#E8E7E7]/20">
               <button
                 type="button"
                 onClick={() => setShowDadosInfoPopup(false)}
-                className="px-6 py-2.5 bg-brand-green text-black hover:bg-brand-green/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md hover:shadow-brand-green/15 active:scale-95 duration-150 font-sans"
+                className="px-6 py-2.5 bg-[#075618] text-white hover:bg-[#075618]/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 duration-150 font-sans"
               >
                 Entendido
               </button>
@@ -1055,34 +962,34 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
       {/* Styled Popup Informing Anonimized Data */}
       {showDadosAnonimizadosPopup && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-[4px] z-50 flex items-center justify-center p-4" onClick={() => setShowDadosAnonimizadosPopup(false)}>
-          <div className="bg-[var(--bg-main)] border border-[var(--border-lab)] rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white border border-[#E8E7E7] rounded-[2rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in scale-in duration-200" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="p-6 border-b border-[var(--border-lab)] flex items-center justify-between bg-black/10 dark:bg-white/[0.02]">
+            <div className="p-6 border-b border-[#E8E7E7] flex items-center justify-between bg-[#E8E7E7]/20">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-xl bg-brand-green/10 text-brand-green flex items-center justify-center border border-brand-green/20">
+                <div className="size-10 rounded-xl bg-[#075618]/10 text-[#075618] flex items-center justify-center border border-[#075618]/20">
                   <ShieldCheck size={18} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold font-display uppercase text-[var(--text-bright)] tracking-tight">Dados Anonimizados</h3>
+                  <h3 className="text-xl font-bold font-display uppercase text-[#111111] tracking-tight">Dados Anonimizados</h3>
                 </div>
               </div>
               <button 
                 type="button"
                 onClick={() => setShowDadosAnonimizadosPopup(false)}
-                className="p-2 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-bright)]"
+                className="p-2 hover:bg-black/5 rounded-full transition-colors text-slate-500 hover:text-slate-800"
               >
                 <X size={18} />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar text-left font-sans">
+            <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar text-left font-sans bg-white">
               <div className="grid grid-cols-1 gap-3.5">
                 {[
                   {
                     title: "O que são dados anonimizados?",
                     description: "Dados anonimizados são informações que foram modificadas para que não seja mais possível saber de quem são.",
-                    color: "border-l-brand-green",
+                    color: "border-l-[#075618]",
                     tag: "Conceito"
                   },
                   {
@@ -1098,12 +1005,12 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     tag: "Exemplo"
                   }
                 ].map((item, idx) => (
-                  <div key={idx} className={`p-4 bg-black/5 dark:bg-white/[0.02] border border-[var(--border-lab)] border-l-4 ${item.color} rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 hover:bg-black/[0.08] dark:hover:bg-white/[0.04] transition-colors`}>
+                  <div key={idx} className={`p-4 bg-slate-50 border border-[#E8E7E7] border-l-4 ${item.color} rounded-2xl flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 hover:bg-slate-100 transition-colors`}>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold font-display uppercase tracking-tight text-[var(--text-bright)]">{item.title}</h4>
-                      <p className="text-xs text-[var(--text-muted)] leading-relaxed font-sans font-medium">{item.description}</p>
+                      <h4 className="text-sm font-bold font-display uppercase tracking-tight text-[#111111]">{item.title}</h4>
+                      <p className="text-xs text-[#111111]/70 leading-relaxed font-sans font-medium">{item.description}</p>
                     </div>
-                    <span className="text-[9px] font-black uppercase tracking-wider bg-black/10 dark:bg-white/5 py-1 px-2.5 rounded-full border border-[var(--border-lab)] text-[var(--text-muted)] self-start shrink-0 font-sans">
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-slate-200/50 py-1 px-2.5 rounded-full border border-[#E8E7E7] text-slate-600 self-start shrink-0 font-sans">
                       {item.tag}
                     </span>
                   </div>
@@ -1112,11 +1019,11 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
             </div>
 
             {/* Footer */}
-            <div className="p-5 border-t border-[var(--border-lab)] flex justify-end bg-black/10 dark:bg-white/[0.02]">
+            <div className="p-5 border-t border-[#E8E7E7] flex justify-end bg-[#E8E7E7]/20">
               <button
                 type="button"
                 onClick={() => setShowDadosAnonimizadosPopup(false)}
-                className="px-6 py-2.5 bg-brand-green text-black hover:bg-brand-green/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md hover:shadow-brand-green/15 active:scale-95 duration-150 font-sans"
+                className="px-6 py-2.5 bg-[#075618] text-[#ffffff] hover:bg-[#075618]/90 font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 duration-150 font-sans"
               >
                 Entendido
               </button>

@@ -58,7 +58,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
               id: data.user.id, 
               full_name: fullName,
               setor: setor,
-              cargo: "Colaborador"
+              cargo: "",
+              contato: ""
             });
           
           if (profileError) console.error("Erro ao criar perfil:", profileError);

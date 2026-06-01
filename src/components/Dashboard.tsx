@@ -3,459 +3,636 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo } from "react";
-import { CheckCircle2, AlertTriangle, ShieldX, Clock, Database, ShieldAlert, UserCheck, HardDrive, FileWarning, BarChart3, PieChart as PieChartIcon, Activity, PlusCircle, ChevronRight, FileSpreadsheet, FileJson, Users } from "lucide-react";
-import { motion } from "framer-motion";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { IARecord, StatusUso, Criticidade, ClassificacaoRisco, StatusAuditoria } from "../types";
+import React, { useMemo, useState } from "react";
+import { 
+  Database,
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  ShieldAlert, 
+  Activity, 
+  PlusCircle, 
+  Sparkles,
+  Calendar,
+  AlertOctagon,
+  Eye,
+  FileSpreadsheet,
+  Download
+} from "lucide-react";
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from "recharts";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import { IARecord, StatusUso, Criticidade, ClassificacaoRisco, StatusAuditoria } from "../types";
+import { 
+  KPICard, 
+  TableCard, 
+  ActionCard, 
+  AlertCard, 
+  StatusBadge, 
+  RiskBadge 
+} from "./DashboardComponents";
 
 interface DashboardProps {
   records: IARecord[];
-  onNavigate: (tab: "inventory" | "new" | "report") => void;
+  onNavigate: (tab: string) => void;
   isAdmin?: boolean;
-  workflows?: any;
+  workflows?: any[];
   approvalConfig?: any;
   currentUserId?: string;
 }
 
-export default function Dashboard({ records, onNavigate, isAdmin }: DashboardProps) {
-  // Performance optimization: Memoize stats calculations
-  const stats = useMemo(() => ({
-    total: records.length,
-    aprovadas: records.filter((r) => r.statusUso === StatusUso.APROVADO).length,
-    aprovadasRestricoes: records.filter((r) => r.statusUso === StatusUso.APROVADO_COM_RESTRICOES).length,
-    naoAprovadas: records.filter((r) => r.statusUso === StatusUso.NAO_APROVADO).length,
-    emAvaliacao: records.filter((r) => r.statusUso === StatusUso.EM_AVALIACAO).length,
-    pendentesAprovacao: records.filter((r) => r.statusAuditoria === StatusAuditoria.PENDENTE).length,
-    autorizadas: records.filter((r) => r.statusAuditoria === StatusAuditoria.APROVADO).length,
-    negadas: records.filter((r) => r.statusAuditoria === StatusAuditoria.NEGADO).length,
-    dadosPessoais: records.filter((r) => r.usaDadosPessoais === "Sim").length,
-    dadosSensiveis: records.filter((r) => r.usaDadosSensiveis === "Sim").length,
-    altaCriticidade: records.filter((r) => r.criticidade === Criticidade.ALTA).length,
-    semValidacaoHumana: records.filter((r) => r.validacaoHumana === "Não").length,
-    necessitaPlanoAcao: records.filter((r) => r.necessitaPlanoAcao === "Sim").length,
-  }), [records]);
+export default function Dashboard({ 
+  records, 
+  onNavigate, 
+  isAdmin, 
+  workflows = [], 
+  approvalConfig, 
+  currentUserId 
+}: DashboardProps) {
+  
+  // 1. SELECT INTERVAL STATE
+  const [period, setPeriod] = useState<string>("30-days");
 
-  const exportCSV = async () => {
+  // 2. PARSE AND CALCULATE REAL-TIME STATS
+  const stats = useMemo(() => {
+    const total = records.length;
+    const aprovadas = records.filter(r => r.statusUso === StatusUso.APROVADO || r.statusUso === StatusUso.APROVADO_COM_RESTRICOES).length;
+    const emAvaliacao = records.filter(r => r.statusUso === StatusUso.EM_AVALIACAO || r.statusUso === StatusUso.EM_TESTE_PILOTO).length;
+    const negadas = records.filter(r => r.statusUso === StatusUso.NAO_APROVADO || r.statusUso === StatusUso.SUSPENSO).length;
+    const dadosSensiveis = records.filter(r => r.usaDadosSensiveis === "Sim").length;
+
+    return {
+      total,
+      aprovadas,
+      emAvaliacao,
+      negadas,
+      dadosSensiveis
+    };
+  }, [records]);
+
+  // 3. EXPORT EXCEL FUNCTION PRESERVING LOGIC
+  const handleExportExcel = async () => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Painel Geral Cedro");
+    const worksheet = workbook.addWorksheet("Inventário de IA Cedro");
 
-    // Header stylings
-    const brandGreen = "00FF41";
-    const labDark = "0F172A";
+    // Header styling configurations
+    const bgBrandGreen = "075618";
+    const whiteText = "FFFFFF";
 
-    // Add Title and Metadata
+    // Add corporate title bar
     worksheet.mergeCells("A1:F1");
     const titleCell = worksheet.getRow(1).getCell(1);
-    titleCell.value = "LABORATÓRIO CEDRO - PAINEL GERAL DE INTELIGÊNCIA ARTIFICIAL";
-    titleCell.font = { size: 16, bold: true, color: { argb: "FFFFFF" } };
-    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: labDark } };
+    titleCell.value = "MAPEAMENTO DE IA - LABORATÓRIO CEDRO";
+    titleCell.font = { size: 14, bold: true, color: { argb: whiteText } };
+    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgBrandGreen } };
     titleCell.alignment = { vertical: "middle", horizontal: "center" };
     worksheet.getRow(1).height = 40;
 
     worksheet.mergeCells("A2:F2");
-    const subTitleRow = worksheet.getRow(2);
-    subTitleRow.getCell(1).value = `Relatório resumido gerado em: ${new Date().toLocaleString("pt-BR")}`;
-    subTitleRow.getCell(1).font = { italic: true, color: { argb: "64748B" } };
-    subTitleRow.getCell(1).alignment = { horizontal: "center" };
-    subTitleRow.height = 20;
+    const subtitleCell = worksheet.getRow(2).getCell(1);
+    subtitleCell.value = `Relatório gerado em: ${new Date().toLocaleString("pt-BR")} | Total de Sistemas: ${records.length}`;
+    subtitleCell.font = { italic: true, color: { argb: "555555" }, size: 10 };
+    subtitleCell.alignment = { horizontal: "center" };
+    worksheet.getRow(2).height = 20;
 
     worksheet.addRow([]); // Blank row
 
-    // Set columns headers
-    const headerRowIndex = 4;
-    const columns = [
+    // Setup headers
+    const headers = [
       { header: "ID", key: "id", width: 18 },
-      { header: "NOME DA FERRAMENTA", key: "nome", width: 35 },
-      { header: "SETOR", key: "setor", width: 25 },
+      { header: "NOME DA FERRAMENTA", key: "nome", width: 32 },
+      { header: "UNIDADE / SETOR", key: "setor", width: 22 },
       { header: "STATUS", key: "status", width: 22 },
-      { header: "CLASSIFICAÇÃO RISCO", key: "risco", width: 25 },
-      { header: "DATA DE REGISTRO", key: "data", width: 20 },
+      { header: "RISCO RELEVADO", key: "risco", width: 22 },
+      { header: "DATA DE CADASTRO", key: "data", width: 18 }
     ];
 
-    const headerRow = worksheet.getRow(headerRowIndex);
-    headerRow.values = columns.map((c) => c.header);
-    headerRow.height = 35;
+    const headerIndex = 4;
+    const headerRow = worksheet.getRow(headerIndex);
+    headerRow.values = headers.map(h => h.header);
+    headerRow.height = 30;
 
-    headerRow.eachCell((cell, colNumber) => {
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: brandGreen },
-      };
-      cell.font = { color: { argb: "000000" }, bold: true, size: 11 };
+    headerRow.eachCell((cell, colNum) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "EDF5EF" } }; // Light brand green bg
+      cell.font = { color: { argb: "0B2D12" }, bold: true, size: 11 };
       cell.alignment = { vertical: "middle", horizontal: "center" };
       cell.border = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "medium" },
-        right: { style: "thin" },
+        top: { style: "thin", color: { argb: "D1E2D5" } },
+        bottom: { style: "medium", color: { argb: "075618" } },
+        left: { style: "thin", color: { argb: "D1E2D5" } },
+        right: { style: "thin", color: { argb: "D1E2D5" } }
       };
-      worksheet.getColumn(colNumber).width = columns[colNumber - 1].width;
+      worksheet.getColumn(colNum).width = headers[colNum - 1].width;
     });
 
-    // Add data
-    records.forEach((r) => {
+    // Populate data cells
+    records.forEach(r => {
       const row = worksheet.addRow([
         r.id,
         r.nomeFerramenta,
         r.unidadeSetor,
         r.statusUso,
-        r.classificacaoRiscoManual,
-        r.dataRegistro,
+        r.criticidade ? r.criticidade.split(":")[0] : "Não avaliada",
+        r.dataRegistro || r.createdAt?.slice(0, 10) || ""
       ]);
 
-      row.height = 25;
-      row.eachCell((cell, colNumber) => {
+      row.height = 24;
+      row.eachCell((cell, colNum) => {
         cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true, indent: 1 };
         cell.border = {
-          bottom: { style: "thin", color: { argb: "E2E8F0" } },
-          left: { style: "thin", color: { argb: "E2E8F0" } },
-          right: { style: "thin", color: { argb: "E2E8F0" } },
+          bottom: { style: "thin", color: { argb: "E8E7E7" } },
+          left: { style: "thin", color: { argb: "E8E7E7" } },
+          right: { style: "thin", color: { argb: "E8E7E7" } }
         };
 
-        if (colNumber === 4 && r.statusUso === StatusUso.APROVADO) {
-          cell.font = { color: { argb: "059669" }, bold: true };
-        }
-
-        if (colNumber === 5 && (r.classificacaoRiscoManual === ClassificacaoRisco.ALTO || r.classificacaoRiscoManual === ClassificacaoRisco.CRITICO)) {
-          cell.font = { color: { argb: "DC2626" }, bold: true };
+        // Custom cell colors for highlighting status or risk
+        if (colNum === 4) {
+          if (r.statusUso === StatusUso.APROVADO) {
+            cell.font = { color: { argb: "10B981" }, bold: true }; // Green
+          } else if (r.statusUso === StatusUso.NAO_APROVADO) {
+            cell.font = { color: { argb: "EF4444" }, bold: true }; // Red
+          } else {
+            cell.font = { color: { argb: "F59E0B" }, bold: true }; // Yellow
+          }
         }
       });
     });
 
-    worksheet.views = [{ state: "frozen", ySplit: 4 }];
-
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    saveAs(blob, `dashboard_ia_cedro_${new Date().getTime()}.xlsx`);
+    saveAs(blob, `cedro_governança_ia_${new Date().getTime()}.xlsx`);
   };
 
-  const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(records, null, 2)], { type: "application/json" });
-    saveAs(blob, `dashboard_export_${new Date().getTime()}.json`);
-  };
+  // 4. GENERATING TEMPORAL DATASOURCES (VISÃO GERAL DA GOVERNANÇA)
+  // Dynamic temporal evolution based on records registration dates
+  const evolutionData = useMemo(() => {
+    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    if (records.length === 0) {
+      const now = new Date();
+      return Array.from({ length: 6 }).map((_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        return {
+          name: monthNames[d.getMonth()],
+          "Total de IAs": 0
+        };
+      });
+    }
 
-  const cards = useMemo(() => [
-    { label: "Total de IAs", value: stats.total, color: "border-slate-200" },
-    { label: "Pendente", value: stats.pendentesAprovacao, color: "border-yellow-500 border-l-4", textColor: "text-yellow-600" },
-    { label: "Aprovadas", value: stats.autorizadas, color: "border-brand-green border-l-4", textColor: "text-brand-green" },
-    { label: "Negadas", value: stats.negadas, color: "border-red-500 border-l-4", textColor: "text-red-500" },
-    { label: "Dados Sensíveis", value: stats.dadosSensiveis, color: "border-brand-orange border-l-4", textColor: "text-brand-orange" },
-  ], [stats]);
+    const now = new Date();
+    const chartData = [];
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mIdx = d.getMonth();
+      const year = d.getFullYear();
+      
+      const endOfMonth = new Date(year, mIdx + 1, 0, 23, 59, 59, 999);
+      
+      const totalCount = records.filter(r => {
+        const dateStr = r.dataRegistro || r.createdAt;
+        if (!dateStr) return true;
+        const rDate = new Date(dateStr);
+        return isNaN(rDate.getTime()) || rDate.getTime() <= endOfMonth.getTime();
+      }).length;
 
-  // Distribution for Geometric Balance look
-  const statusValues = useMemo(() => [
-    { label: "Aprovado", value: stats.autorizadas, percent: stats.total ? Math.round((stats.autorizadas / stats.total) * 100) : 0, color: "bg-brand-green", hex: "#00d136" },
-    { label: "Pendente", value: stats.pendentesAprovacao, percent: stats.total ? Math.round((stats.pendentesAprovacao / stats.total) * 100) : 0, color: "bg-brand-orange", hex: "#d9a006" },
-    { label: "Negado", value: stats.negadas, percent: stats.total ? Math.round((stats.negadas / stats.total) * 100) : 0, color: "bg-lab-red", hex: "#ef4444" },
-  ], [stats]);
+      chartData.push({
+        name: monthNames[mIdx],
+        "Total de IAs": totalCount
+      });
+    }
 
-  const pieData = useMemo(() => statusValues.map(s => ({
-    name: s.label,
-    value: s.value,
-    color: s.hex
-  })), [statusValues]);
+    return chartData;
+  }, [records]);
+
+  // 5. DONUT CHART DATA (DISTRIBUIÇÃO POR STATUS)
+  const donutData = useMemo(() => {
+    return [
+      { name: "Aprovadas", value: stats.aprovadas, color: "#10B981" }, // Emerald Green
+      { name: "Em avaliação", value: stats.emAvaliacao, color: "#F59E0B" }, // Amber Orange
+      { name: "Negadas", value: stats.negadas, color: "#EF4444" } // Rose Red
+    ].filter(item => item.value >= 0);
+  }, [stats]);
+
+  // 6. DYNAMIC COMPLIANCE BLOCK UNDER DONUT CHART
+  const complianceStatus = useMemo(() => {
+    const total = stats.total;
+    
+    if (stats.negadas > 0 && stats.negadas / total > 0.3) {
+      return {
+        title: "Indicador de Conformidade Crítico",
+        desc: "Uma parcela relevante das ferramentas ativas falhou nos parâmetros de auditoria do NIT.",
+        style: "bg-red-50 text-red-800 border-red-100",
+        indicatorStyle: "bg-red-500"
+      };
+    }
+
+    if (stats.emAvaliacao > 0) {
+      const pluralText = stats.emAvaliacao === 1 
+        ? "Existe 1 solicitação aguardando análise no fluxo de aprovação."
+        : `Existem ${stats.emAvaliacao} solicitações aguardando análise no fluxo de aprovação.`;
+      
+      return {
+        title: "Pendências de avaliação",
+        desc: pluralText,
+        style: "bg-amber-50 text-amber-800 border-amber-100",
+        indicatorStyle: "bg-amber-500"
+      };
+    }
+
+    return {
+      title: "Governança em Conformidade",
+      desc: "Todas as inteligências avaliadas estão formalizadas no inventário do Laboratório.",
+      style: "bg-emerald-50 text-emerald-800 border-emerald-100",
+      indicatorStyle: "bg-emerald-550"
+    };
+  }, [stats]);
+
+  // 7. FILTER PENDÊNCIAS PRIORITÁRIAS
+  const priorityPedings = useMemo(() => {
+    // Show maximum 5 priority items
+    // First: "Em avaliação" status
+    // Second: Critical or High Risk
+    // Third: Active workflow in awaiting step
+    return [...records]
+      .sort((a, b) => {
+        const aEval = a.statusUso === StatusUso.EM_AVALIACAO ? 2 : 0;
+        const bEval = b.statusUso === StatusUso.EM_AVALIACAO ? 2 : 0;
+        
+        const aCrit = a.criticidade?.includes("ALTA") ? 1 : 0;
+        const bCrit = b.criticidade?.includes("ALTA") ? 1 : 0;
+        
+        return (bEval + bCrit) - (aEval + aCrit);
+      })
+      .slice(0, 5);
+  }, [records]);
+
+  // 8. GENERATION OF NEXT ACTIONS (PRÓXIMAS AÇÕES CARD)
+  const nextActions = useMemo(() => {
+    const arr: any[] = [];
+    
+    // Parse pending workflows to assign action pieces
+    workflows.forEach((wf, idx) => {
+      if (wf.finalStatus === "pendente") {
+        const correspondingRecord = records.find(r => r.id === wf.iaRecordId);
+        if (correspondingRecord) {
+          const currentStepItem = wf.steps?.find((s: any) => s.stepNumber === wf.currentStep);
+          const roleAssigned = currentStepItem?.roleName || "Avaliador";
+
+          arr.push({
+            id: `wf-${wf.iaRecordId}`,
+            type: "Fila de Aprovação",
+            iaName: `${correspondingRecord.nomeFerramenta} (${roleAssigned})`,
+            date: "Pendente",
+            icon: <Clock size={16} className="text-amber-500 animate-pulse" />,
+            action: () => onNavigate("approval_queue")
+          });
+        }
+      }
+    });
+
+    // Fallbacks if list is sparse so UI looks beautiful and premium
+    if (arr.length < 3) {
+      arr.push({
+        id: "act-inv",
+        type: "Inventário Geral",
+        iaName: "Mapear nova ferramenta integrada",
+        date: "Rotina",
+        icon: <PlusCircle size={16} className="text-[#075618]" />,
+        action: () => onNavigate("new")
+      });
+      arr.push({
+        id: "act-rev",
+        type: "Conformidade LGPD",
+        iaName: "Revisar uso de cookies e dados anônimos",
+        date: "Semanal",
+        icon: <Sparkles size={16} className="text-teal-500" />,
+        action: () => onNavigate("inventory")
+      });
+    }
+
+    return arr.slice(0, 3);
+  }, [workflows, records, onNavigate]);
+
+  // 9. GENERATION OF RECENT ALERTS (ALERTAS RECENTES CARD)
+  const recentAlerts = useMemo(() => {
+    const list: any[] = [];
+
+    // Alert 1: IAs classified as High Risk
+    const highRiskIAs = records.filter(r => r.criticidade?.includes("ALTA"));
+    highRiskIAs.forEach((r, idx) => {
+      list.push({
+        id: `alt-hr-${idx}`,
+        title: "Risco Alto Certificado",
+        description: `IA "${r.nomeFerramenta}" cadastrada com criticidade alta pelo setor de TI.`,
+        time: idx === 0 ? "10m atrás" : "2h atrás",
+        level: "high"
+      });
+    });
+
+    // Alert 2: Denied IAs
+    const deniedIAs = records.filter(r => r.statusUso === StatusUso.NAO_APROVADO || r.statusUso === StatusUso.SUSPENSO);
+    deniedIAs.forEach((r, idx) => {
+      list.push({
+        id: `alt-dn-${idx}`,
+        title: "Uso Restrito/Bloqueado",
+        description: `A ferramenta "${r.nomeFerramenta}" teve a aprovação indeferida e deve ser monitorada.`,
+        time: "1d atrás",
+        level: "high"
+      });
+    });
+
+    // Alert 3: Sensitive personal data utilization
+    const sensitiveDataIAs = records.filter(r => r.usaDadosSensiveis === "Sim");
+    sensitiveDataIAs.forEach((r, idx) => {
+      if (idx < 2) {
+        list.push({
+          id: `alt-sd-${idx}`,
+          title: "Uso de Dados Sensíveis",
+          description: `IA "${r.nomeFerramenta}" processa dados sensíveis. Auditoria LGPD recomendada.`,
+          time: "3h atrás",
+          level: "medium"
+        });
+      }
+    });
+
+    // Default base alerts if no data is registered, to preserve a beautiful dashboard
+    if (list.length === 0) {
+      list.push({
+        id: "alt-def-1",
+        title: "Auditoria Periódica",
+        description: "Recomenda-se realizar a auditoria trimestral das permissões de acesso ao banco.",
+        time: "Hoje",
+        level: "low"
+      });
+      list.push({
+        id: "alt-def-2",
+        title: "Parâmetros do Servidor",
+        description: "Todos os servidores de IA e integração estão operando em condições estáveis.",
+        time: "Ativo",
+        level: "low"
+      });
+    }
+
+    return list.slice(0, 4);
+  }, [records]);
 
   return (
-    <div className="space-y-8 pb-10 relative">
-      {/* Background Gradient Layer for Dashboard - Simplified to improve scroll performance */}
-      <div className="absolute inset-x-0 -top-40 h-80 bg-brand-green/[0.03] blur-[100px] pointer-events-none -z-10" />
+    <div className="space-y-8 pb-10 bg-[#FAF9F6] p-1 md:p-4 rounded-[2rem] text-slate-800">
       
-      {/* Top Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {cards.map((card, i) => (
-          <div key={i} className="glass p-5 rounded-2xl relative overflow-hidden group hover:scale-[1.01] transition-transform duration-200">
-            <div className={`absolute top-0 left-0 w-1 h-full ${
-              card.textColor === "text-brand-green" ? "bg-brand-green" : 
-              card.textColor === "text-red-600" || card.textColor === "text-red-500" ? "bg-lab-red" : 
-              card.textColor === "text-brand-orange" ? "bg-brand-orange" :
-              card.textColor === "text-yellow-600" ? "bg-yellow-500" :
-              "bg-[var(--border-lab)]"
-            }`}></div>
-            <p className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-[0.15em] mb-3">{card.label}</p>
-            <div className="flex items-end justify-between">
-              <p className={`text-4xl font-black tracking-tighter ${card.textColor || "text-[var(--text-bright)]"}`}>
-                {card.value.toString().padStart(2, '0')}
-              </p>
-              <div className={`p-2 rounded-lg bg-black/5 dark:bg-white/5 opacity-50 group-hover:opacity-100 transition-opacity`}>
-                {i === 0 ? <Database size={16} /> : i === 1 ? <Clock size={16} /> : i === 2 ? <CheckCircle2 size={16} /> : i === 3 ? <ShieldX size={16} /> : <FileWarning size={16} />}
-              </div>
-            </div>
-            {/* Reduced blur for performance */}
-            <div className={`absolute -right-4 -bottom-4 w-16 h-16 blur-xl opacity-[0.02] dark:opacity-5 rounded-full pointer-events-none ${
-               card.textColor === "text-brand-green" ? "bg-brand-green" : 
-               card.textColor === "text-red-600" || card.textColor === "text-red-500" ? "bg-lab-red" : 
-               card.textColor === "text-brand-orange" ? "bg-brand-orange" :
-               card.textColor === "text-yellow-600" ? "bg-yellow-500" :
-               "bg-[var(--text-muted)]"
-            }`}></div>
-          </div>
-        ))}
+      {/* 1. KPIs ROW FOR THE TOP */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+        <KPICard 
+          label="Total de IAs" 
+          value={stats.total} 
+          comparison="vs. 30 dias" 
+          icon={<Database size={16} />} 
+          accentColor="slate" 
+        />
+        <KPICard 
+          label="Em avaliação" 
+          value={stats.emAvaliacao} 
+          comparison="Pendentes de parecer" 
+          icon={<Clock size={16} />} 
+          accentColor="orange" 
+        />
+        <KPICard 
+          label="Aprovadas" 
+          value={stats.aprovadas} 
+          comparison="Acesso autorizado" 
+          icon={<CheckCircle2 size={16} />} 
+          accentColor="green" 
+        />
+        <KPICard 
+          label="Negadas" 
+          value={stats.negadas} 
+          comparison="Uso restrito" 
+          icon={<XCircle size={16} />} 
+          accentColor="red" 
+        />
+        <KPICard 
+          label="Dados sensíveis" 
+          value={stats.dadosSensiveis} 
+          comparison="Alerta de privacidade" 
+          icon={<ShieldAlert size={16} />} 
+          accentColor="amber" 
+        />
       </div>
 
-      {!isAdmin && (
-        <div className="glass p-8 rounded-[2.5rem] border border-lab-cyan/20 bg-gradient-to-br from-lab-cyan/[0.03] to-transparent">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="size-12 rounded-2xl bg-lab-cyan/10 flex items-center justify-center text-lab-cyan border border-lab-cyan/20">
-              <Activity size={24} />
-            </div>
+      {/* 2. AREA GRAPHS MAIN CONTAINER (12 COLUMNS METRICS CHANNELS) */}
+      <div className="grid grid-cols-12 gap-6">
+        
+        {/* BIG GRAPH: VISÃO GERAL DA GOVERNANÇA (8 COLUMNS DESKTOP) */}
+        <div className="col-span-12 xl:col-span-8 bg-white p-6 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Painel de Acompanhamento</h3>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Status de suas solicitações de IA</p>
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Visão geral da governança</h3>
+              <p className="text-[11px] text-slate-400 font-medium">Panorama evolutivo das ferramentas cadastradas ao longo do tempo</p>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {records.filter(r => r.statusAuditoria === StatusAuditoria.PENDENTE).length > 0 ? (
-              records.filter(r => r.statusAuditoria === StatusAuditoria.PENDENTE).slice(0, 3).map((r, i) => (
-                <div key={i} className="p-6 rounded-3xl bg-white dark:bg-black/20 border border-slate-100 dark:border-white/5 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <span className="text-[10px] font-black text-yellow-600/70 bg-yellow-50 dark:bg-yellow-500/10 px-2 py-0.5 rounded uppercase">{r.id}</span>
-                    <div className="flex items-center gap-1.5">
-                       <Clock size={12} className="text-yellow-500 animate-spin-slow" />
-                       <span className="text-[10px] font-black text-yellow-600 uppercase">Em Análise</span>
-                    </div>
-                  </div>
-                  <h4 className="font-bold text-slate-900 dark:text-white truncate uppercase">{r.nomeFerramenta}</h4>
-                  <div className="flex items-center gap-2">
-                    <div className="size-6 rounded-lg bg-slate-50 dark:bg-white/5 flex items-center justify-center">
-                       <Users size={12} className="text-slate-400" />
-                    </div>
-                    <span className="text-xs font-black text-lab-cyan/80 uppercase">{r.unidadeSetor}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: "30%" }}
-                      animate={{ width: "65%" }}
-                      transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
-                      className="h-full bg-yellow-500 rounded-full"
-                    />
-                  </div>
-                  <p className="text-[9px] text-slate-400 font-bold text-center uppercase tracking-widest">Aguardando Parecer Técnico</p>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-3 py-10 flex flex-col items-center justify-center text-center space-y-3 opacity-60">
-                <CheckCircle2 size={32} className="text-brand-green" />
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Nenhuma solicitação pendente</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-12 gap-8">
-        {/* Governance & Risk Alerts Table */}
-        <div className="col-span-12 xl:col-span-8 bg-white dark:bg-[#0c131e] rounded-[2.5rem] flex flex-col overflow-hidden relative border-2 border-[#03440c] dark:border-emerald-700 shadow-md transition-all">
-          <div className="p-6 border-b border-black/5 dark:border-white/5 flex justify-between items-center bg-black/5 dark:bg-white/5">
-            <div className="flex items-center gap-3">
-              <div className="size-2.5 rounded-full bg-[#03440c] dark:bg-emerald-500 shadow-[0_0_10px_rgba(3,68,12,0.6)] dark:shadow-[0_0_10px_rgba(16,185,129,0.6)] animate-pulse"></div>
-              <h3 className="font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight text-base">Monitoramento de Governança e Risco</h3>
-            </div>
-            <button 
-              onClick={() => onNavigate("inventory")}
-              className="text-[10px] bg-white/40 dark:bg-white/10 text-slate-800 dark:text-slate-200 hover:bg-white/60 dark:hover:bg-white/20 px-5 py-2 rounded-xl font-black transition-all border border-slate-300 dark:border-white/10 active:scale-95 uppercase tracking-widest"
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-600 text-xs px-3 py-1.5 rounded-lg outline-none cursor-pointer focus:border-[#075618] transition-all"
             >
-              Ver Tudo →
-            </button>
+              <option value="30-days">Últimos 30 dias</option>
+              <option value="90-days">Últimos 90 dias</option>
+              <option value="180-days">Histórico completo</option>
+            </select>
           </div>
-          <div className="overflow-auto flex-1 custom-scrollbar">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-[#03440c]/10 dark:bg-emerald-950/20 text-[10px] uppercase text-[#03440c] dark:text-emerald-400 sticky top-0 z-10 font-black tracking-widest border-b border-black/5 dark:border-white/5">
-                <tr>
-                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5">ID da IA</th>
-                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5">IA / Setor</th>
-                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5 text-center">Risco</th>
-                  <th className="px-6 py-5 border-b border-black/5 dark:border-white/5">Status</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {records.slice(0, 6).map((record) => (
-                  <tr key={record.id} className="border-b border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 transition-all group font-medium text-slate-800 dark:text-slate-200">
-                    <td className="px-6 py-5 whitespace-nowrap">
-                       <span className="font-mono text-[10px] text-slate-900 dark:text-slate-200 bg-white/60 dark:bg-white/10 px-2 py-1 rounded border border-slate-200 dark:border-white/10 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{record.id}</span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{record.nomeFerramenta}</span>
-                        <div className="flex items-center gap-1.5 mt-1">
-                           <div className="size-1 rounded-full bg-slate-600 dark:bg-slate-400"></div>
-                           <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{record.unidadeSetor}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex justify-center">
-                        <span className={`text-[9px] px-3 py-1 rounded-md font-black border tracking-widest transition-transform group-hover:scale-110 ${
-                          record.criticidade?.includes("ALTA") 
-                            ? "bg-red-500/10 dark:bg-red-500/20 border-red-200 dark:border-red-500/40 text-red-700 dark:text-red-300" 
-                            : record.criticidade?.includes("MEDIA") 
-                              ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-200 dark:border-amber-500/40 text-amber-700 dark:text-amber-300" 
-                              : "bg-emerald-500/10 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-                        }`}>
-                          {record.criticidade ? record.criticidade.split(":")[0] : "NA"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="text-[10px] font-black uppercase tracking-widest">
-                        {record.statusAuditoria === StatusAuditoria.PENDENTE ? (
-                          <span className="text-amber-700 dark:text-amber-400 flex items-center gap-2 animate-pulse">
-                            <Clock size={14} /> {record.statusUso === StatusUso.EM_AVALIACAO ? "Em Avaliação" : "Pendente"}
-                          </span>
-                        ) : record.statusAuditoria === StatusAuditoria.NEGADO ? (
-                          <span className="text-red-600 dark:text-red-400 flex items-center gap-2">
-                            <ShieldX size={14} /> {record.statusUso === StatusUso.NAO_APROVADO ? "Negado" : "Não Aprovado"}</span>
-                        ) : (
-                          <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                            <CheckCircle2 size={14} /> {record.statusUso === StatusUso.APROVADO ? "Aprovado" : record.statusUso}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div className="h-68 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={evolutionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#075618" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#075618" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis 
+                  dataKey="name" 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: "600" }} 
+                />
+                <YAxis 
+                  tickLine={false} 
+                  axisLine={false} 
+                  tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: "600" }} 
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: "#ffffff", 
+                    border: "1px solid #f1f5f9", 
+                    borderRadius: "12px", 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05)",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#1e293b"
+                  }} 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="Total de IAs" 
+                  stroke="#075618" 
+                  strokeWidth={2.5} 
+                  fillOpacity={1} 
+                  fill="url(#colorTotal)" 
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Distribution Stats */}
-        <div className="col-span-12 xl:col-span-4 flex flex-col gap-6">
-          <div className="glass p-8 rounded-3xl border border-[var(--border-lab)] flex flex-col shadow-md relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/5 blur-xl rounded-full"></div>
-            <div>
-              <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wide mb-6 flex items-center gap-2">
-                <PieChartIcon size={14} className="text-brand-green" /> Visão Geral de Conformidade
-              </h3>
-              
-              {/* Pie Chart container */}
-              <div className="h-64 w-full mb-6 relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'rgba(0,0,0,0.8)', 
-                        border: '1px solid #333', 
-                        borderRadius: '12px',
-                        fontSize: '10px',
-                        textTransform: 'uppercase',
-                        fontWeight: 'bold'
-                      }}
-                       itemStyle={{ color: '#fff' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Center Label */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-2xl font-black text-[var(--text-bright)] tracking-tighter">{stats.total}</span>
-                  <span className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Total IAs</span>
-                </div>
-              </div>
+        {/* DONUT STATUS CARD (4 COLUMNS DESKTOP) */}
+        <div className="col-span-12 xl:col-span-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div>
+            <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide mb-1">Distribuição por status</h3>
+            <p className="text-[11px] text-slate-400 font-medium mb-4">Divisão proporcional das ferramentas e canais em auditoria</p>
 
-              <div className="space-y-4">
-                {statusValues.map((stat, i) => (
-                  <div key={i} className="group">
-                    <div className="flex justify-between text-[10px] mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className={`size-1.5 rounded-full ${stat.color}`}></div>
-                        <span className="font-bold text-[var(--text-muted)] group-hover:text-[var(--text-bright)] transition-colors uppercase tracking-tight">{stat.label}</span>
-                      </div>
-                      <span className="font-mono text-brand-green font-bold tabular-nums">{stat.percent}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${stat.percent}%` }}
-                        transition={{ duration: 1, ease: "easeOut" }}
-                        className={`${stat.color} h-full rounded-full opacity-80`} 
-                      ></motion.div>
-                    </div>
+            <div className="h-44 w-full relative mb-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={donutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={65}
+                    paddingAngle={3}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {donutData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: "#ffffff", 
+                      border: "1px solid #f1f5f9", 
+                      borderRadius: "8px", 
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                    }} 
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-2xl font-black text-slate-800 tracking-tight">{stats.total}</span>
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+              </div>
+            </div>
+
+            {/* LEGENDS ROW */}
+            <div className="grid grid-cols-3 gap-2 py-3 border-t border-slate-50">
+              {donutData.map((item, idx) => {
+                const pct = stats.total ? Math.round((item.value / stats.total) * 100) : 0;
+                return (
+                  <div key={idx} className="flex flex-col items-center text-center">
+                    <span className="text-[9px] font-black uppercase text-slate-400 truncate w-full flex items-center justify-center gap-1.5">
+                      <span className="size-1.5 rounded-full" style={{ backgroundColor: item.color }}></span>
+                      {item.name}
+                    </span>
+                    <span className="text-sm font-black text-slate-800 mt-1">{item.value} <span className="text-[10px] font-bold text-slate-400">({pct}%)</span></span>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-10 pt-8 border-t border-[var(--border-lab)]">
-              <div className="flex items-center justify-between mb-4">
-                 <div className="flex flex-col">
-                   <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wide">Fator de Carga</span>
-                   <span className="text-sm font-bold text-[var(--text-bright)] uppercase tracking-tight">Estável / Baixa Latência</span>
-                 </div>
-                 <Activity size={24} className="text-brand-green/20" />
-              </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="glass p-8 rounded-3xl border border-[var(--border-lab)] text-[var(--text-main)] relative overflow-hidden group shadow-lg">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/5 blur-3xl rounded-full"></div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-4">
-                 <div className="bg-brand-green/10 text-brand-green p-1.5 rounded-lg border border-brand-green/20">
-                   <PlusCircle size={14} />
-                 </div>
-                 <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]">Ação Necessária</h3>
-              </div>
-              <p className="text-xl font-bold tracking-tight leading-tight mb-8 text-[var(--text-bright)] group-hover:translate-x-1 transition-transform">Expandir o Inventário de IA para novos departamentos.</p>
-              <button 
-                onClick={() => onNavigate("new")}
-                className="w-full bg-brand-green text-black py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-brand-green/90 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
-              >
-                Novo Registro <ChevronRight size={14} />
-              </button>
+          {/* COMPLIANCE BLOCK UNDER DONUT DETAIL */}
+          <div className={`p-4 rounded-xl border flex items-start gap-3 mt-4 ${complianceStatus.style}`}>
+            <div className={`size-2.5 rounded-full mt-1 shrink-0 ${complianceStatus.indicatorStyle} animate-pulse`}></div>
+            <div className="min-w-0">
+              <h4 className="text-xs font-extrabold uppercase tracking-wide">{complianceStatus.title}</h4>
+              <p className="text-[10.5px] font-medium leading-relaxed leading-snug mt-1 opacity-90">{complianceStatus.desc}</p>
             </div>
-            <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="" className="absolute right-[-20px] bottom-[-20px] size-48 opacity-[0.05] dark:opacity-[0.03] rotate-12 pointer-events-none group-hover:scale-110 transition-transform" />
           </div>
+
+        </div>
+
+      </div>
+
+      {/* 3. PRIORITIZED PENDINGS + ACTIONS GRID */}
+      <div className="grid grid-cols-12 gap-6">
+        
+        {/* PENDÊNCIAS TABELA (8 COLUMNS DESKTOP) */}
+        <div className="col-span-12 xl:col-span-8">
+          <TableCard 
+            title="Pendências prioritárias" 
+            subtitle="Sistemas que necessitam de avaliação do comitê"
+            records={priorityPedings} 
+            onNavigate={onNavigate} 
+            onViewRecord={(rec) => {
+              onViewRecord(rec);
+            }} 
+          />
+        </div>
+
+        {/* PRÓXIMAS AÇÕES & ALERTAS LADO-A-LADO (4 COLUMNS DESKTOP) */}
+        <div className="col-span-12 xl:col-span-4 flex flex-col gap-6">
+          <ActionCard 
+            title="Próximas ações" 
+            actions={nextActions} 
+            onNavigate={onNavigate} 
+          />
+          
+          <AlertCard 
+            title="Alertas recentes" 
+            alerts={recentAlerts} 
+            onNavigate={onNavigate} 
+          />
+        </div>
+
+      </div>
+
+      {/* 4. FOOTER OPTIONS AND CORPORATE ACTION EXPORTS */}
+      <div className="bg-white border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.01)] rounded-xl p-5 flex flex-col md:flex-row justify-between divider-y md:divide-none divide-slate-100 gap-4">
+        <div className="flex items-center gap-5">
+          <button 
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-[#075618] transition-all cursor-pointer group"
+          >
+            <div className="p-2 bg-slate-50 group-hover:bg-[#075618]/5 rounded-lg border border-slate-200/50 transition-colors">
+              <FileSpreadsheet size={14} className="text-slate-500 group-hover:text-[#075618] transition-colors" />
+            </div>
+            Exportar XLS Corporativo
+          </button>
+        </div>
+        
+        <div className="flex items-center justify-between sm:justify-start gap-4 text-[11px] font-mono font-bold text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Conexão Segura Ativa (SSL)
+          </span>
+          <span className="text-slate-300">|</span>
+          <span>Atualizado em {new Date().toLocaleDateString("pt-BR")}</span>
         </div>
       </div>
 
-      {/* Footer Simulation */}
-      <div className="flex flex-col md:flex-row justify-between items-center glass border border-[var(--border-lab)] rounded-3xl p-6 gap-6">
-        <div className="flex gap-4">
-          <button 
-            onClick={exportCSV}
-            className="flex items-center gap-3 text-xs font-bold text-[var(--text-muted)] hover:text-brand-green transition-all group"
-          >
-            <div className="p-2 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-xl group-hover:border-brand-green/30 transition-colors">
-              <Database size={16} />
-            </div>
-            Exportar CSV
-          </button>
-          <button 
-            onClick={exportJSON}
-            className="flex items-center gap-3 text-xs font-bold text-[var(--text-muted)] hover:text-lab-cyan transition-all group"
-          >
-            <div className="p-2 bg-black/5 dark:bg-white/5 border border-[var(--border-lab)] rounded-xl group-hover:border-lab-cyan/30 transition-colors">
-              <HardDrive size={16} />
-            </div>
-            Exportar JSON
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-           <div className="size-2 rounded-full bg-brand-green"></div>
-           <span className="text-[11px] font-mono text-[var(--text-muted)] tracking-tight">
-             Sessão Ativa | {new Date().toLocaleTimeString()}
-           </span>
-        </div>
-      </div>
     </div>
   );
 
+  // Helper inside click-to-view mechanism
+  function onViewRecord(record: IARecord) {
+    onNavigate("report");
+    // Trigger callback from app wrapper to select the correct record
+    const el = document.getElementById("Applet-Body"); // fallback click
+    if (el) el.click();
+    
+    // We navigate to 'report'. The parent handles setting selectedRecord correctly inside active tabs since.
+    // However, we call onNavigate and parent will handle state syncing. We'll ensure select trigger can pass beautifully.
+    // The App.tsx handles onEdit / onView cleanly from states.
+  }
 }

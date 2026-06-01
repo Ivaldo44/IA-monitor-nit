@@ -183,9 +183,145 @@ router.get("/workflow/list", async (req, res) => {
   }
 });
 
+// Inicializar um fluxo de aprovação de forma consistente com a configuração do Administrador
+router.post("/workflow/init", async (req, res) => {
+  const { recordId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = getSupabase();
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // 1. Verificar quem está fazendo a requisição
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return res.status(401).json({ error: "Token inválido" });
+
+    // 2. Buscar workflow da IA
+    let wfData = null;
+    const { data: existingWf } = await supabaseAdmin
+      .from("approval_workflows")
+      .select("id, current_step, final_status")
+      .eq("ia_record_id", recordId)
+      .maybeSingle();
+
+    if (existingWf) {
+      wfData = existingWf;
+      // 3. Se já existe o workflow, verificar se existem etapas no approval_steps
+      const { data: existingSteps } = await supabaseAdmin
+        .from("approval_steps")
+        .select("id")
+        .eq("workflow_id", existingWf.id);
+
+      if (existingSteps && existingSteps.length > 0) {
+        // Já possui etapas criadas, não duplicar e não alterar os responsáveis automaticamente (Regra 1 e 3)
+        return res.json({ success: true, alreadyExists: true, workflowId: existingWf.id });
+      }
+    } else {
+      // Criar entrada no approval_workflows
+      const { data: newWf, error: newWfErr } = await supabaseAdmin
+        .from("approval_workflows")
+        .insert({
+          ia_record_id: recordId,
+          current_step: 1,
+          final_status: "pendente",
+        })
+        .select("id, current_step, final_status")
+        .single();
+
+      if (newWfErr || !newWf) {
+        return res.status(500).json({ error: `Não foi possível inicializar o fluxo de aprovação para esta IA: ${newWfErr?.message || "Erro desconhecido"}` });
+      }
+      wfData = newWf;
+    }
+
+    // 4. Buscar configuração atual salva pelo administrador na tela "Configurar Fluxo"
+    const { data: configRows } = await supabaseAdmin
+      .from("approval_config")
+      .select("*")
+      .order("step_number");
+
+    // Etapas padrão caso as configurações de fluxo estejam vazias
+    const defaultSteps = [
+      { step_number: 1, role_name: "Coordenador NIT", is_opinion_only: false },
+      { step_number: 2, role_name: "Gerente NIT", is_opinion_only: false },
+      { step_number: 3, role_name: "Gerente TI", is_opinion_only: false },
+      { step_number: 4, role_name: "Análise Financeira", is_opinion_only: true },
+      { step_number: 5, role_name: "Presidência", is_opinion_only: false },
+    ];
+
+    const stepsToInsert = (configRows && configRows.length > 0)
+      ? configRows.map((c: any) => ({
+          workflow_id: wfData.id,
+          ia_record_id: recordId,
+          step_number: c.step_number,
+          role_name: c.role_name,
+          assigned_user_id: c.assigned_user_id || null,
+          assigned_user_name: c.assigned_user_name || null,
+          status: "aguardando",
+          comment: null,
+          is_opinion_only: c.is_opinion_only || false,
+          decided_at: null,
+        }))
+      : defaultSteps.map(s => ({
+          workflow_id: wfData.id,
+          ia_record_id: recordId,
+          step_number: s.step_number,
+          role_name: s.role_name,
+          assigned_user_id: null,
+          assigned_user_name: null,
+          status: "aguardando",
+          comment: null,
+          is_opinion_only: s.is_opinion_only,
+          decided_at: null,
+        }));
+
+    const { error: stepsInsertErr } = await supabaseAdmin
+      .from("approval_steps")
+      .insert(stepsToInsert);
+
+    if (stepsInsertErr) {
+      console.error("Erro ao inserir etapas do fluxo:", stepsInsertErr);
+      return res.status(500).json({ error: `Erro ao salvar as etapas do fluxo: ${stepsInsertErr.message}` });
+    }
+
+    // 5. Atualizar status_uso da IA para "Em avaliação" no início do workflow
+    const { data: iaRecord } = await supabaseAdmin
+      .from("ia_records")
+      .select("data")
+      .eq("id", recordId)
+      .single();
+
+    if (iaRecord?.data) {
+      const recordData = iaRecord.data as any;
+      const updatedData = {
+        ...recordData,
+        statusUso: "Em avaliação",
+      };
+
+      await supabaseAdmin
+        .from("ia_records")
+        .update({
+          data: updatedData,
+          status_uso: "Em avaliação",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", recordId);
+    }
+
+    return res.json({ success: true, workflowId: wfData.id });
+
+  } catch (err: any) {
+    console.error("Erro no workflow/init:", err);
+    return res.status(500).json({ error: err.message || "Erro interno" });
+  }
+});
+
 // Rota de aprovação/negação de IA com validação de fluxo
 router.post("/workflow/decide", async (req, res) => {
-  const { recordId, decision, comment } = req.body;
+  const { recordId, decision, comment, coordinatorData } = req.body;
   const authHeader = req.headers.authorization;
 
   if (!authHeader) return res.status(401).json({ error: "Unauthorized" });
@@ -222,6 +358,56 @@ router.post("/workflow/decide", async (req, res) => {
 
     if (existingWf) {
       wfData = existingWf;
+
+      // Autocorreção preventiva se o workflow existir mas as etapas estiverem vazias
+      const { data: existingSteps } = await supabaseAdmin
+        .from("approval_steps")
+        .select("id")
+        .eq("workflow_id", existingWf.id);
+
+      if (!existingSteps || existingSteps.length === 0) {
+        console.log(`Workflow ${existingWf.id} encontrado sem etapas. Criando etapas automáticas...`);
+        const { data: configRows } = await supabaseAdmin
+          .from("approval_config")
+          .select("*")
+          .order("step_number");
+
+        const defaultSteps = [
+          { step_number: 1, role_name: "Coordenador NIT", is_opinion_only: false },
+          { step_number: 2, role_name: "Gerente NIT", is_opinion_only: false },
+          { step_number: 3, role_name: "Gerente TI", is_opinion_only: false },
+          { step_number: 4, role_name: "Análise Financeira", is_opinion_only: true },
+          { step_number: 5, role_name: "Presidência", is_opinion_only: false },
+        ];
+
+        const stepsToInsert = (configRows && configRows.length > 0)
+          ? configRows.map((c: any) => ({
+              workflow_id: existingWf.id,
+              ia_record_id: recordId,
+              step_number: c.step_number,
+              role_name: c.role_name,
+              assigned_user_id: c.assigned_user_id || null,
+              assigned_user_name: c.assigned_user_name || null,
+              status: "aguardando",
+              comment: null,
+              is_opinion_only: c.is_opinion_only || false,
+              decided_at: null,
+            }))
+          : defaultSteps.map(s => ({
+              workflow_id: existingWf.id,
+              ia_record_id: recordId,
+              step_number: s.step_number,
+              role_name: s.role_name,
+              assigned_user_id: null,
+              assigned_user_name: null,
+              status: "aguardando",
+              comment: null,
+              is_opinion_only: s.is_opinion_only,
+              decided_at: null,
+            }));
+
+        await supabaseAdmin.from("approval_steps").insert(stepsToInsert);
+      }
     } else {
       console.log(`Workflow não encontrado para a IA ${recordId}. Inicializando on-the-fly...`);
       // Buscar configuração atual das etapas de aprovação
@@ -265,7 +451,9 @@ router.post("/workflow/decide", async (req, res) => {
             assigned_user_id: c.assigned_user_id || null,
             assigned_user_name: c.assigned_user_name || null,
             status: "aguardando",
+            comment: null,
             is_opinion_only: c.is_opinion_only || false,
+            decided_at: null,
           }))
         : defaultSteps.map(s => ({
             workflow_id: newWf.id,
@@ -275,7 +463,9 @@ router.post("/workflow/decide", async (req, res) => {
             assigned_user_id: null,
             assigned_user_name: null,
             status: "aguardando",
+            comment: null,
             is_opinion_only: s.is_opinion_only,
+            decided_at: null,
           }));
 
       const { error: stepsInsertErr } = await supabaseAdmin
@@ -303,20 +493,23 @@ router.post("/workflow/decide", async (req, res) => {
       return res.status(404).json({ error: "Etapa atual não encontrada no workflow" });
     }
 
-    // Aprovadores com permissões (Admin Override ou preenchimento de etapa não atribuída)
-    const isRequesterAdmin = role === "admin";
-    const isStepUnassigned = !currentStepData.assigned_user_id;
-    const isAssignedToMe = currentStepData.assigned_user_id === user.id;
-
-    if (!isAssignedToMe && !isRequesterAdmin && !(isStepUnassigned && ["admin", "moderator"].includes(role))) {
-      return res.status(403).json({ 
-        error: "Você não é o responsável pela etapa atual deste fluxo. Aguarde sua vez." 
+    if (!currentStepData.assigned_user_id) {
+      return res.status(403).json({
+        error: "Esta etapa ainda não possui responsável definido. Configure o fluxo antes de aprovar ou negar."
       });
     }
 
-    // 5. Registrar decisão
-    const isOpinionOnly = currentStepData.is_opinion_only;
-    const decisionStatus = isOpinionOnly ? "opiniao" : decision;
+    const isAssignedToMe = currentStepData.assigned_user_id === user.id;
+
+    if (!isAssignedToMe) {
+      return res.status(403).json({ 
+        error: "Apenas o responsável designado para esta etapa pode aprovar ou negar." 
+      });
+    }
+
+    // 5. Registrar decisão (Regra 4)
+    // Atualizar status da etapa correspondente para 'aprovado' ou 'negado'
+    const decisionStatus = decision === "aprovado" ? "aprovado" : "negado";
 
     await supabaseAdmin
       .from("approval_steps")
@@ -342,15 +535,17 @@ router.post("/workflow/decide", async (req, res) => {
     let newAuditStatus = "Pendente";
     let newStatusUso = "Em avaliação";
 
-    if (!isOpinionOnly && decision === "negado") {
+    if (decision === "negado") {
+      // Regra 6: Ao negar uma etapa, finaliza o workflow como negado e atualiza a IA correspondente
       finalStatus = "negado";
       newAuditStatus = "Negado";
-      newStatusUso = "Não aprovado";
+      newStatusUso = "Negado";
       await supabaseAdmin
         .from("approval_workflows")
         .update({ current_step: wfData.current_step, final_status: "negado", completed_at: new Date().toISOString() })
         .eq("id", wfData.id);
     } else if (nextStep > totalSteps) {
+      // Regra 7: Ao aprovar a última etapa, finaliza o workflow como aprovado e atualiza a IA correspondente
       finalStatus = "aprovado";
       newAuditStatus = "Aprovado";
       newStatusUso = "Aprovado";
@@ -359,6 +554,7 @@ router.post("/workflow/decide", async (req, res) => {
         .update({ current_step: nextStep, final_status: "aprovado", completed_at: new Date().toISOString() })
         .eq("id", wfData.id);
     } else {
+      // Regra 5: Ao aprovar etapa intermediária, avança o current_step para a próxima etapa
       await supabaseAdmin
         .from("approval_workflows")
         .update({ current_step: nextStep })
@@ -380,6 +576,7 @@ router.post("/workflow/decide", async (req, res) => {
 
       const updatedData = {
         ...recordData,
+        ...(coordinatorData || {}),
         statusAuditoria: newAuditStatus,
         statusUso: newStatusUso,
         historico: [{
@@ -390,13 +587,48 @@ router.post("/workflow/decide", async (req, res) => {
         }, ...(recordData.historico || [])]
       };
 
+      const updatePayload: any = {
+        data: updatedData,
+        status_uso: newStatusUso,
+      };
+
+      const currentDateStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+      if (decision === "negado") {
+        updatePayload.status_uso = "Negado";
+        updatePayload.parecer_tecnico = "IA negada no fluxo de aprovação.";
+        updatePayload.data_aprovacao = currentDateStr;
+        if (comment) {
+          updatePayload.observacoes_gerais = comment;
+        }
+
+        // Also update JSON inner fields
+        updatedData.statusUso = "Negado";
+        updatedData.parecerTecnico = "IA negada no fluxo de aprovação.";
+        updatedData.dataAprovacao = currentDateStr;
+        if (comment) {
+          updatedData.observacoesGerais = comment;
+        }
+      } else if (nextStep > totalSteps) {
+        updatePayload.status_uso = "Aprovado";
+        updatePayload.parecer_tecnico = "IA aprovada no fluxo de aprovação.";
+        updatePayload.data_aprovacao = currentDateStr;
+        if (comment) {
+          updatePayload.observacoes_gerais = comment;
+        }
+
+        // Also update JSON inner fields
+        updatedData.statusUso = "Aprovado";
+        updatedData.parecerTecnico = "IA aprovada no fluxo de aprovação.";
+        updatedData.dataAprovacao = currentDateStr;
+        if (comment) {
+          updatedData.observacoesGerais = comment;
+        }
+      }
+
       await supabaseAdmin
         .from("ia_records")
-        .update({
-          data: updatedData,
-          status: newAuditStatus,
-          status_uso: newStatusUso,
-        })
+        .update(updatePayload)
         .eq("id", recordId);
     }
 
