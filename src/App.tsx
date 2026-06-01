@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck, Bell, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusUso, UserProfile, StatusAuditoria, ApprovalWorkflow, ApprovalConfig } from "./types";
@@ -22,6 +22,8 @@ import { UserProfileView } from "./components/UserProfileView";
 import { Chat } from "./components/Chat";
 import { useAuth } from "./contexts/AuthContext";
 import ApprovalPage from "./components/ApprovalPage";
+import { generateSystemAlerts, saveAlertInteraction } from "./lib/alerts";
+import { Eye, CheckCircle, AlertCircle, Info, Check } from "lucide-react";
 
 export interface NotificationToast {
   id: string;
@@ -129,6 +131,19 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const isDarkMode = false; // Modo escuro removido - apenas modo claro
+
+  // Estados e lógicas para o sistema integrado de Alertas
+  const [alertsToken, setAlertsToken] = useState(0);
+  const triggerAlertsRefresh = () => setAlertsToken(prev => prev + 1);
+  const [alertFilter, setAlertFilter] = useState<"all" | "critical" | "warning" | "info" | "resolved">("all");
+
+  const systemAlerts = useMemo(() => {
+    return generateSystemAlerts(records, workflows, profile, supabaseStatus);
+  }, [records, workflows, profile, supabaseStatus, alertsToken]);
+
+  const activeUnreadAlertsCount = useMemo(() => {
+    return systemAlerts.filter(a => a.status === "Ativo").length;
+  }, [systemAlerts]);
 
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
   const [toasts, setToasts] = useState<NotificationToast[]>([]);
@@ -632,6 +647,49 @@ export default function App() {
     }
   };
 
+  const handleResetStatus = async (recordId: string, reason?: string) => {
+    try {
+      const { data, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) {
+        throw new Error(`Erro ao recuperar sessão: ${sessionErr.message}`);
+      }
+      const session = data?.session;
+      const response = await fetch("/api/workflow/reset-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ recordId, reason })
+      });
+
+      let result;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        result = await response.json();
+      } else {
+        await response.text();
+        throw new Error(`Erro do servidor (${response.status}).`);
+      }
+
+      if (!response.ok) {
+        throw new Error(result.error || "Falha ao redefinir status");
+      }
+
+      addToast({ 
+        title: "Status Redefinido", 
+        message: "A IA retornou para análise no fluxo de aprovação com sucesso.", 
+        type: "success" 
+      });
+
+      await refreshRecords();
+      await loadApprovalData();
+    } catch (error: any) {
+      console.error("Erro ao redefinir status:", error);
+      alert(`Erro: ${error.message || "Erro desconhecido ao redefinir status"}`);
+    }
+  };
+
   const handleUpdateUserRole = async (userId: string, newRole: "admin" | "moderator" | "user") => {
     // Check if it's a real GUID/UUID (Fallback names are not UUIDs)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
@@ -960,12 +1018,14 @@ export default function App() {
             <button 
               onClick={() => setActiveTab("alerts")} 
               className="p-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl relative transition-all active:scale-95 text-slate-500 hover:text-[#075618] shrink-0 cursor-pointer shadow-sm"
-              title="Central de Alertas"
+              title="Alertas"
             >
               <Bell size={18} />
-              <span className="absolute -top-1 -right-1 size-4.5 bg-rose-500 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow">
-                3
-              </span>
+              {activeUnreadAlertsCount > 0 && (
+                <span className="absolute -top-1 -right-1 size-5 bg-rose-500 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow">
+                  {activeUnreadAlertsCount}
+                </span>
+              )}
             </button>
 
             {/* User Logged Block */}
@@ -1069,6 +1129,8 @@ export default function App() {
                   supabaseStatus={supabaseStatus}
                   isSyncing={isSyncing}
                   onSync={handleSync}
+                  onResetStatus={handleResetStatus}
+                  onNavigate={(tab) => setActiveTab(tab)}
                 />
               )}
               {activeTab === "chat" && (
@@ -1078,102 +1140,230 @@ export default function App() {
                 <UserProfileView />
               )}
               {activeTab === "alerts" && (
-                <div className="space-y-6 bg-white p-8 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] text-slate-800 animate-fade-in max-w-6xl mx-auto">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
+                <div className="space-y-6 bg-slate-50/50 p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] text-slate-800 animate-fade-in max-w-6xl mx-auto">
+                  {/* Cabeçalho */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
                     <div>
-                      <h3 className="text-xl font-black uppercase text-[#075618] tracking-tight">Central de Alertas Críticos</h3>
-                      <p className="text-xs text-slate-400 font-medium">Monitoramento regulatório, privacidade LGPD e limites de conformidade</p>
+                      <h3 className="text-xl font-black uppercase text-[#075618] tracking-tight">Alertas</h3>
+                      <p className="text-xs text-slate-500 font-medium">Acompanhe eventos, pendências e riscos que exigem atenção no ecossistema de IA.</p>
                     </div>
-                    <span className="text-[10px] font-bold text-[#075618] hover:bg-emerald-50 px-2.5 py-1 bg-[#075618]/5 rounded-full uppercase tracking-widest font-mono">Status: Monitorando</span>
+                    <span className="text-[10px] font-bold text-[#075618] px-3 py-1 bg-[#075618]/5 border border-[#075618]/10 rounded-full uppercase tracking-widest font-mono">Status: Monitorando</span>
                   </div>
-                  
-                  {records.length === 0 ? (
-                    <div className="py-20 text-center space-y-3">
-                      <div className="inline-flex p-4 bg-slate-50 border border-slate-100 rounded-full text-slate-400">
-                        <Bell size={24} />
+
+                  {/* Cards Pequenos no Topo */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Card 1: Alertas ativos */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
+                      <div className="p-2.5 bg-slate-50 text-slate-700 rounded-xl">
+                        <Bell size={20} />
                       </div>
-                      <p className="text-[#111111] font-bold text-xs uppercase tracking-wider">Nenhum sistema cadastrado</p>
-                      <p className="text-[11px] text-slate-400">Cadastre ferramentas no inventário para acionar os triggers de segurança.</p>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alertas ativos</p>
+                        <p className="text-lg font-black text-slate-800">
+                          {systemAlerts.filter(a => a.status !== "Resolvido").length}
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {(() => {
-                        const itemsWithAlerts = records.filter(r => 
-                          r.criticidade?.includes("ALTA") || 
-                          r.usaDadosSensiveis === "Sim" || 
-                          r.statusUso === StatusUso.NAO_APROVADO || 
-                          r.statusUso === StatusUso.SUSPENSO
-                        );
-                        
-                        if (itemsWithAlerts.length === 0) {
+
+                    {/* Card 2: Críticos */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
+                      <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
+                        <AlertCircle size={20} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Críticos</p>
+                        <p className="text-lg font-black text-rose-600">
+                          {systemAlerts.filter(a => a.status !== "Resolvido" && a.level === "CRÍTICO").length}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Pendentes */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
+                      <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+                        <Info size={20} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Atenção / Pendentes</p>
+                        <p className="text-lg font-black text-amber-600">
+                          {systemAlerts.filter(a => a.status !== "Resolvido" && a.level === "ATENÇÃO").length}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Card 4: Resolvidos */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
+                      <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <CheckCircle size={20} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resolvidos</p>
+                        <p className="text-lg font-black text-emerald-600">
+                          {systemAlerts.filter(a => a.status === "Resolvido").length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filtros */}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {[
+                      { id: "all", label: "Todos" },
+                      { id: "critical", label: "Críticos" },
+                      { id: "warning", label: "Atenção" },
+                      { id: "info", label: "Informativos" },
+                      { id: "resolved", label: "Resolvidos" },
+                    ].map((filt) => (
+                      <button
+                        key={filt.id}
+                        onClick={() => setAlertFilter(filt.id as any)}
+                        className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                          alertFilter === filt.id
+                            ? "bg-[#075618] text-white shadow-xs"
+                            : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50"
+                        }`}
+                      >
+                        {filt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Listagem de Alertas */}
+                  {(() => {
+                    // Filtrar as notificações com base nas abas
+                    const filtered = systemAlerts.filter(a => {
+                      if (alertFilter === "all") return a.status !== "Resolvido";
+                      if (alertFilter === "critical") return a.status !== "Resolvido" && a.level === "CRÍTICO";
+                      if (alertFilter === "warning") return a.status !== "Resolvido" && a.level === "ATENÇÃO";
+                      if (alertFilter === "info") return a.status !== "Resolvido" && a.level === "INFORMATIVO";
+                      if (alertFilter === "resolved") return a.status === "Resolvido";
+                      return true;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="py-16 text-center space-y-4 bg-white rounded-2xl border border-slate-100">
+                          <div className="inline-flex p-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
+                            <CheckCircle2 size={24} />
+                          </div>
+                          <div>
+                            <p className="text-[#111111] font-bold text-sm uppercase tracking-wider">Nenhum alerta ativo</p>
+                            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                              Todos os processos de IA monitorados estão em conformidade no momento.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        {filtered.map((alert) => {
+                          // Definir estilos de acordo com severidade
+                          const containerStyle = 
+                            alert.status === "Resolvido" 
+                              ? "bg-slate-50/70 border-slate-200/80 text-slate-500 opacity-75"
+                              : alert.level === "CRÍTICO"
+                                ? "bg-rose-50/40 border-rose-100/80 text-rose-950"
+                                : alert.level === "ATENÇÃO"
+                                  ? "bg-amber-50/40 border-amber-100/80 text-amber-950"
+                                  : "bg-blue-50/40 border-blue-100/80 text-blue-950";
+
+                          const badgeStyle = 
+                            alert.status === "Resolvido"
+                              ? "bg-slate-200 text-slate-700"
+                              : alert.level === "CRÍTICO"
+                                ? "bg-rose-100 text-rose-800"
+                                : alert.level === "ATENÇÃO"
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-blue-100 text-blue-800";
+
                           return (
-                            <div className="py-20 text-center space-y-3">
-                              <div className="inline-flex p-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
-                                <CheckCircle2 size={24} />
+                            <div 
+                              key={alert.id} 
+                              className={`p-5 rounded-2xl border ${containerStyle} flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-150 hover:shadow-xs hover:translate-x-0.5`}
+                            >
+                              <div className="space-y-2 min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded tracking-wider ${badgeStyle}`}>
+                                    {alert.level}
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                                    • {alert.source}
+                                  </span>
+                                  {alert.status === "Lido" && alert.status !== "Resolvido" && (
+                                    <span className="text-[9px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">
+                                      Lido
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className="font-extrabold text-sm tracking-tight text-slate-800 uppercase">{alert.title}</h4>
+                                <p className="text-xs leading-relaxed text-slate-600 font-medium">{alert.desc}</p>
+                                <p className="text-[10px] text-slate-400 font-semibold">
+                                  Gerado em: {new Date(alert.createdAt).toLocaleString("pt-BR")}
+                                </p>
                               </div>
-                              <p className="text-[#111111] font-bold text-xs uppercase tracking-wider">Nenhum alerta ativo</p>
-                              <p className="text-[11px] text-slate-400">Todos os sistemas de IA mapeados estão operando sob conformidade regulatória normal.</p>
+
+                              <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center">
+                                {/* Botão Ação Principal (Ver IA ou Abrir perfil) */}
+                                {alert.actionType === "open-ia" && alert.relatedRecordId && (
+                                  <button
+                                    onClick={() => {
+                                      const matched = records.find(r => r.id === alert.relatedRecordId);
+                                      if (matched) {
+                                        setSelectedRecord(matched);
+                                        setActiveTab("report");
+                                      }
+                                    }}
+                                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1.5"
+                                  >
+                                    <Eye size={12} /> Abrir IA
+                                  </button>
+                                )}
+
+                                {alert.actionType === "open-profile" && (
+                                  <button
+                                    onClick={() => setActiveTab("profile")}
+                                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1.5"
+                                  >
+                                    <UserCircle size={12} /> Perfil
+                                  </button>
+                                )}
+
+                                {/* Marcar como lido */}
+                                {alert.status === "Ativo" && (
+                                  <button
+                                    onClick={() => {
+                                      saveAlertInteraction(alert.id, "Lido");
+                                      triggerAlertsRefresh();
+                                    }}
+                                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 border border-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer"
+                                    title="Marcar como lido"
+                                  >
+                                    Lido
+                                  </button>
+                                )}
+
+                                {/* Marcar como resolvido */}
+                                {alert.status !== "Resolvido" && (
+                                  <button
+                                    onClick={() => {
+                                      saveAlertInteraction(alert.id, "Resolvido");
+                                      triggerAlertsRefresh();
+                                    }}
+                                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1"
+                                    title="Marcar como Resolvido"
+                                  >
+                                    <Check size={12} strokeWidth={3} /> Resolver
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           );
-                        }
-                        
-                        return records.map((r) => {
-                          const subAlerts = [];
-                          if (r.criticidade?.toUpperCase().includes("ALTA") || r.criticidade?.toUpperCase().includes("CRITICA")) {
-                            subAlerts.push({
-                              id: `${r.id}-risk`,
-                              title: "Certificação de Risco Alto",
-                              desc: `A ferramenta "${r.nomeFerramenta}" incorporada pelo setor "${r.unidadeSetor}" apresenta criticidade de nível alto. É imprescindível realizar auditoria técnica e mitigação de vieses anualmente.`,
-                              level: "CRÍTICO",
-                              style: "bg-rose-50 border-rose-100 text-rose-800",
-                              badge: "bg-rose-200 text-rose-800 font-extrabold"
-                            });
-                          }
-                          if (r.usaDadosSensiveis === "Sim") {
-                            subAlerts.push({
-                              id: `${r.id}-sens`,
-                              title: "Fluxo de Dados Sensíveis ativo",
-                              desc: `A inteligência "${r.nomeFerramenta}" processa ou transfere dados pessoais sensíveis protegidos pela LGPD. Proteja canais de comunicação para prevenir vazamentos.`,
-                              level: "Privacidade",
-                              style: "bg-amber-50 border-amber-100 text-amber-800",
-                              badge: "bg-amber-200 text-amber-800 font-bold"
-                            });
-                          }
-                          if (r.statusUso === StatusUso.NAO_APROVADO || r.statusUso === StatusUso.SUSPENSO) {
-                            subAlerts.push({
-                              id: `${r.id}-denied`,
-                              title: "Uso de Tecnologia Rejeitada",
-                              desc: `O comitê diretor ou NIT indeferiu o uso da ferramenta "${r.nomeFerramenta}". O uso operacional corporativo está proibido de forma explícita.`,
-                              level: "BLOQUEIO",
-                              style: "bg-red-50 border-red-200 text-red-800",
-                              badge: "bg-red-550 text-white font-extrabold"
-                            });
-                          }
-
-                          return subAlerts.map(sa => (
-                            <div key={sa.id} className={`p-5 rounded-2xl border ${sa.style} flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-200 hover:translate-x-1`}>
-                              <div className="space-y-1.5 min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider ${sa.badge}`}>{sa.level}</span>
-                                  <h4 className="font-extrabold text-sm tracking-tight uppercase">{sa.title}</h4>
-                                </div>
-                                <p className="text-xs opacity-90 leading-relaxed">{sa.desc}</p>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setSelectedRecord(r);
-                                  setActiveTab("report");
-                                }}
-                                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-[#075618] hover:text-[#075618] text-[10px] font-all font-black uppercase rounded-xl transition-all duration-150 active:scale-95 shrink-0 shadow-sm cursor-pointer"
-                              >
-                                Auditar IA
-                              </button>
-                            </div>
-                          ));
-                        });
-                      })()}
-                    </div>
-                  )}
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
               {activeTab === "new" && (

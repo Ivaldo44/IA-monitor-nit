@@ -647,6 +647,164 @@ router.post("/workflow/decide", async (req, res) => {
   }
 });
 
+// Reset status endpoint for administrators
+router.post("/workflow/reset-status", async (req, res) => {
+  const { recordId, reason } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Não autorizado: token ausente" });
+  }
+
+  try {
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = getSupabase();
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // 1. Validar autenticação
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Token inválido ou expirado" });
+    }
+
+    // 2. Validar se o usuário é admin
+    const { data: profileRow, error: profileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("role, full_name")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || profileRow?.role !== "admin") {
+      return res.status(403).json({ error: "Acesso proibido: Apenas administradores podem redefinir o status de uma IA." });
+    }
+
+    const adminFullName = profileRow?.full_name || user.email || "Administrador";
+
+    // 3. Localizar ia_record
+    const { data: iaRecord, error: iaErr } = await supabaseAdmin
+      .from("ia_records")
+      .select("*")
+      .eq("id", recordId)
+      .single();
+
+    if (iaErr || !iaRecord) {
+      return res.status(404).json({ error: "Registro de IA não encontrado" });
+    }
+
+    // 4. Localizar approval_workflow
+    const { data: workflow, error: wfErr } = await supabaseAdmin
+      .from("approval_workflows")
+      .select("*")
+      .eq("ia_record_id", recordId)
+      .maybeSingle();
+
+    if (workflow) {
+      // Reiniciar approval_workflow
+      const { error: wfUpdateErr } = await supabaseAdmin
+        .from("approval_workflows")
+        .update({
+          current_step: 1,
+          final_status: "pendente",
+          completed_at: null
+        })
+        .eq("id", workflow.id);
+
+      if (wfUpdateErr) {
+        return res.status(500).json({ error: `Erro ao reiniciar o workflow: ${wfUpdateErr.message}` });
+      }
+
+      // Reiniciar approval_steps para aguardando
+      const { error: stepsUpdateErr } = await supabaseAdmin
+        .from("approval_steps")
+        .update({
+          status: "aguardando",
+          comment: null,
+          decided_at: null
+        })
+        .eq("workflow_id", workflow.id);
+
+      if (stepsUpdateErr) {
+        return res.status(500).json({ error: `Erro ao redefinir as etapas de aprovação: ${stepsUpdateErr.message}` });
+      }
+    }
+
+    // 5. Atualizar ia_records para status de nova avaliação e registrar histórico
+    const recordData = iaRecord.data ? { ...iaRecord.data } : {};
+    const oldStatus = iaRecord.status || recordData.statusAuditoria || "Não avaliado";
+
+    const now = new Date();
+    const pad = (num: number) => String(num).padStart(2, "0");
+    const formattedDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    const infoMessage = `Status redefinido por administrador em ${formattedDate}. A IA retornou para análise no fluxo de aprovação. [ID Admin: ${user.id}] Nome: ${adminFullName}. Status anterior: ${oldStatus}, Novo status: Pendente. Motivo: ${reason || "Não informado"}`;
+
+    const newHistoryEntry = {
+      date: now.toISOString(),
+      user: adminFullName,
+      action: "Status redefinido por administrador",
+      message: infoMessage
+    };
+
+    recordData.statusAuditoria = "Pendente";
+    recordData.statusUso = "Em avaliação";
+    recordData.dataAprovacao = null;
+    recordData.parecerTecnico = "";
+    recordData.historico = [newHistoryEntry, ...(recordData.historico || [])];
+
+    let iaUpdateErr: any = null;
+    try {
+      const { error } = await supabaseAdmin
+        .from("ia_records")
+        .update({
+          data: recordData,
+          status: "Pendente",
+          status_uso: "Em avaliação",
+          parecer_tecnico: "",
+          data_aprovacao: null
+        })
+        .eq("id", recordId);
+      iaUpdateErr = error;
+    } catch (e: any) {
+      iaUpdateErr = e;
+    }
+
+    if (iaUpdateErr) {
+      const errMsg = (iaUpdateErr.message || "").toLowerCase();
+      const isMissingColumn = 
+        iaUpdateErr.code === "PGRST204" || 
+        iaUpdateErr.code === "42703" || 
+        errMsg.includes("status") || 
+        errMsg.includes("schema cache");
+
+      if (isMissingColumn) {
+        console.warn("⚠️ Coluna 'status' ou similar não existe em ia_records. Tentando fallback sem a coluna 'status'...");
+        const { error: retryError } = await supabaseAdmin
+          .from("ia_records")
+          .update({
+            data: recordData,
+            status_uso: "Em avaliação"
+          })
+          .eq("id", recordId);
+        iaUpdateErr = retryError;
+      }
+    }
+
+    if (iaUpdateErr) {
+      return res.status(500).json({ error: `Erro ao atualizar a ficha da IA: ${iaUpdateErr.message}` });
+    }
+
+    return res.json({
+      success: true,
+      message: "Status e fluxo de aprovação reiniciados com sucesso!",
+      recordId
+    });
+
+  } catch (err: any) {
+    console.error("Erro no workflow/reset-status:", err);
+    return res.status(500).json({ error: err.message || "Erro interno do servidor" });
+  }
+});
+
 // Routing mapping
 app.use("/api", router);
 app.use("/.netlify/functions/api", router);

@@ -208,15 +208,9 @@ export default function ApprovalPage({
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-            Governança, Risco e Conformidade (GRC)
-          </span>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             Aprovação de sistemas
           </h1>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Acompanhe a conformidade de processos corporativos e valide com segurança os pareceres de etapas sequentes.
-          </p>
         </div>
 
         {/* Compact indicators */}

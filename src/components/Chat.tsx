@@ -1,81 +1,137 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { ChatMessage, UserProfile } from "../types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, User, Hash, MoreVertical, MessageSquare, ShieldCheck, X, Briefcase, Building, Phone, Mail } from "lucide-react";
+import { 
+  Send, User, Hash, MoreVertical, MessageSquare, ShieldCheck, X, 
+  Briefcase, Building, Mail, Search, Filter, Plus, ArrowLeft, 
+  Paperclip, Smile, Star, CheckCheck, Check, ChevronLeft, Info, HelpCircle,
+  FileText, Download
+} from "lucide-react";
 
+const SUGGESTED_EMOJIS = ["😀", "😄", "👍", "👏", "🙏", "✅", "⚠️", "📌", "💬", "📎"];
+
+// Avatar do Usuário customizado, seguro contra falhas e compatível com Supabase
+const ChatAvatar: React.FC<{
+  avatarUrl?: string | null;
+  fullName?: string;
+  sizeClassName?: string;
+  textClassName?: string;
+  className?: string;
+}> = ({ avatarUrl, fullName, sizeClassName = "size-9", textClassName = "text-xs", className = "" }) => {
+  const [hasError, setHasError] = useState(false);
+
+  // Geração de iniciais a partir de full_name ou correspondente
+  const initials = useMemo(() => {
+    if (!fullName) return "IA";
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "IA";
+    return parts.map(p => p[0]).join("").substring(0, 2).toUpperCase();
+  }, [fullName]);
+
+  // Resetar falha quando o avatar_url for atualizado
+  useEffect(() => {
+    setHasError(false);
+  }, [avatarUrl]);
+
+  const hasPhoto = avatarUrl && avatarUrl.trim() !== "" && !hasError;
+
+  return (
+    <div
+      className={`rounded-full flex items-center justify-center font-bold uppercase shrink-0 overflow-hidden text-center select-none ${sizeClassName} ${
+        hasPhoto
+          ? "bg-slate-50 border border-slate-200"
+          : "bg-emerald-50 text-[#075618] border border-emerald-100/60"
+      } ${className}`}
+    >
+      {hasPhoto ? (
+        <img
+          src={avatarUrl}
+          alt={fullName || "Avatar"}
+          className="w-full h-full object-cover rounded-full animate-fade-in"
+          referrerPolicy="no-referrer"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span className={`font-black tracking-tight select-none ${textClassName}`}>
+          {initials}
+        </span>
+      )}
+    </div>
+  );
+};
+
+// Modal para visualização detalhada do perfil do profissional
 const ProfileModal: React.FC<{ profile: UserProfile; onClose: () => void }> = ({ profile, onClose }) => (
   <motion.div 
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-emerald-950/60 backdrop-blur-md"
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
     onClick={onClose}
   >
     <motion.div 
-      initial={{ scale: 0.9, opacity: 0, y: 20 }}
+      initial={{ scale: 0.95, opacity: 0, y: 10 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
-      exit={{ scale: 0.9, opacity: 0, y: 20 }}
-      className="bg-emerald-900 dark:bg-emerald-950 rounded-[3rem] w-full max-w-sm overflow-hidden shadow-[0_20px_80px_rgba(0,0,0,0.4)] border border-emerald-800/50"
+      exit={{ scale: 0.95, opacity: 0, y: 10 }}
+      className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-200"
       onClick={e => e.stopPropagation()}
     >
-      <div className="relative h-32 bg-gradient-to-br from-emerald-800 to-brand-green">
-        <div className="absolute inset-0 bg-black/20" />
+      <div className="relative h-28 bg-[#075618]">
         <button 
           onClick={onClose}
-          className="absolute top-6 right-6 p-2 bg-black/20 hover:bg-white/20 text-white rounded-xl transition-all backdrop-blur-md border border-white/10"
+          className="absolute top-4 right-4 p-1.5 bg-black/10 hover:bg-black/20 text-white rounded-lg transition-colors cursor-pointer"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
       </div>
       
-      <div className="px-8 pb-10 -mt-16">
-        <div className="relative inline-block mb-6">
-          <div className="w-28 h-28 rounded-[2rem] bg-emerald-900 border-4 border-emerald-900 overflow-hidden shadow-2xl flex items-center justify-center relative z-10">
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
-            ) : (
-              <User size={48} className="text-emerald-400" />
-            )}
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-brand-green rounded-full border-4 border-emerald-900 z-20 shadow-[0_0_15px_rgba(0,255,101,0.5)]" />
+      <div className="px-6 pb-8 -mt-12 text-center">
+        <div className="relative inline-block mb-4">
+          <ChatAvatar 
+            avatarUrl={profile.avatar_url} 
+            fullName={profile.full_name} 
+            sizeClassName="w-24 h-24" 
+            textClassName="text-2xl"
+            className="border-4 border-white shadow-md mx-auto"
+          />
         </div>
 
-        <h2 className="text-2xl font-black text-white mb-1 uppercase tracking-tight">{profile.full_name}</h2>
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-green/10 rounded-full mb-8">
-          <ShieldCheck size={12} className="text-brand-green" />
-          <p className="text-brand-green font-black text-[10px] uppercase tracking-widest">Auditor Verificado</p>
+        <h2 className="text-lg font-bold text-slate-800 tracking-tight uppercase">{profile.full_name}</h2>
+        <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 border border-emerald-100 rounded-full mb-6">
+          <ShieldCheck size={11} className="text-emerald-700" />
+          <p className="text-emerald-800 font-extrabold text-[9px] uppercase tracking-wider">Membro Cedro</p>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-4 p-5 rounded-3xl bg-black/20 border border-emerald-800/40 group hover:border-brand-green/30 transition-all">
-            <div className="w-10 h-10 rounded-2xl bg-brand-green/10 flex items-center justify-center text-brand-green group-hover:scale-110 transition-transform">
-              <Briefcase size={20} />
+        <div className="space-y-3 text-left">
+          <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+              <Briefcase size={16} />
             </div>
             <div>
-              <p className="text-[9px] text-emerald-500 uppercase font-black tracking-[0.2em] mb-0.5">Cargo Titular</p>
-              <p className="text-sm font-black text-white uppercase">{profile.cargo || "Não informado"}</p>
+              <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Cargo</p>
+              <p className="text-xs font-bold text-slate-700 uppercase">{profile.cargo || "Não informado"}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 p-5 rounded-3xl bg-black/20 border border-emerald-800/40 group hover:border-brand-green/30 transition-all">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-              <Building size={20} />
+          <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+              <Building size={16} />
             </div>
             <div>
-              <p className="text-[9px] text-emerald-500 uppercase font-black tracking-[0.2em] mb-0.5">Setor de Atuação</p>
-              <p className="text-sm font-black text-white uppercase">{profile.setor || "Não informado"}</p>
+              <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Setor de Atuação</p>
+              <p className="text-xs font-bold text-slate-700 uppercase">{profile.setor || "Não informado"}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 p-5 rounded-3xl bg-black/20 border border-emerald-800/40 group hover:border-brand-green/30 transition-all">
-            <div className="w-10 h-10 rounded-2xl bg-sky-500/10 flex items-center justify-center text-sky-400 group-hover:scale-110 transition-transform">
-              <Mail size={20} />
+          <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+              <Mail size={16} />
             </div>
             <div>
-              <p className="text-[9px] text-emerald-500 uppercase font-black tracking-[0.2em] mb-0.5">Identidade Digital</p>
-              <p className="text-sm font-black text-white truncate max-w-[180px]">{profile.contato || "N/A"}</p>
+              <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Contato / Email</p>
+              <p className="text-xs font-bold text-slate-700 truncate max-w-[200px]">{profile.contato || "N/A"}</p>
             </div>
           </div>
         </div>
@@ -86,507 +142,1079 @@ const ProfileModal: React.FC<{ profile: UserProfile; onClose: () => void }> = ({
 
 export const Chat: React.FC = () => {
   const { user, profile } = useAuth();
+  
+  // States reais do bando de dados do Supabase
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [lastMessagesMap, setLastMessagesMap] = useState<Record<string, ChatMessage>>({});
+  
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"public" | "private">("public");
-  const [selectedRecipient, setSelectedRecipient] = useState<UserProfile | null>(null);
+
+  // Conversa ativa selecionada (representa o ID do usuário real de profiles)
+  const [selectedConvId, setSelectedConvId] = useState<string>("");
+  const [listFilter, setListFilter] = useState<"all" | "unread" | "favorites">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Busca na conversa ativa
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  
+  // Controle de arquivos e emojis
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+  const [uiError, setUiError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  // Modais de ações adicionais
   const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState("");
+  
+  // Controle local de favoritos
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (activeTab === "private" && selectedRecipient) {
-      localStorage.setItem("active_chat_with", selectedRecipient.id);
-    } else {
-      localStorage.removeItem("active_chat_with");
+  // Setup de datas amigáveis
+  const isSameDay = (d1Str: string, d2Str: string) => {
+    try {
+      const d1 = new Date(d1Str);
+      const d2 = new Date(d2Str);
+      return d1.getFullYear() === d2.getFullYear() &&
+             d1.getMonth() === d2.getMonth() &&
+             d1.getDate() === d2.getDate();
+    } catch {
+      return false;
     }
-    return () => {
-      localStorage.removeItem("active_chat_with");
-    };
-  }, [selectedRecipient, activeTab]);
-
-  const isOnline = (lastSeen?: string) => {
-    if (!lastSeen) return false;
-    const lastSeenDate = new Date(lastSeen);
-    const now = new Date();
-    // Consider online if seen in last 3 minutes
-    return now.getTime() - lastSeenDate.getTime() < 180000;
   };
 
+  const getFriendlyDateLabel = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+
+      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()) {
+        return "Hoje";
+      }
+      if (d.getFullYear() === yesterday.getFullYear() && d.getMonth() === yesterday.getMonth() && d.getDate() === yesterday.getDate()) {
+        return "Ontem";
+      }
+      
+      const months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+      return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`;
+    } catch {
+      return "Data Indeterminada";
+    }
+  };
+
+  const formatMessageTime = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return "";
+    }
+  };
+
+  // Carregar usuários reais da tabela profiles
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .neq("id", user?.id || "");
+      
+      if (!error && data) {
+        let filtered = data || [];
+        
+        // Regra de permissões com base no cargo/setor
+        const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
+        if (!isCurrentUserAdmin) {
+          const userSector = profile?.setor?.toLowerCase().trim();
+          filtered = filtered.filter(u => {
+            const isUserAdmin = u.role?.toLowerCase().trim() === "admin";
+            const isSameSector = u.setor && userSector && u.setor.toLowerCase().trim() === userSector;
+            return isUserAdmin || isSameSector;
+          });
+        }
+        setUsers(filtered);
+      }
+    } catch (e) {
+      console.error("Falha ao carregar perfis reais de usuários para o Chat:", e);
+    }
+  };
+
+  // Carregar mensagens reais entre o usuário logado e o usuário selecionado
+  const fetchRealtimeMessages = async () => {
+    if (!selectedConvId || !user?.id) {
+      setMessages([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`and(sender_id.eq.${user.id},recipient_id.eq.${selectedConvId}),and(sender_id.eq.${selectedConvId},recipient_id.eq.${user.id})`)
+        .order("created_at", { ascending: true })
+        .limit(150);
+
+      if (!error && data) {
+        const enriched = (data || []).map((msg: any) => {
+          let senderProfile = null;
+          if (msg.sender_id === user.id) {
+            senderProfile = profile;
+          } else {
+            senderProfile = users.find(u => u.id === msg.sender_id) || null;
+          }
+          return {
+            ...msg,
+            sender_profile: senderProfile
+          };
+        });
+        setMessages(enriched);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar mensagens reais do Supabase:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Carregar as últimas mensagens de todas as conversas para as prévias na sidebar
+  const fetchAllLastMessages = async () => {
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        const lastMsgs: Record<string, ChatMessage> = {};
+        data.forEach((msg: ChatMessage) => {
+          const partnerId = msg.sender_id === user.id ? msg.recipient_id : msg.sender_id;
+          if (partnerId && !lastMsgs[partnerId]) {
+            lastMsgs[partnerId] = msg;
+          }
+        });
+        setLastMessagesMap(lastMsgs);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar mapa de conversas com últimas mensagens:", err);
+    }
+  };
+
+  // Atualizar tudo ao start ou mudar de usuário
   useEffect(() => {
-    cleanupOldMessages();
-    fetchInitialData();
-    
-    // Real-time for messages
+    fetchUsers();
+    fetchAllLastMessages();
+  }, [user?.id, profile]);
+
+  useEffect(() => {
+    if (selectedConvId) {
+      fetchRealtimeMessages();
+    } else {
+      setMessages([]);
+    }
+  }, [selectedConvId, user?.id]);
+
+  // Integração em tempo real com o canal do Supabase
+  useEffect(() => {
+    if (!user?.id) return;
+
     const messageChannel = supabase
-      .channel("cedro-chat-room")
+      .channel("chat-realtime-cedro")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         async (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          const isRelevant = 
-            (!newMessage.is_private && activeTab === "public") || 
-            (newMessage.is_private && activeTab === "private" && 
-             ((newMessage.sender_id === user?.id && newMessage.recipient_id === selectedRecipient?.id) ||
-              (newMessage.sender_id === selectedRecipient?.id && newMessage.recipient_id === user?.id)));
+          const insertMsg = payload.new as ChatMessage;
+          const isRelatedToMe = insertMsg.sender_id === user.id || insertMsg.recipient_id === user.id;
 
-          if (!isRelevant) return;
+          if (isRelatedToMe) {
+            // Atualiza mapa de últimas mensagens
+            const partnerId = insertMsg.sender_id === user.id ? insertMsg.recipient_id : insertMsg.sender_id;
+            if (partnerId) {
+              setLastMessagesMap(prev => ({
+                ...prev,
+                [partnerId]: insertMsg
+              }));
+            }
 
-          setMessages(prev => {
-            // Check if we already have this message (by real ID)
-            if (prev.some(m => m.id === newMessage.id)) return prev;
-            
-            // Check if this is a response to our own optimistic message
-            // If the message is from us, we might have an optimistic version with a temporary ID
-            const isFromMe = newMessage.sender_id === user?.id;
-            let updated = [...prev];
-            
-            if (isFromMe) {
-              // Look for a message with the same content sent in the last 10 seconds that has a non-UUID ID (temporary)
-              const optimisticIdx = updated.findIndex(m => 
-                m.sender_id === user?.id && 
-                m.content === newMessage.content && 
-                m.id.length < 20 // temporaryId is short
-              );
-              
-              if (optimisticIdx !== -1) {
-                updated[optimisticIdx] = { ...newMessage, sender_profile: profile || undefined };
-                return updated.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            // Se for do chat ativamente aberto, adiciona na lista
+            const isForOpenChat = 
+              (insertMsg.sender_id === user.id && insertMsg.recipient_id === selectedConvId) ||
+              (insertMsg.sender_id === selectedConvId && insertMsg.recipient_id === user.id);
+
+            if (isForOpenChat) {
+              let senderProfile = null;
+              if (insertMsg.sender_id === user.id) {
+                senderProfile = profile;
+              } else {
+                senderProfile = users.find(u => u.id === insertMsg.sender_id) || null;
               }
-            }
+              const enrichedMsg = {
+                ...insertMsg,
+                sender_profile: senderProfile
+              };
 
-            // Normal processing for others or if no matching optimistic found
-            const combined = [...updated, newMessage].sort(
-              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-            );
-
-            const knownSender = prev.find(m => m.sender_id === newMessage.sender_id)?.sender_profile;
-            if (knownSender) {
-              return combined.map(m => m.id === newMessage.id ? { ...m, sender_profile: knownSender } : m);
-            }
-
-            fetchSenderProfile(newMessage.sender_id).then(profileData => {
-              if (profileData) {
-                setMessages(current => 
-                  current.map(m => m.sender_id === newMessage.sender_id ? { ...m, sender_profile: profileData } : m)
+              setMessages(prev => {
+                if (prev.some(m => m.id === enrichedMsg.id)) return prev;
+                return [...prev, enrichedMsg].sort(
+                  (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                 );
-              }
-            });
-            return combined;
-          });
-        }
-      )
-      .subscribe();
-
-    // Real-time for user presence
-    const userChannel = supabase
-      .channel("presence-room")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        (payload) => {
-          const updatedProfile = payload.new as UserProfile;
-          if (updatedProfile) {
-            setUsers(prev => prev.map(u => u.id === updatedProfile.id ? updatedProfile : u));
-            if (selectedRecipient?.id === updatedProfile.id) {
-              setSelectedRecipient(updatedProfile);
+              });
             }
           }
         }
       )
       .subscribe();
 
-    // Update time every minute to refresh "isOnline" badges
-    const statusInterval = setInterval(() => {
-      setUsers(prev => [...prev]);
-    }, 60000);
-
     return () => {
       supabase.removeChannel(messageChannel);
-      supabase.removeChannel(userChannel);
-      clearInterval(statusInterval);
     };
-  }, [activeTab, selectedRecipient, user?.id]);
+  }, [selectedConvId, user?.id]);
 
-  const fetchInitialData = async () => {
-    setLoading(true);
-    await fetchUsers();
-    await fetchMessages();
-  };
-
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .neq("id", user?.id || "");
-    
-    if (error) {
-      console.error("Erro ao buscar usuários do chat:", error);
-    }
-
-    let filtered = data || [];
-    
-    const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
-    if (!isCurrentUserAdmin) {
-      const userSector = profile?.setor?.toLowerCase().trim();
-      filtered = filtered.filter(u => {
-        const isUserAdmin = u.role?.toLowerCase().trim() === "admin";
-        const isSameSector = u.setor && userSector && u.setor.toLowerCase().trim() === userSector;
-        return isUserAdmin || isSameSector;
-      });
-    }
-    setUsers(filtered);
-  };
-
-  const fetchMessages = async () => {
-    try {
-      let query = supabase
-        .from("messages")
-        .select("*, sender_profile: profiles!messages_sender_id_fkey (*)")
-        .order("created_at", { ascending: true })
-        .limit(100);
-
-      if (activeTab === "public") {
-        query = query.eq("is_private", false);
-      } else if (selectedRecipient) {
-        query = query.or(`and(sender_id.eq.${user?.id},recipient_id.eq.${selectedRecipient.id}),and(sender_id.eq.${selectedRecipient.id},recipient_id.eq.${user?.id})`);
-      } else {
-        setMessages([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setMessages(data || []);
-    } catch (err) {
-      console.error("Erro ao buscar mensagens:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSenderProfile = async (senderId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", senderId)
-      .single();
-    return data;
-  };
-
-  const cleanupOldMessages = async () => {
-    try {
-      const yesterday = new Date();
-      yesterday.setHours(yesterday.getHours() - 24);
-      await supabase.from("messages").delete().lt("created_at", yesterday.toISOString());
-    } catch (err) {
-      console.error("Erro na limpeza:", err);
-    }
-  };
-
+  // Scroll automático para a última mensagem
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, selectedConvId]);
 
+  // Recipiente ativo
+  const selectedRecipient = useMemo(() => {
+    if (!selectedConvId) return null;
+    return users.find(u => u.id === selectedConvId) || null;
+  }, [selectedConvId, users]);
+
+  // Lista de conversas computadas baseadas apenas nos profissionais do sistema
+  const computedConversations = useMemo(() => {
+    return users.map(u => {
+      const lastMsgObj = lastMessagesMap[u.id];
+      const hasAttachment = lastMsgObj?.attachment_url;
+      const lastMsgText = lastMsgObj 
+        ? (lastMsgObj.content || (hasAttachment ? "📎 Arquivo Anexo" : "")) 
+        : "Nenhuma mensagem ainda. Inicie a conversa.";
+
+      const lastMsgTime = lastMsgObj 
+        ? formatMessageTime(lastMsgObj.created_at) 
+        : "";
+
+      return {
+        id: u.id,
+        name: u.full_name || "Sem Nome",
+        subtitle: `${u.setor || "Sem setor"} • ${u.cargo || "Profissional"}`,
+        lastMessage: lastMsgText || "",
+        time: lastMsgTime || "",
+        favorite: favorites.includes(u.id),
+        unreadCount: 0,
+        profile: u
+      };
+    });
+  }, [users, lastMessagesMap, favorites]);
+
+  // Filtragem e busca de conversas na aba de conversas
+  const filteredConversations = useMemo(() => {
+    return computedConversations.filter(c => {
+      const nameStr = c.name || "";
+      const subtitleStr = c.subtitle || "";
+      const lastMsgStr = c.lastMessage || "";
+      const queryStr = searchQuery || "";
+
+      const matchesSearch = 
+        nameStr.toLowerCase().includes(queryStr.toLowerCase()) ||
+        subtitleStr.toLowerCase().includes(queryStr.toLowerCase()) ||
+        lastMsgStr.toLowerCase().includes(queryStr.toLowerCase());
+      
+      if (!matchesSearch) return false;
+
+      if (listFilter === "all") return true;
+      if (listFilter === "favorites") return !!c.favorite;
+      return true;
+    });
+  }, [computedConversations, searchQuery, listFilter]);
+
+  // Manuseio de anexação de arquivos
+  const handleFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Bloquear arquivos com mais de 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      setUiError("O arquivo selecionado é muito grande. O limite máximo permitido é 10MB.");
+      setTimeout(() => setUiError(""), 5000);
+      return;
+    }
+
+    // Bloquear arquivos inseguros
+    const unsafeExtensions = ["exe", "bat", "cmd", "sh", "js", "vbs"];
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (fileExt && unsafeExtensions.includes(fileExt)) {
+      setUiError("Este tipo de arquivo não é permitido por motivos de segurança do laboratório.");
+      setTimeout(() => setUiError(""), 5000);
+      return;
+    }
+
+    setSelectedFile(file);
+    setUiError("");
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Seletor de emoji funcional
+  const handleEmojiClick = (emoji: string) => {
+    const input = inputRef.current;
+    if (!input) {
+      setNewMessage(prev => prev + emoji);
+      return;
+    }
+
+    const start = input.selectionStart ?? newMessage.length;
+    const end = input.selectionEnd ?? newMessage.length;
+    const text = newMessage;
+    const nextText = text.substring(0, start) + emoji + text.substring(end);
+    setNewMessage(nextText);
+
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(start + emoji.length, start + emoji.length);
+    }, 0);
+
+    setIsEmojiOpen(false);
+  };
+
+  // Enviar mensagem real e anexos via Storage
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newMessage.trim()) return;
-    if (activeTab === "private" && !selectedRecipient) return;
+    if (!newMessage.trim() && !selectedFile) return;
 
-    const messageContent = newMessage.trim();
+    const textToSend = newMessage.trim();
+    const fileToUpload = selectedFile;
+
+    // Limpar estados imediatamente para melhorar a responsividade
     setNewMessage("");
+    setSelectedFile(null);
+    setUiError("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
-    const temporaryId = Math.random().toString(36).substring(7);
-    const optimisticMessage: ChatMessage = {
-      id: temporaryId,
-      created_at: new Date().toISOString(),
-      sender_id: user.id,
-      content: messageContent,
-      is_private: activeTab === "private",
-      recipient_id: selectedRecipient?.id,
-      sender_profile: profile || undefined
-    };
+    let attachment_url = "";
+    let attachment_name = "";
+    let attachment_type = "";
+    let attachment_size = 0;
 
-    setMessages(prev => [...prev, optimisticMessage]);
+    if (fileToUpload) {
+      setUploading(true);
+      try {
+        const fileExt = fileToUpload.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 11)}-${Date.now()}.${fileExt}`;
+        const filePath = `${user?.id}/${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("chat-attachments")
+          .upload(filePath, fileToUpload);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        if (uploadData) {
+          const { data: publicUrlData } = supabase.storage
+            .from("chat-attachments")
+            .getPublicUrl(filePath);
+
+          attachment_url = publicUrlData.publicUrl;
+          attachment_name = fileToUpload.name;
+          attachment_type = fileToUpload.type;
+          attachment_size = fileToUpload.size;
+        }
+      } catch (storageErr) {
+        console.error("Falha ao realizar o upload:", storageErr);
+        // Exibir erro amigável de armazenamento exatamente como solicitado
+        setUiError("Não foi possível anexar o arquivo. Verifique a configuração de armazenamento.");
+        setTimeout(() => setUiError(""), 6000);
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
 
     try {
-      const { data, error } = await supabase
+      const payload = {
+        content: textToSend || `Anexou arquivo: ${attachment_name}`,
+        sender_id: user?.id || "myself",
+        is_private: true,
+        recipient_id: selectedConvId,
+        attachment_url: attachment_url || null,
+        attachment_name: attachment_name || null,
+        attachment_type: attachment_type || null,
+        attachment_size: attachment_size || null
+      };
+
+      const { data: insertData, error: insertError } = await supabase
         .from("messages")
-        .insert({
-          content: messageContent,
-          sender_id: user.id,
-          is_private: activeTab === "private",
-          recipient_id: selectedRecipient?.id
-        })
+        .insert(payload)
         .select()
         .single();
 
-      if (error) throw error;
-      // Note: We don't necessarily need to manually update state here anymore 
-      // because the Realtime subscription will handle the replacement of the temporary ID
-      // by matching content and sender_id. This prevents the "double message" flicker.
-    } catch (err) {
-      console.error("Erro ao enviar mensagem:", err);
-      // Remove optimistic message if insert failed
-      setMessages(prev => prev.filter(m => m.id !== temporaryId));
-      setNewMessage(messageContent);
+       if (!insertError && insertData) {
+        const enrichedInsert = {
+          ...insertData,
+          sender_profile: profile
+        };
+        setMessages(prev => {
+          if (prev.some(m => m.id === enrichedInsert.id)) return prev;
+          return [...prev, enrichedInsert];
+        });
+        fetchAllLastMessages();
+      }
+    } catch (dbErr) {
+      console.error("Erro ao salvar mensagem:", dbErr);
+      setUiError("Erro ao enviar a mensagem para o banco.");
+      setTimeout(() => setUiError(""), 5000);
     }
   };
 
-  return (
-    <div className="w-full max-w-full h-[calc(100vh-120px)] flex gap-4 xl:gap-6 py-2 px-4">
-      {/* Sidebar - Canais e Usuários */}
-      <div className="w-72 hidden lg:flex flex-col gap-6 shrink-0">
-        <div className="bg-black/30 dark:bg-black/60 border border-emerald-200/20 dark:border-emerald-800/30 p-6 rounded-[2.5rem] flex-1 overflow-y-auto shadow-xl shadow-black/20 glass">
-          <h2 className="text-xl font-black text-emerald-900 dark:text-white mb-8 flex items-center gap-3 uppercase tracking-tighter">
-            <div className="p-2 bg-brand-green/20 rounded-xl">
-              <MessageSquare size={20} className="text-brand-green" />
-            </div>
-            Central Chat
-          </h2>
-          
-          <div className="space-y-3 mb-10">
-            <h3 className="text-[10px] font-black text-emerald-800/60 dark:text-emerald-100/40 uppercase tracking-[0.3em] mb-4 ml-2">Canais Públicos</h3>
-            <button 
-              onClick={() => { setActiveTab("public"); setSelectedRecipient(null); }}
-              className={`w-full flex items-center gap-4 p-4 rounded-3xl transition-all duration-300 relative group border ${
-                activeTab === "public" 
-                ? "bg-brand-green text-black border-brand-green shadow-lg shadow-brand-green/20 font-black" 
-                : "bg-black/40 dark:bg-black/80 border-emerald-800/20 hover:bg-emerald-500/20 text-emerald-100 dark:text-white font-bold"
-              }`}
-            >
-              <Hash size={20} className={activeTab === "public" ? "text-black" : "text-brand-green group-hover:scale-110 transition-transform"} />
-              <span className="text-sm uppercase tracking-wider">GERAL</span>
-              {activeTab === "public" && <motion.div layoutId="activePill" className="absolute left-0 w-1.5 h-6 bg-black rounded-r-full" />}
-            </button>
-          </div>
+  const toggleFavorite = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites(prev => 
+      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
+    );
+  };
 
-          <div className="flex items-center justify-between mb-6 ml-2">
-            <h3 className="text-[10px] font-black text-emerald-800/60 dark:text-emerald-100/40 uppercase tracking-[0.3em]">Membros Online</h3>
-            <span className="text-[9px] bg-emerald-500/20 text-brand-green px-2 py-0.5 rounded-full font-black">{users.length}</span>
-          </div>
+  // Filtragem de palavras chave internamente no chat ativado
+  const highlightTerm = (text: string = "", term: string) => {
+    if (!text) return "";
+    if (!term) return text;
+    const parts = text.split(new RegExp(`(${term})`, "gi"));
+    return (
+      <>
+        {parts.map((part, i) => 
+          part.toLowerCase() === term.toLowerCase() 
+            ? <span key={i} className="bg-yellow-100 text-slate-800 px-0.5 rounded font-extrabold">{part}</span> 
+            : part
+        )}
+      </>
+    );
+  };
+
+  const activeMessagesToShow = useMemo(() => {
+    let result = messages;
+    if (chatSearchOpen && chatSearchQuery.trim()) {
+      const query = chatSearchQuery.toLowerCase();
+      result = result.filter(m => (m.content || "").toLowerCase().includes(query));
+    }
+    return result;
+  }, [messages, chatSearchOpen, chatSearchQuery]);
+
+  // Lista para nova conversa (modal busca em profiles reais)
+  const modalUsersRoster = useMemo(() => {
+    if (newChatSearch.trim()) {
+      return users.filter(u => 
+        u.full_name?.toLowerCase().includes(newChatSearch.toLowerCase()) ||
+        u.setor?.toLowerCase().includes(newChatSearch.toLowerCase()) ||
+        u.cargo?.toLowerCase().includes(newChatSearch.toLowerCase())
+      );
+    }
+    return users;
+  }, [users, newChatSearch]);
+
+  const activeConvObj = computedConversations.find(c => c.id === selectedConvId);
+
+  return (
+    <div className="w-full max-w-full h-[calc(100vh-140px)] flex flex-col pt-1">
+      {/* Container Principal Claro, Corporativo e Sofisticado do Cedro */}
+      <div className="flex-1 bg-white border border-slate-200/80 rounded-2xl overflow-hidden flex h-full shadow-xs">
+        
+        {/* COLUNA ESQUERDA - Sidebar de conversas */}
+        <div className={`w-full lg:w-96 flex flex-col bg-white border-r border-slate-200 shrink-0 ${selectedConvId ? "hidden lg:flex" : "flex"}`}>
           
-          <div className="space-y-2">
-            {users.map(u => (
-              <div key={u.id} className="group relative">
-                <button 
-                  onClick={() => { setActiveTab("private"); setSelectedRecipient(u); }}
-                  className={`w-full flex items-center gap-4 p-3.5 rounded-3xl transition-all duration-300 border ${
-                    selectedRecipient?.id === u.id 
-                    ? "bg-emerald-600 text-white border-emerald-500 shadow-xl shadow-emerald-900/30" 
-                    : "bg-black/40 dark:bg-black/80 border-emerald-800/20 hover:bg-emerald-500/20 text-emerald-100 dark:text-white font-bold"
+          {/* Header Superior da Sidebar */}
+          <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5 bg-slate-50/50">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Chat</h2>
+                <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Comunique-se com sua equipe</p>
+              </div>
+              <button 
+                onClick={() => setIsNewChatOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#075618] hover:bg-[#053e11] text-white text-[10px] font-black uppercase rounded-lg shadow-3xs transition cursor-pointer active:scale-95"
+              >
+                <Plus size={12} strokeWidth={3} /> Nova conversa
+              </button>
+            </div>
+
+            {/* Caixa de Busca */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Buscar conversas..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#075618]/60 focus:ring-1 focus:ring-[#075618]/20 transition font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Chips de filtro */}
+            <div className="flex gap-1.5 pt-0.5">
+              {[
+                { id: "all", label: "Todas" },
+                { id: "favorites", label: "Favoritas" },
+              ].map(chip => (
+                <button
+                  key={chip.id}
+                  onClick={() => setListFilter(chip.id as any)}
+                  className={`text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border cursor-pointer transition ${
+                    listFilter === chip.id 
+                      ? "bg-emerald-50 text-[#075618] border-emerald-200 shadow-3xs"
+                      : "bg-white text-slate-500 border-slate-200/60 hover:bg-slate-100/50"
                   }`}
                 >
-                  <div className="relative shrink-0">
-                    <div className={`w-10 h-10 rounded-2xl border-2 overflow-hidden flex items-center justify-center transition-all ${
-                      selectedRecipient?.id === u.id ? "border-brand-green" : "border-emerald-700/30 dark:border-emerald-800/30 bg-black/20"
-                    }`}>
-                      {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" /> : <User size={18} className="text-emerald-400" />}
-                    </div>
-                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-4 border-emerald-950 ${isOnline(u.last_seen) ? "bg-brand-green" : "bg-slate-600"}`} />
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className={`text-xs font-black truncate uppercase ${selectedRecipient?.id === u.id ? "text-white" : "text-emerald-50 dark:text-white"}`}>{u.full_name}</p>
-                      {u.role === "admin" && (
-                        <span className="p-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[7px] font-black text-amber-500 uppercase tracking-tight shrink-0">
-                          ADM
-                        </span>
-                      )}
-                    </div>
-                    <p className={`text-[9px] font-bold truncate opacity-60 uppercase tracking-tighter ${selectedRecipient?.id === u.id ? "text-emerald-100" : "text-emerald-300 dark:text-emerald-400"}`}>{u.setor || "NIT"}</p>
-                  </div>
+                  {chip.label}
                 </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setViewingProfile(u); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/20 rounded-xl transition-all text-emerald-400"
-                  title="Perfil Auditado"
-                >
-                  <User size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-black/5 dark:bg-black/40 border border-emerald-100/20 dark:border-emerald-800/40 rounded-[3rem] overflow-hidden shadow-2xl relative glass">
-        {/* Header */}
-        <div className="p-8 border-b border-emerald-100/10 dark:border-emerald-800/40 flex justify-between items-center bg-black/10 dark:bg-black/40 backdrop-blur-xl">
-          <div className="flex items-center gap-6">
-            <div className={`w-14 h-14 rounded-3xl flex items-center justify-center shadow-2xl shadow-brand-green/20 overflow-hidden ${activeTab === "public" ? "bg-brand-green text-black" : "bg-emerald-800 text-white"}`}>
-              {activeTab === "public" ? (
-                <span className="text-xl font-black">AG</span>
-              ) : selectedRecipient?.avatar_url ? (
-                <img src={selectedRecipient.avatar_url} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xl font-black">
-                  {selectedRecipient?.full_name?.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() || "U"}
-                </span>
-              )}
+              ))}
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-black text-emerald-900 dark:text-white uppercase tracking-tight">
-                    {activeTab === "public" ? "GERAL" : `${selectedRecipient?.full_name}`}
-                  </h2>
-                  {activeTab !== "public" && selectedRecipient?.role === "admin" && (
-                    <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1">
-                      <ShieldCheck size={10} /> Admin
-                    </span>
-                  )}
+          </div>
+
+          {/* Listagem de conversas */}
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
+            {users.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
+                <div className="size-12 bg-slate-50 text-slate-400 rounded-xl border border-slate-250 flex items-center justify-center">
+                  <User size={20} />
                 </div>
-                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) ? "bg-brand-green/10" : "bg-slate-500/10"}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) ? "bg-brand-green animate-pulse" : "bg-slate-500"}`} />
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) ? "text-brand-green" : "text-slate-500"}`}>
-                    {isOnline(activeTab === "public" ? "" : selectedRecipient?.last_seen) || activeTab === "public" ? "Ativo" : "Offline"}
-                  </span>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nenhum contato disponível</h3>
+                  <p className="text-[11px] text-slate-400/80 mt-1.5 leading-relaxed max-w-[240px]">
+                    Ainda não há outros usuários cadastrados para iniciar uma conversa.
+                  </p>
                 </div>
               </div>
-              <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-black uppercase tracking-[0.2em] mt-1">
-                {activeTab === "public" ? "Protocolo de Comunicação Cedro" : "Conexão Ponto-a-Ponto Segura"}
-              </p>
-            </div>
-          </div>
-          
-          <div className="hidden md:flex flex-col items-end">
-            <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Status do Servidor</div>
-            <div className="flex items-center gap-2">
-              <div className="h-1 w-12 bg-emerald-800/20 rounded-full overflow-hidden">
-                <motion.div initial={{ x: -50 }} animate={{ x: 50 }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }} className="h-full w-4 bg-brand-green" />
+            ) : filteredConversations.length === 0 ? (
+              <div className="py-12 p-5 text-center space-y-2">
+                <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Nenhuma conversa encontrada</p>
+                <p className="text-xs text-slate-400/80">Verifique os filtros ou busque por outro profissional.</p>
               </div>
-              <span className="text-[9px] font-black text-brand-green uppercase">Sincronizado</span>
-            </div>
-          </div>
-        </div>
+            ) : (
+              filteredConversations.map(conv => {
+                const isActive = selectedConvId === conv.id;
+                const isConvFavorite = !!conv.favorite;
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-8 scroll-smooth custom-scrollbar">
-          {loading ? (
-            <div className="h-full flex flex-col items-center justify-center gap-4">
-              <div className="animate-spin rounded-[1.5rem] h-12 w-12 border-t-2 border-r-2 border-brand-green" />
-              <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Carregando Fluxos...</span>
-            </div>
-          ) : activeTab === "private" && !selectedRecipient ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-12">
-              <div className="w-24 h-24 bg-emerald-500/10 rounded-[2.5rem] flex items-center justify-center mb-6">
-                <MessageSquare className="text-emerald-500/40" size={40} />
-              </div>
-              <h3 className="text-2xl font-black text-emerald-900 dark:text-white uppercase mb-4 tracking-tighter">Inicie uma conversa direta</h3>
-              <p className="text-emerald-600 dark:text-emerald-400/60 text-sm max-w-sm font-medium uppercase text-xs tracking-tight">Protocolo de comunicação interna. Selecione um colega para iniciar uma conexão criptografada.</p>
-            </div>
-          ) : (
-            messages.map((msg, idx) => {
-              const isOwn = msg.sender_id === user?.id;
-              const showAvatar = idx === 0 || messages[idx-1].sender_id !== msg.sender_id;
-              
-              return (
-                <motion.div 
-                  initial={{ opacity: 0, x: isOwn ? 20 : -20 }} 
-                  animate={{ opacity: 1, x: 0 }} 
-                  key={msg.id} 
-                  className={`flex gap-4 ${isOwn ? "flex-row-reverse" : "flex-row"}`}
-                >
-                  <div className="w-10 h-10 shrink-0">
-                    {showAvatar && (
-                      <button 
-                        onClick={() => msg.sender_profile && setViewingProfile(msg.sender_profile)}
-                        className={`w-10 h-10 rounded-2xl bg-white dark:bg-emerald-900/40 border overflow-hidden flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95 ${
-                          isOwn ? "border-brand-green/30" : "border-emerald-200 dark:border-emerald-800"
-                        }`}
-                      >
-                        {msg.sender_profile?.avatar_url ? (
-                          <img src={msg.sender_profile.avatar_url} className="w-full h-full object-cover" />
-                        ) : (
-                          <User size={18} className="text-emerald-500" />
-                        )}
-                      </button>
+                return (
+                  <div 
+                    key={conv.id}
+                    onClick={() => setSelectedConvId(conv.id)}
+                    className={`p-4 flex items-start gap-3 transition-all cursor-pointer relative group ${
+                      isActive 
+                        ? "bg-slate-50/70 text-slate-800" 
+                        : "bg-white hover:bg-slate-50/40 text-slate-700"
+                    }`}
+                  >
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-[#075618] rounded-r" />
                     )}
-                  </div>
-                  
-                  <div className={`max-w-[70%] space-y-1.5 ${isOwn ? "items-end" : "items-start"}`}>
-                    {showAvatar && (
-                      <div className={`flex items-center gap-2 px-1 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                        <div className={`flex items-center gap-1.5 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
-                          <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-200 uppercase tracking-tight">
-                            {msg.sender_profile?.full_name || "Membro Cedro"}
-                          </span>
-                          {msg.sender_profile?.role === "admin" && (
-                            <span className="px-1 py-0.2 bg-amber-500/20 border border-amber-500/30 rounded-[4px] text-[7px] font-black text-amber-500 uppercase tracking-tighter shrink-0 flex items-center gap-0.5">
-                              <ShieldCheck size={7} /> ADM
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[8px] font-black text-emerald-400 uppercase opacity-60">
-                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+                    {/* Avatar da Conversa */}
+                    <div className="relative shrink-0 mt-0.5">
+                      <ChatAvatar 
+                        avatarUrl={conv.profile.avatar_url} 
+                        fullName={conv.name} 
+                        sizeClassName="size-9"
+                        textClassName="text-xs"
+                      />
+                    </div>
+
+                    {/* Conteúdo Textual */}
+                    <div className="flex-1 min-w-0 pr-1">
+                      <div className="flex justify-between items-baseline mb-0.5 gap-2">
+                        <h4 className="text-xs font-bold text-slate-800 truncate uppercase tracking-tight">
+                          {conv.name}
+                        </h4>
+                        <span className="text-[9px] text-slate-400 font-semibold shrink-0">
+                          {conv.time}
                         </span>
                       </div>
-                    )}
-                    <div className={`p-5 rounded-[2rem] text-sm font-medium leading-relaxed shadow-xl border relative whitespace-pre-wrap ${
-                      isOwn 
-                      ? "bg-brand-green text-black border-brand-green/20 rounded-tr-none" 
-                      : "bg-black/40 dark:bg-emerald-900/40 text-emerald-100 dark:text-emerald-50 border-emerald-800/20 dark:border-emerald-800/40 rounded-tl-none"
-                    }`}>
-                       {msg.content}
-                      {/* Efeito de brilho para mensagens próprias */}
-                      {isOwn && <div className="absolute inset-0 bg-white/10 rounded-[2rem] pointer-events-none" />}
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1 truncate block opacity-75">
+                        {conv.subtitle}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate font-medium">
+                        {conv.lastMessage}
+                      </p>
+                    </div>
+
+                    {/* Opções e favoritar */}
+                    <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-1.5">
+                      <button 
+                        onClick={(e) => toggleFavorite(conv.id, e)}
+                        className={`text-slate-300 hover:text-amber-400 transition cursor-pointer md:opacity-0 group-hover:opacity-100 ${
+                          isConvFavorite ? "opacity-100! text-amber-400!" : ""
+                        }`}
+                        title={isConvFavorite ? "Remover dos favoritos" : "Marcar como favorita"}
+                      >
+                        <Star size={12} fill={isConvFavorite ? "currentColor" : "none"} strokeWidth={2.5} />
+                      </button>
                     </div>
                   </div>
-                </motion.div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
+
+          {/* Rodapé da Sidebar */}
+          <div className="p-4 bg-slate-50 border-t border-slate-105 flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+            <span>Laboratório Cedro</span>
+            <span>{filteredConversations.length} Contatos</span>
+          </div>
         </div>
 
-        {/* Input Area */}
-        <div className="p-8 bg-black/10 dark:bg-black/60 border-t border-emerald-100/10 dark:border-emerald-800/40">
-          <form onSubmit={handleSendMessage} className="flex items-center gap-4 relative group">
-            <div className="flex-1 relative">
-              <textarea
-                placeholder={activeTab === "private" && !selectedRecipient ? "AGUARDANDO CONEXÃO..." : "DIGITAR..."}
-                disabled={activeTab === "private" && !selectedRecipient}
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e as any);
-                  }
-                }}
-                rows={1}
-                className="w-full pl-8 pr-20 py-5 bg-white dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/60 rounded-[2rem] outline-none text-emerald-900 dark:text-white font-bold text-sm tracking-tight placeholder:text-emerald-400 dark:placeholder:text-emerald-100/40 focus:border-brand-green dark:focus:border-brand-green focus:ring-4 focus:ring-brand-green/10 transition-all shadow-inner uppercase tracking-wider resize-none min-h-[64px] max-h-32 custom-scrollbar"
-              />
-              <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                <kbd className="hidden sm:inline-flex px-2 py-1 bg-brand-green/20 rounded-lg text-[9px] font-black text-brand-green border border-brand-green/30 uppercase shadow-[0_0_10px_rgba(0,255,101,0.2)]">Enter</kbd>
+        {/* ÁREA DIREITA - Conversa ativa com os usuários reais */}
+        <div className={`flex-1 flex flex-col bg-slate-50/55 relative ${!selectedConvId ? "hidden lg:flex" : "flex"}`}>
+          
+          {activeConvObj && selectedRecipient ? (
+            <>
+              {/* HEADER DA CONVERSA ATIVA */}
+              <div className="p-4 border-b border-slate-200/80 flex justify-between items-center bg-white shadow-3xs p-4">
+                <div className="flex items-center gap-3">
+                  
+                  {/* Botão voltar para lista no layout mobile */}
+                  <button 
+                    onClick={() => setSelectedConvId("")}
+                    className="lg:hidden p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 transition shrink-0 active:scale-95 mr-1"
+                    title="Voltar para lista"
+                  >
+                    <ChevronLeft size={16} strokeWidth={2.5} />
+                  </button>
+
+                  <ChatAvatar 
+                    avatarUrl={selectedRecipient.avatar_url} 
+                    fullName={selectedRecipient.full_name} 
+                    sizeClassName="size-11"
+                    textClassName="text-sm font-black"
+                  />
+
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-1.5 leading-snug">
+                      {selectedRecipient.full_name}
+                      {selectedRecipient.role === "admin" && (
+                        <span className="px-1.5 py-0.2 bg-amber-500/10 border border-amber-500/25 rounded text-[7px] font-black text-amber-700 tracking-wider">ADM</span>
+                      )}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block mt-0.5">
+                      {selectedRecipient.setor || "Sem setor específico"} • {selectedRecipient.cargo || "Membro Cedro"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Ações do header do chat */}
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    onClick={() => setChatSearchOpen(prev => {
+                      if (prev) setChatSearchQuery("");
+                      return !prev;
+                    })}
+                    className={`p-2 rounded-lg transition active:scale-95 shrink-0 ${
+                      chatSearchOpen 
+                        ? "bg-[#075618]/10 text-[#075618] border border-[#075618]/20" 
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-transparent"
+                    }`}
+                    title="Pesquisar na conversa"
+                  >
+                    <Search size={14} strokeWidth={2.5} />
+                  </button>
+
+                  <button 
+                    onClick={() => setViewingProfile(selectedRecipient)}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg active:scale-95 shrink-0 transition border border-transparent"
+                    title="Ver detalhes de perfil"
+                  >
+                    <Info size={14} strokeWidth={2.5} />
+                  </button>
+                </div>
               </div>
+
+              {/* BARRA DE PESQUISA INTERNA ATIVA */}
+              <AnimatePresence>
+                {chatSearchOpen && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="bg-white border-b border-slate-250 p-3 flex items-center gap-2 overflow-hidden shadow-3xs"
+                  >
+                    <Search size={13} className="text-slate-400 shrink-0 ml-1" />
+                    <input 
+                      type="text"
+                      placeholder="Filtrar por palavras-chave na conversa..."
+                      value={chatSearchQuery}
+                      onChange={(e) => setChatSearchQuery(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-xs py-1 px-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#075618]/50"
+                    />
+                    {chatSearchQuery && (
+                      <button 
+                        onClick={() => setChatSearchQuery("")}
+                        className="p-1 hover:bg-slate-100 text-slate-400 rounded-md shrink-0 template-btn"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* CORPO DE MENSAGENS */}
+              <div 
+                ref={scrollRef} 
+                className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 custom-scrollbar bg-slate-50/50"
+              >
+                {activeMessagesToShow.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                    <div className="size-12 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center mb-3.5 border border-slate-200 shadow-4xs">
+                      <MessageSquare size={18} />
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-tight">Nenhuma mensagem ainda</h3>
+                    <p className="text-xs text-slate-400/80 mt-1 max-w-[260px] leading-relaxed">
+                      Envie uma mensagem para iniciar a conversa.
+                    </p>
+                  </div>
+                ) : (
+                  (() => {
+                    const elements: React.ReactNode[] = [];
+                    let lastMessageDateStr = "";
+
+                    activeMessagesToShow.forEach((msg, idx) => {
+                      const idOwn = msg.sender_id === user?.id;
+                      
+                      // Adicionar separador de data se o dia mudou
+                      const msgDateStr = msg.created_at;
+                      if (!lastMessageDateStr || !isSameDay(lastMessageDateStr, msgDateStr)) {
+                        elements.push(
+                          <div key={`date-${msg.id}`} className="flex items-center justify-center my-6 gap-3 select-none">
+                            <div className="h-px bg-slate-200 flex-1"></div>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider px-2.5 bg-slate-50/5" style={{ background: "#f8fafc" }}>
+                              {getFriendlyDateLabel(msgDateStr)}
+                            </span>
+                            <div className="h-px bg-slate-200 flex-1"></div>
+                          </div>
+                        );
+                        lastMessageDateStr = msgDateStr;
+                      }
+
+                      const showAvatar = idx === 0 || activeMessagesToShow[idx-1].sender_id !== msg.sender_id || (elements[elements.length - 1] as any)?.key?.startsWith("date-");
+
+                      elements.push(
+                        <motion.div 
+                          initial={{ opacity: 0, y: 5 }} 
+                          animate={{ opacity: 1, y: 0 }} 
+                          key={msg.id} 
+                          className={`flex gap-3 max-w-[85%] md:max-w-[70%] ${idOwn ? "ml-auto flex-row-reverse" : "mr-auto flex-row"}`}
+                        >
+                          {/* Avatar */}
+                          <div className="size-8 shrink-0">
+                            {showAvatar && (
+                              <button 
+                                onClick={() => msg.sender_profile && setViewingProfile(msg.sender_profile as UserProfile)}
+                                className="transition hover:scale-105 active:scale-95 cursor-pointer"
+                              >
+                                <ChatAvatar 
+                                  avatarUrl={msg.sender_profile?.avatar_url} 
+                                  fullName={msg.sender_profile?.full_name} 
+                                  sizeClassName="size-8"
+                                  textClassName="text-[10px]"
+                                />
+                              </button>
+                            )}
+                          </div>
+                          
+                          {/* Conteúdo do balão */}
+                          <div className={`space-y-1 ${idOwn ? "items-end text-right" : "items-start text-left"}`}>
+                            {showAvatar && (
+                              <div className={`flex items-baseline gap-1.5 select-none ${idOwn ? "flex-row-reverse" : "flex-row"}`}>
+                                <span className="text-[10px] font-bold text-slate-705 uppercase tracking-tight">
+                                  {msg.sender_profile?.full_name || "Membro Cedro"}
+                                </span>
+                                <span className="text-[8px] font-semibold text-slate-400 uppercase">
+                                  {formatMessageTime(msg.created_at)}
+                                </span>
+                              </div>
+                            )}
+                            <div className={`p-3 px-4 rounded-xl text-xs font-semibold leading-relaxed shadow-4xs border whitespace-pre-wrap ${
+                              idOwn 
+                                ? "bg-[#e2f5e7] text-slate-800 border-emerald-100 rounded-tr-none text-left" 
+                                : "bg-white text-slate-800 border-slate-200/80 rounded-tl-none text-left"
+                            }`}>
+                              {highlightTerm(msg.content, chatSearchQuery)}
+
+                              {/* Exibição de Anexos */}
+                              {(msg.attachment_url) && (
+                                <div className="mt-2.5 pt-2 border-t border-slate-200/40 flex items-center gap-2">
+                                  <div className="p-1.5 bg-slate-100 rounded-md text-slate-500">
+                                    <FileText size={16} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-bold text-slate-700 truncate">{msg.attachment_name || "Documento"}</p>
+                                    <p className="text-[9px] text-slate-400">
+                                      {msg.attachment_size ? `${Math.round(msg.attachment_size / 1024)} KB` : "Arquivo"}
+                                    </p>
+                                  </div>
+                                  <a 
+                                    href={msg.attachment_url} 
+                                    target="_blank" 
+                                    rel="noreferrer referrer"
+                                    className="p-1 text-[#075618] hover:bg-slate-50 rounded-lg transition"
+                                    title="Baixar anexo"
+                                  >
+                                    <Download size={14} />
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    });
+                    
+                    return elements;
+                  })()
+                )}
+              </div>
+
+              {/* BARRA DE PRÉVIA DE ANEXO SELECIONADO */}
+              {selectedFile && (
+                <div className="p-2.5 px-6 bg-slate-100 border-t border-slate-200 flex items-center justify-between gap-3 text-xs select-none">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Paperclip size={14} className="text-slate-500 shrink-0" />
+                    <span className="font-bold text-slate-700 truncate max-w-[200px]">{selectedFile.name}</span>
+                    <span className="text-[10px] text-slate-450 shrink-0">({Math.round(selectedFile.size / 1024)} KB)</span>
+                  </div>
+                  <button 
+                    onClick={handleRemoveFile}
+                    className="p-1 bg-white hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-full transition cursor-pointer"
+                    title="Remover anexo"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {/* BARRA DE AVISOS OU ERROS DE SISTEMA */}
+              {uiError && (
+                <div className="bg-rose-50 border-t border-rose-100 p-2.5 px-6 text-xs text-rose-800 font-bold tracking-tight text-center select-none">
+                  ⚠️ {uiError}
+                </div>
+              )}
+
+              {/* CAMPO DE COMPOSIÇÃO FIXO (RODAPÉ) */}
+              <div className="p-4 bg-white border-t border-slate-200/80 shadow-3xs relative">
+                
+                {/* Painel do Seletor de Emojis */}
+                <AnimatePresence>
+                  {isEmojiOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsEmojiOpen(false)} 
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute bottom-16 left-4 z-50 bg-white p-3 rounded-2xl border border-slate-200 shadow-lg flex gap-1.5 items-center max-w-sm"
+                      >
+                        {SUGGESTED_EMOJIS.map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => handleEmojiClick(emoji)}
+                            className="p-1.5 hover:bg-slate-100 rounded-lg text-lg transition active:scale-95 cursor-pointer"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+                  
+                  {/* Inputs ocultos de arquivos */}
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleFileSelect} 
+                  />
+
+                  {/* Anexar arquivo e emojis */}
+                  <div className="flex items-center gap-1 text-slate-400 select-none shrink-0">
+                    <button 
+                      type="button"
+                      onClick={handleFileClick}
+                      className="p-1.5 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition cursor-pointer"
+                      title="Anexar parecer de IA ou arquivos"
+                    >
+                      <Paperclip size={15} />
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setIsEmojiOpen(prev => !prev)}
+                      className={`p-1.5 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition cursor-pointer ${isEmojiOpen ? "text-[#075618] bg-slate-100" : ""}`}
+                      title="Inserir emoji"
+                    >
+                      <Smile size={15} />
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    ref={inputRef}
+                    placeholder="Digite sua mensagem corporativa..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl outline-none py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-[#075618]/50 focus:bg-white transition"
+                    disabled={uploading}
+                  />
+                  
+                  <button 
+                    type="submit"
+                    disabled={(!newMessage.trim() && !selectedFile) || uploading}
+                    className="size-8.5 flex items-center justify-center bg-[#075618] hover:bg-[#053e11] disabled:opacity-40 disabled:hover:bg-[#075618] text-white rounded-lg transition shrink-0 cursor-pointer shadow-3xs active:scale-95"
+                    title="Enviar"
+                  >
+                    <Send size={13} fill="currentColor" />
+                  </button>
+                </form>
+
+                <div className="mt-2.5 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-wider px-1 select-none">
+                  <span className="flex items-center gap-1">
+                    <span className="size-1 bg-[#075618] rounded-full inline-block animate-pulse" /> Mensagem segura e confidencial
+                  </span>
+                  <span>Canal interno</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ESTADO VAGIO PADRAO DA CONVERSA */
+            <div className="flex-1 h-full flex flex-col items-center justify-center text-center p-8 bg-slate-50/20">
+              <div className="size-14 bg-emerald-50 text-[#075618] border border-emerald-100 rounded-2xl flex items-center justify-center mb-4 shadow-3xs">
+                <MessageSquare size={24} />
+              </div>
+              <h3 className="text-base font-bold text-slate-800 uppercase tracking-tight">Selecione uma conversa</h3>
+              <p className="text-xs text-slate-400 max-w-xs mt-1 leading-relaxed">
+                Escolha um profissional de audito ou governança na lista ao lado para iniciar conversas, compartilhar pareces de IA e anexos de auditoria de forma criptografada.
+              </p>
             </div>
-            
-            <button 
-              type="submit"
-              disabled={!newMessage.trim() || (activeTab === "private" && !selectedRecipient)}
-              className="w-16 h-16 flex items-center justify-center bg-brand-green hover:bg-emerald-400 text-black rounded-[1.8rem] transition-all active:scale-90 disabled:opacity-50 disabled:grayscale shadow-2xl shadow-brand-green/20 group/send"
-            >
-              <Send size={24} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-            </button>
-          </form>
-          <div className="mt-4 flex items-center justify-between px-4">
-            <div className="flex gap-4">
-              <span className="text-[8px] font-black text-white uppercase tracking-widest flex items-center gap-1.5">
-                <div className="size-1 rounded-full bg-brand-green shadow-[0_0_5px_rgba(0,255,101,1)]"></div> Canal Seguro
-              </span>
-              <span className="text-[8px] font-black text-emerald-100/60 uppercase tracking-widest flex items-center gap-1.5">
-                <div className="size-1 rounded-full bg-emerald-500/50"></div> Latência: 12ms
-              </span>
-            </div>
-            <p className="text-[8px] font-black text-emerald-100/40 uppercase tracking-tight">Pressione Shift + Enter para quebra de linha</p>
-          </div>
+          )}
         </div>
       </div>
 
+      {/* MODAL INICIAR NOVA CONVERSA */}
+      <AnimatePresence>
+        {isNewChatOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-3xs"
+            onClick={() => {
+              setIsNewChatOpen(false);
+              setNewChatSearch("");
+            }}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-slate-200 flex flex-col h-[400px]"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-slate-150 flex justify-between items-center bg-slate-50 select-none">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Iniciar Conversa</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">Selecione um profissional do Cedro Labs</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setIsNewChatOpen(false);
+                    setNewChatSearch("");
+                  }}
+                  className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-3 border-b border-slate-100">
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text"
+                    placeholder="Buscar profissional por nome, setor ou cargo..."
+                    value={newChatSearch}
+                    onChange={(e) => setNewChatSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-[#075618]/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
+                {modalUsersRoster.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 select-none">
+                    <p className="text-xs uppercase font-black tracking-wider">Profissional não cadastrado</p>
+                  </div>
+                ) : (
+                  modalUsersRoster.map(rosterUser => (
+                    <div 
+                      key={rosterUser.id}
+                      onClick={() => {
+                        setSelectedConvId(rosterUser.id);
+                        setIsNewChatOpen(false);
+                        setNewChatSearch("");
+                      }}
+                      className="p-3.5 hover:bg-slate-50 flex items-center gap-3 cursor-pointer transition select-none"
+                    >
+                      <ChatAvatar 
+                        avatarUrl={rosterUser.avatar_url} 
+                        fullName={rosterUser.full_name} 
+                        sizeClassName="size-8.5"
+                        textClassName="text-xs"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-tight">{rosterUser.full_name}</h4>
+                        <p className="text-[9px] text-[#075618] font-bold uppercase tracking-wider truncate mb-0.5">{rosterUser.cargo}</p>
+                        <p className="text-[9px] text-slate-400 font-medium truncate uppercase">{rosterUser.setor || "NIT / Cedro"}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL AUDITOR VERIFICADO DE PERFIL */}
       <AnimatePresence>
         {viewingProfile && (
           <ProfileModal 

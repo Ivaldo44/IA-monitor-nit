@@ -119,7 +119,7 @@ export default function SystemControls({
             Controles Técnicos de Governança
           </h4>
           <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            Painel interno reservado a administradores do NIT Cedro para configuração em tempo real do ecossistema, simulação de diagnósticos de redundância e validação de conformidade da privacidade.
+            Área restrita para manutenção, monitoramento e integridade operacional do sistema.
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">

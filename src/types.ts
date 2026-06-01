@@ -212,6 +212,10 @@ export interface ChatMessage {
   is_private: boolean;
   recipient_id?: string;
   sender_profile?: UserProfile;
+  attachment_url?: string;
+  attachment_name?: string;
+  attachment_type?: string;
+  attachment_size?: number;
 }
 
 // ============================================================
