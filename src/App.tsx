@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck, Bell, ChevronLeft, ChevronDown } from "lucide-react";
+import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck, Bell, ChevronLeft, ChevronDown, Search, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusUso, UserProfile, StatusAuditoria, ApprovalWorkflow, ApprovalConfig } from "./types";
 import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles, updateUserProfile } from "./storage";
@@ -879,10 +879,15 @@ export default function App() {
           isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         } ${
           isSidebarCollapsed ? "md:w-20" : "md:w-72"
-        } fixed md:static inset-y-0 left-0 z-40 bg-gradient-to-b from-[#075618] via-[#053d10] to-[#022108] text-white border-r border-[#021d06] transition-all duration-300 ease-in-out md:flex flex-col shrink-0 overflow-hidden shadow-xl shadow-black/20 animate-fade-in`}
+        } fixed md:static inset-y-0 left-0 z-40 bg-gradient-to-b from-[#03230c] via-[#011406] to-[#000902] text-white border-r border-emerald-950/70 transition-all duration-300 ease-in-out md:flex flex-col shrink-0 md:overflow-visible overflow-hidden relative shadow-[4px_0_24px_rgba(0,0,0,0.3)] animate-fade-in`}
       >
-        <div className={`hidden md:block border-b border-emerald-950 bg-[#042A0D]/30 transition-all duration-300 overflow-hidden relative ${isSidebarCollapsed ? "h-20 p-3" : "h-28 p-6"}`}>
-          <div className="absolute inset-0 bg-[#00d136]/5 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        {/* Soft internal light overlay for visual thickness and premium glow */}
+        <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-[#00d136]/12 to-transparent pointer-events-none blur-3xl opacity-80" />
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#00d136]/4 to-transparent pointer-events-none blur-2xl opacity-60" />
+
+        {/* Brand Header Container with Larger Logo */}
+        <div className={`hidden md:block border-b border-emerald-950/40 bg-[#03200b]/20 transition-all duration-300 overflow-hidden relative ${isSidebarCollapsed ? "h-20 p-3" : "h-36 p-6"}`}>
+          <div className="absolute inset-0 bg-[#00d136]/8 blur-2xl rounded-full opacity-100 transition-opacity duration-300"></div>
           
           <div className="relative w-full h-full flex items-center justify-center">
             {/* Logo Completa (Visible when NOT collapsed) */}
@@ -892,7 +897,7 @@ export default function App() {
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
                 alt="Laboratório Cedro" 
-                className="h-10 w-auto brightness-0 invert object-contain"
+                className="h-24 w-auto brightness-0 invert object-contain filter drop-shadow-[0_6px_16px_rgba(0,209,54,0.3)] hover:scale-102 transition-transform duration-300"
               />
             </div>
 
@@ -903,29 +908,33 @@ export default function App() {
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
                 alt="Símbolo Laboratório Cedro" 
-                className="h-9 w-auto brightness-0 invert object-contain" 
+                className="h-10 w-auto brightness-0 invert object-contain filter drop-shadow-[0_2px_8px_rgba(0,209,54,0.2)]" 
               />
             </div>
           </div>
         </div>
 
-        <nav className={`mt-8 flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar transition-all duration-300 ${isSidebarCollapsed ? "px-2" : ""}`}>
+        {/* Navigation items with elegant styling */}
+        <nav className={`mt-8 flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar transition-all duration-300 relative z-10 ${isSidebarCollapsed ? "px-2" : ""}`}>
           {sidebarGroups.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-2 transition-all duration-300 relative">
-              {/* Discrete divider when collapsed */}
+              {/* Discrete horizontal group divider */}
               {groupIdx > 0 && (
-                <div className={`border-t border-emerald-900/10 transition-all duration-300 mx-3 ${
-                  isSidebarCollapsed ? "my-4" : "hidden h-0"
+                <div className={`transition-all duration-300 ${
+                  isSidebarCollapsed 
+                    ? "border-t border-emerald-950/50 mx-3 my-4" 
+                    : "border-t border-emerald-500/10 mx-3 pt-4 mb-2"
                 }`} />
               )}
               
-              <div className={`text-[10px] font-black uppercase tracking-[0.1em] text-emerald-200/50 transition-all duration-300 ${
-                isSidebarCollapsed ? "opacity-0 h-0 my-0 overflow-hidden pointer-events-none" : "px-4 mb-3 opacity-100 h-auto mt-2"
+              {/* Section titles in uppercase, desaturated small green */}
+              <div className={`text-[9px] font-black uppercase tracking-[0.16em] text-emerald-400/50 transition-all duration-300 ${
+                isSidebarCollapsed ? "opacity-0 h-0 my-0 overflow-hidden pointer-events-none" : "px-4 mb-2.5 opacity-100 h-auto mt-1"
               }`}>
                 {group.title}
               </div>
               
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {group.items.map((item) => (
                   <button
                     key={item.id}
@@ -935,16 +944,16 @@ export default function App() {
                       if (window.innerWidth < 768) setIsSidebarOpen(false);
                     }}
                     title={isSidebarCollapsed ? item.label : undefined}
-                    className={`w-full group flex items-center rounded-xl font-medium transition-all duration-300 relative overflow-hidden ${
-                      isSidebarCollapsed ? "justify-center p-3.5 gap-0" : "gap-3.5 px-4 py-3"
+                    className={`w-full group flex items-center rounded-xl font-semibold transition-all duration-200 relative overflow-hidden ${
+                      isSidebarCollapsed ? "justify-center p-3 gap-0" : "gap-3.5 px-4 py-3"
                     } ${
                       activeTab === item.id 
-                        ? "bg-white/10 text-white font-extrabold border-l-4 border-l-emerald-400" 
+                        ? "bg-gradient-to-r from-[#00d136]/18 to-[#00d136]/2 text-white border-l-4 border-l-[#00d136] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]" 
                         : "text-emerald-100/70 hover:text-white hover:bg-white/5"
                     }`}
                   >
-                    <item.icon size={20} className={`shrink-0 transition-all duration-300 ${
-                      activeTab === item.id ? "text-emerald-300" : "text-emerald-100/50 group-hover:text-emerald-50/90"
+                    <item.icon size={17} className={`shrink-0 transition-all duration-300 ${
+                      activeTab === item.id ? "text-[#00d136] scale-110" : "text-emerald-200/40 group-hover:text-emerald-50/90 group-hover:scale-105"
                     } ${isSidebarCollapsed ? "mx-auto" : ""}`} />
                     
                     <span className={`tracking-tight transition-all duration-300 text-xs whitespace-nowrap origin-left ${
@@ -954,12 +963,6 @@ export default function App() {
                     }`}>
                       {item.label}
                     </span>
-                    
-                    {!isSidebarCollapsed && activeTab === item.id && (
-                      <div className="ml-auto flex items-center gap-1 shrink-0 transition-opacity duration-300">
-                        <div className="size-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                      </div>
-                    )}
                   </button>
                 ))}
               </div>
@@ -967,96 +970,128 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Sidebar Collapse Footer Toggle */}
-        <div className="p-4 border-t border-emerald-950/60 bg-[#021f07]/50 hidden md:block">
-          <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className={`w-full flex items-center hover:bg-white/5 text-emerald-100/65 hover:text-white rounded-lg transition-all duration-300 text-xs font-semibold cursor-pointer active:scale-95 ${
-              isSidebarCollapsed ? "justify-center p-2" : "justify-start gap-2.5 px-3 py-2"
-            }`}
-            title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-          >
-            <div className={`transition-transform duration-300 ${isSidebarCollapsed ? "rotate-180" : "rotate-0"}`}>
-              <ChevronLeft size={18} className="shrink-0" />
+        {/* Sidebar Footer with brand */}
+        <div className="p-6 border-t border-emerald-950/40 bg-[#010a03]/50 mt-auto select-none md:block hidden relative z-10 shrink-0">
+          {!isSidebarCollapsed ? (
+            <div className="flex items-center gap-3">
+              <img 
+                src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
+                alt="Laboratório Cedro" 
+                className="h-7 w-auto brightness-0 invert object-contain opacity-75"
+              />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-white/90 uppercase tracking-wider leading-none">Cedro IA</span>
+              </div>
             </div>
-            
-            <span className={`tracking-tight transition-all duration-300 whitespace-nowrap overflow-hidden ${
-              isSidebarCollapsed ? "opacity-0 w-0 pointer-events-none" : "opacity-100 w-auto ml-1"
-            }`}>
-              Recolher menu
-            </span>
-          </button>
+          ) : (
+            <div className="flex flex-col items-center justify-center">
+              <img 
+                src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
+                alt="Símbolo Cedro" 
+                className="h-5 w-auto brightness-0 invert opacity-65"
+              />
+            </div>
+          )}
         </div>
+
+        {/* Overlapping Expand/Collapse Round White Button */}
+        <button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute bottom-16 -right-3.5 size-7 rounded-full bg-white text-slate-700 hover:text-[#00d136] border border-slate-200/95 flex items-center justify-center transition-all duration-300 cursor-pointer active:scale-90 shadow-[0_4px_12px_rgba(0,0,0,0.18)] z-50 md:flex hidden hover:scale-106"
+          title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          <ChevronLeft size={13} className={`transition-transform duration-300 ${isSidebarCollapsed ? "rotate-180" : "rotate-0"}`} />
+        </button>
 
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#FAF9F6]">
-        <header className="bg-white/85 backdrop-blur-md border-b border-slate-100 px-8 py-4.5 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-          <div className="flex items-center gap-4">
-            {/* Online Status Bullet */}
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
-              <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest">Status: Online</span>
+        <header className="bg-white border-b border-slate-200/80 px-6 md:px-8 h-20 flex items-center justify-between sticky top-0 z-30 shadow-xs select-none shrink-0 w-full">
+          {/* Main Left Block */}
+          <div className="flex items-center gap-4.5 flex-1 min-w-0">
+            {/* Hamburger Button with Menu Icon */}
+            <button 
+              onClick={() => {
+                if (window.innerWidth >= 768) {
+                  setIsSidebarCollapsed(!isSidebarCollapsed);
+                } else {
+                  setIsSidebarOpen(!isSidebarOpen);
+                }
+              }}
+              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition-all cursor-pointer active:scale-95 shrink-0"
+              title="Menu Lateral"
+            >
+              <Menu size={20} />
+            </button>
+
+            {/* Gorgeous Rounded Horizontal Search Bar */}
+            <div className="relative flex items-center w-full max-w-sm md:w-80 lg:w-[24rem]">
+              <Search size={15} className="absolute left-4.5 text-slate-400 pointer-events-none" />
+              <input 
+                type="text"
+                placeholder="Buscar IAs, análises, alertas..."
+                className="w-full pl-11 pr-14 py-2.5 bg-white border border-slate-200/80 rounded-full text-xs text-slate-700 focus:outline-none focus:border-[#00d136] focus:ring-4 focus:ring-[#00d136]/5 shadow-2xs font-semibold placeholder-slate-400 transition-all"
+              />
+              <div className="absolute right-4.5 flex items-center select-none pointer-events-none">
+                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] font-extrabold text-slate-400 bg-slate-50 border border-slate-200 rounded font-sans leading-none">⌘ K</kbd>
+              </div>
             </div>
-            
-            {/* Title Block with dynamic index indicator */}
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2.5">
-              <span className="text-slate-300 font-mono text-xs font-bold leading-none">
-                / 0{Math.max(1, menuItems.findIndex(m => m.id === activeTab) + 1)}
-              </span>
-              Mapeamento IA
-              <span className="text-[10px] px-2.5 py-1 bg-slate-50 border border-slate-200/60 text-slate-500 font-bold rounded-lg uppercase tracking-wider shrink-0">
-                {menuItems.find(m => m.id === activeTab)?.label}
-              </span>
-            </h2>
           </div>
 
-          <div className="flex items-center gap-5">
+          {/* Main Right Block */}
+          <div className="flex items-center gap-4 pl-4 shrink-0">
             
-            {/* Interactive Alerts Bell */}
+            {/* Alerts Bell (Sino) Button with real unread count */}
             <button 
               onClick={() => setActiveTab("alerts")} 
-              className="p-2.5 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl relative transition-all active:scale-95 text-slate-500 hover:text-[#075618] shrink-0 cursor-pointer shadow-sm"
-              title="Alertas"
+              className="size-10 flex items-center justify-center p-2.5 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 rounded-full relative transition-all active:scale-95 text-slate-600 hover:text-[#00d136] shrink-0 cursor-pointer shadow-2xs"
+              title="Notificações"
             >
               <Bell size={18} />
               {activeUnreadAlertsCount > 0 && (
-                <span className="absolute -top-1 -right-1 size-5 bg-rose-500 text-white text-[9px] font-extrabold rounded-full flex items-center justify-center border-2 border-white animate-bounce shadow">
-                  {activeUnreadAlertsCount}
-                </span>
+                <span className="absolute top-1.5 right-1.5 size-2 bg-[#00d136] rounded-full border border-white shadow-xs animate-pulse" />
               )}
             </button>
 
-            {/* User Logged Block */}
+            {/* Help/Interrogation button */}
+            <button 
+              className="size-10 flex items-center justify-center p-2.5 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 rounded-full relative transition-all active:scale-95 text-slate-600 hover:text-[#00d136] shrink-0 cursor-pointer shadow-2xs"
+              title="Ajuda"
+            >
+              <HelpCircle size={18} />
+            </button>
+
+            {/* User Block with perfect alignment */}
             <div 
               onClick={() => setActiveTab("profile")}
-              className="hidden sm:flex items-center gap-3.5 pl-3.5 border-l border-slate-100 cursor-pointer group"
-              title="Visualizar Perfil"
+              className="flex items-center gap-3 pl-4.5 border-l border-slate-200 cursor-pointer group select-none"
+              title="Meu Perfil"
             >
-              <div className="text-right">
-                <div className="flex items-center gap-1.5 justify-end">
-                  {isCurrentUserAdmin && (
-                    <span className="text-[8px] font-black bg-emerald-500/10 border border-emerald-500/10 text-emerald-700 px-1.5 py-0.5 rounded uppercase shrink-0">
-                      ADMIN
-                    </span>
-                  )}
-                  <p className="text-[11px] font-black text-slate-700 group-hover:text-[#075618] transition-colors leading-tight">
-                    {profile?.full_name || "Usuário"}
-                  </p>
-                </div>
-                <p className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest">
-                  {profile?.cargo || "Colaborador"}
-                </p>
-              </div>
-              
-              <div className="w-9.5 h-9.5 rounded-xl border border-slate-100 overflow-hidden flex items-center justify-center p-0.5 bg-white group-hover:border-[#075618] transition-colors shadow-sm shrink-0">
+              <div className="size-10.5 rounded-full border border-slate-100 overflow-hidden flex items-center justify-center p-0.5 bg-white group-hover:border-[#00d136] transition-all shadow-sm shrink-0">
                 {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-[8px]" />
+                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-full" />
                 ) : (
                   <UserCircle size={22} className="text-slate-400" />
                 )}
               </div>
+              
+              <div className="flex flex-col text-left hidden sm:flex">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-black text-slate-800 group-hover:text-[#00d136] transition-colors leading-tight">
+                    {profile?.full_name || "Membro Cedro"}
+                  </p>
+                  {isCurrentUserAdmin && (
+                    <span className="text-[8px] font-black bg-emerald-500/10 border border-emerald-500/20 text-[#00d136] px-1.5 py-0.5 rounded uppercase font-sans shrink-0 leading-none">
+                      ADMIN
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] font-bold text-[#00d136] uppercase tracking-wider mt-0.5">
+                  {profile?.cargo || "Colaborador"}
+                </p>
+              </div>
+              
               <ChevronDown size={14} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
             </div>
 
@@ -1073,7 +1108,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
               className={`max-w-[95rem] mx-auto relative ${
-                activeTab === "dashboard" || activeTab === "alerts"
+                activeTab === "dashboard" || activeTab === "alerts" || activeTab === "profile"
                   ? "p-0 bg-transparent border-0 shadow-none text-slate-800" 
                   : "bg-[var(--bg-card-page)] border-4 border-[var(--border-page)] rounded-[3rem] p-6 md:p-10 shadow-2xl text-[var(--text-bright)]"
               }`}

@@ -216,6 +216,7 @@ export interface ChatMessage {
   attachment_name?: string;
   attachment_type?: string;
   attachment_size?: number;
+  status?: "sending" | "error";
 }
 
 // ============================================================

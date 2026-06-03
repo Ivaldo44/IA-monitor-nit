@@ -256,15 +256,59 @@ export const Chat: React.FC = () => {
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .or(`and(sender_id.eq.${user.id},recipient_id.eq.${selectedConvId}),and(sender_id.eq.${selectedConvId},recipient_id.eq.${user.id})`)
-        .order("created_at", { ascending: true })
-        .limit(150);
+      console.log("Carregando mensagens para a conversa:", selectedConvId);
+      let data = null;
+      let error = null;
 
-      if (!error && data) {
-        const enriched = (data || []).map((msg: any) => {
+      // 1. Tentar a consulta .or() combinada padrão do PostgREST
+      try {
+        const res = await supabase
+          .from("messages")
+          .select("*")
+          .or(`and(sender_id.eq.${user.id},recipient_id.eq.${selectedConvId}),and(sender_id.eq.${selectedConvId},recipient_id.eq.${user.id})`)
+          .order("created_at", { ascending: true })
+          .limit(150);
+        data = res.data;
+        error = res.error;
+      } catch (orErr) {
+        console.warn("Falha de parser na query .or() combinada, usando manual...", orErr);
+      }
+
+      // 2. Se falhar ou do banco retornar erro, usar busca por consultas separadas (absolutamente imune a falhas)
+      if (error || !data) {
+        console.log("Buscando mensagens separadamente para máxima compatibilidade...");
+        const [sentRes, recvRes] = await Promise.all([
+          supabase
+            .from("messages")
+            .select("*")
+            .eq("sender_id", user.id)
+            .eq("recipient_id", selectedConvId)
+            .limit(100),
+          supabase
+            .from("messages")
+            .select("*")
+            .eq("sender_id", selectedConvId)
+            .eq("recipient_id", user.id)
+            .limit(100)
+        ]);
+
+        if (sentRes.error) {
+          console.error("Erro na busca de enviadas:", sentRes.error);
+        }
+        if (recvRes.error) {
+          console.error("Erro na busca de recebidas:", recvRes.error);
+        }
+
+        const combined = [...(sentRes.data || []), ...(recvRes.data || [])];
+        combined.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        data = combined;
+        error = null;
+      }
+
+      console.log("Mensagens carregadas do Supabase:", data);
+
+      if (data) {
+        const enriched = data.map((msg: any) => {
           let senderProfile = null;
           if (msg.sender_id === user.id) {
             senderProfile = profile;
@@ -279,7 +323,7 @@ export const Chat: React.FC = () => {
         setMessages(enriched);
       }
     } catch (err) {
-      console.error("Erro ao carregar mensagens reais do Supabase:", err);
+      console.error("Erro fatal ao carregar mensagens reais do Supabase:", err);
     } finally {
       setLoading(false);
     }
@@ -289,13 +333,44 @@ export const Chat: React.FC = () => {
   const fetchAllLastMessages = async () => {
     if (!user?.id) return;
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-        .order("created_at", { ascending: false });
+      let data = null;
+      let error = null;
 
-      if (!error && data) {
+      try {
+        const res = await supabase
+          .from("messages")
+          .select("*")
+          .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+          .order("created_at", { ascending: false });
+        data = res.data;
+        error = res.error;
+      } catch (orErr) {
+        console.warn("Falha no .or de busca das últimas mensagens:", orErr);
+      }
+
+      if (error || !data) {
+        const [sentRes, recvRes] = await Promise.all([
+          supabase
+            .from("messages")
+            .select("*")
+            .eq("sender_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(100),
+          supabase
+            .from("messages")
+            .select("*")
+            .eq("recipient_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(100)
+        ]);
+
+        const combined = [...(sentRes.data || []), ...(recvRes.data || [])];
+        combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        data = combined;
+        error = null;
+      }
+
+      if (data) {
         const lastMsgs: Record<string, ChatMessage> = {};
         data.forEach((msg: ChatMessage) => {
           const partnerId = msg.sender_id === user.id ? msg.recipient_id : msg.sender_id;
@@ -504,13 +579,68 @@ export const Chat: React.FC = () => {
     e.preventDefault();
     if (!newMessage.trim() && !selectedFile) return;
 
+    if (!user?.id) {
+      setUiError("Você precisa estar autenticado para enviar mensagens.");
+      return;
+    }
+
+    if (!selectedConvId) {
+      setUiError("Selecione um profissional para conversar.");
+      return;
+    }
+
     const textToSend = newMessage.trim();
     const fileToUpload = selectedFile;
 
-    // Limpar estados imediatamente para melhorar a responsividade
+    // 1. Validar anexo antes de prosseguir
+    if (fileToUpload) {
+      const allowedExts = ["pdf", "doc", "docx", "xls", "xlsx", "png", "jpg", "jpeg", "txt"];
+      const fileExt = fileToUpload.name.split('.').pop()?.toLowerCase();
+      if (!fileExt || !allowedExts.includes(fileExt)) {
+        setUiError("Tipo de arquivo não permitido.");
+        return;
+      }
+
+      const maxSize = 10 * 1024 * 1024; // 10 MB
+      if (fileToUpload.size > maxSize) {
+        setUiError("O arquivo excede o tamanho máximo permitido de 10 MB.");
+        return;
+      }
+    }
+
+    setUiError("");
+
+    // 2. Criar mensagem otimista temporária imediatamente
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: ChatMessage = {
+      id: tempId,
+      created_at: new Date().toISOString(),
+      sender_id: user.id,
+      content: textToSend || `Anexou arquivo: ${fileToUpload ? fileToUpload.name : ""}`,
+      is_private: true,
+      recipient_id: selectedConvId,
+      sender_profile: profile || undefined,
+      status: "sending"
+    };
+
+    if (fileToUpload) {
+      tempMessage.attachment_name = fileToUpload.name;
+      tempMessage.attachment_size = fileToUpload.size;
+      tempMessage.attachment_type = fileToUpload.type;
+    }
+
+    // Inserir localmente instantaneamente!
+    setMessages(prev => [...prev, tempMessage]);
+
+    // Atualizar mapa de última mensagem instantaneamente na sidebar
+    setLastMessagesMap(prev => ({
+      ...prev,
+      [selectedConvId]: tempMessage
+    }));
+
+    // Limpar estados na hora para melhorar a responsividade
     setNewMessage("");
     setSelectedFile(null);
-    setUiError("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -519,14 +649,16 @@ export const Chat: React.FC = () => {
     let attachment_name = "";
     let attachment_type = "";
     let attachment_size = 0;
+    let uploadFailed = false;
 
     if (fileToUpload) {
       setUploading(true);
       try {
-        const fileExt = fileToUpload.name.split('.').pop();
+        const fileExt = fileToUpload.name.split('.').pop()?.toLowerCase();
         const fileName = `${Math.random().toString(36).substring(2, 11)}-${Date.now()}.${fileExt}`;
-        const filePath = `${user?.id}/${fileName}`;
+        const filePath = `${user.id}/${fileName}`;
 
+        // Tenta fazer o upload para o bucket chat-attachments
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from("chat-attachments")
           .upload(filePath, fileToUpload);
@@ -545,51 +677,111 @@ export const Chat: React.FC = () => {
           attachment_type = fileToUpload.type;
           attachment_size = fileToUpload.size;
         }
-      } catch (storageErr) {
+      } catch (storageErr: any) {
         console.error("Falha ao realizar o upload:", storageErr);
-        // Exibir erro amigável de armazenamento exatamente como solicitado
-        setUiError("Não foi possível anexar o arquivo. Verifique a configuração de armazenamento.");
-        setTimeout(() => setUiError(""), 6000);
-        setUploading(false);
-        return;
+        uploadFailed = true;
+        setUiError("Bucket de anexos não configurado. Crie o bucket chat-attachments no Supabase Storage.");
+        
+        // Se NÃO há texto digitado, não dá para enviar nada no banco. Restauramos e interrompemos.
+        if (!textToSend) {
+          setUploading(false);
+          setNewMessage(textToSend);
+          setSelectedFile(fileToUpload);
+          setMessages(prev => prev.filter(m => m.id !== tempId));
+          return;
+        }
       } finally {
         setUploading(false);
       }
     }
 
     try {
-      const payload = {
+      const payload: any = {
         content: textToSend || `Anexou arquivo: ${attachment_name}`,
-        sender_id: user?.id || "myself",
+        sender_id: user.id,
         is_private: true,
         recipient_id: selectedConvId,
-        attachment_url: attachment_url || null,
-        attachment_name: attachment_name || null,
-        attachment_type: attachment_type || null,
-        attachment_size: attachment_size || null
+        attachment_url: uploadFailed ? null : (attachment_url || null),
+        attachment_name: uploadFailed ? null : (attachment_name || null),
+        attachment_type: uploadFailed ? null : (attachment_type || null),
+        attachment_size: uploadFailed ? null : (attachment_size || null)
       };
 
-      const { data: insertData, error: insertError } = await supabase
+      console.log("Enviando mensagem:", payload);
+
+      let insertData = null;
+      let insertError = null;
+
+      // 1. Tentar inserção completa com suporte a anexo
+      const res1 = await supabase
         .from("messages")
         .insert(payload)
         .select()
         .single();
+      
+      insertData = res1.data;
+      insertError = res1.error;
 
-       if (!insertError && insertData) {
+      // 2. Se der erro por falta de colunas (anexos ausentes na tabela do Supabase legado)
+      if (insertError && (insertError.code === "42703" || insertError.message?.includes("attachment") || insertError.message?.includes("column"))) {
+        console.warn("Tabela remote 'messages' não suporta anexos ainda. Tentando persistência com fallback básico de texto.");
+        
+        let fallbackText = textToSend;
+        if (attachment_url && !uploadFailed) {
+          fallbackText = (textToSend ? textToSend + "\n\n" : "") + `📎 Arquivo Anexo: [${attachment_name}](${attachment_url})`;
+        }
+
+        const basicPayload = {
+          content: fallbackText || "📎 Anexo enviado",
+          sender_id: user.id,
+          is_private: true,
+          recipient_id: selectedConvId
+        };
+
+        const res2 = await supabase
+          .from("messages")
+          .insert(basicPayload)
+          .select()
+          .single();
+        
+        insertData = res2.data;
+        insertError = res2.error;
+      }
+
+      if (insertError) {
+        console.error("Erro ao salvar mensagem no Supabase:", insertError);
+        setUiError(`Erro ao enviar mensagem: ${insertError.message || insertError.details || "Código do banco: " + insertError.code}`);
+        
+        // Marcar mensagem local temporária como erro
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "error" } : m));
+        // Restaurar para que o usuário possa tentar novamente
+        setNewMessage(textToSend);
+        setSelectedFile(fileToUpload);
+        return;
+      }
+
+      if (insertData) {
+        console.log("Mensagem salva com sucesso:", insertData);
+
         const enrichedInsert = {
           ...insertData,
           sender_profile: profile
         };
+
+        // Substituir a mensagem temporária local pela real retornada pelo Supabase!
         setMessages(prev => {
-          if (prev.some(m => m.id === enrichedInsert.id)) return prev;
-          return [...prev, enrichedInsert];
+          return prev.map(m => m.id === tempId ? enrichedInsert : m);
         });
+
+        // Atualizar listagem de prévias lateral
         fetchAllLastMessages();
       }
-    } catch (dbErr) {
-      console.error("Erro ao salvar mensagem:", dbErr);
-      setUiError("Erro ao enviar a mensagem para o banco.");
-      setTimeout(() => setUiError(""), 5000);
+    } catch (dbErr: any) {
+      console.error("Erro fatal ao processar envio de mensagem:", dbErr);
+      setUiError(`Erro ao processar envio: ${dbErr.message || dbErr}`);
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: "error" } : m));
+      setNewMessage(textToSend);
+      setSelectedFile(fileToUpload);
     }
   };
 
@@ -953,9 +1145,19 @@ export const Chat: React.FC = () => {
                                 <span className="text-[10px] font-bold text-slate-705 uppercase tracking-tight">
                                   {msg.sender_profile?.full_name || "Membro Cedro"}
                                 </span>
-                                <span className="text-[8px] font-semibold text-slate-400 uppercase">
-                                  {formatMessageTime(msg.created_at)}
-                                </span>
+                                {msg.status === "sending" ? (
+                                  <span className="text-[8px] font-black text-amber-600 uppercase animate-pulse select-none">
+                                    Enviando...
+                                  </span>
+                                ) : msg.status === "error" ? (
+                                  <span className="text-[8px] font-black text-rose-500 uppercase select-none">
+                                    Falha ao enviar
+                                  </span>
+                                ) : (
+                                  <span className="text-[8px] font-semibold text-slate-400 uppercase">
+                                    {formatMessageTime(msg.created_at)}
+                                  </span>
+                                )}
                               </div>
                             )}
                             <div className={`p-3 px-4 rounded-xl text-xs font-semibold leading-relaxed shadow-4xs border whitespace-pre-wrap ${
@@ -966,7 +1168,7 @@ export const Chat: React.FC = () => {
                               {highlightTerm(msg.content, chatSearchQuery)}
 
                               {/* Exibição de Anexos */}
-                              {(msg.attachment_url) && (
+                              {(msg.attachment_url || msg.attachment_name) && (
                                 <div className="mt-2.5 pt-2 border-t border-slate-200/40 flex items-center gap-2">
                                   <div className="p-1.5 bg-slate-100 rounded-md text-slate-500">
                                     <FileText size={16} />
@@ -975,20 +1177,32 @@ export const Chat: React.FC = () => {
                                     <p className="text-[11px] font-bold text-slate-700 truncate">{msg.attachment_name || "Documento"}</p>
                                     <p className="text-[9px] text-slate-400">
                                       {msg.attachment_size ? `${Math.round(msg.attachment_size / 1024)} KB` : "Arquivo"}
+                                      {msg.status === "sending" && <span className="ml-1 text-amber-500 animate-pulse">(Anexando...)</span>}
                                     </p>
                                   </div>
-                                  <a 
-                                    href={msg.attachment_url} 
-                                    target="_blank" 
-                                    rel="noreferrer referrer"
-                                    className="p-1 text-[#075618] hover:bg-slate-50 rounded-lg transition"
-                                    title="Baixar anexo"
-                                  >
-                                    <Download size={14} />
-                                  </a>
+                                  {msg.attachment_url ? (
+                                    <a 
+                                      href={msg.attachment_url} 
+                                      target="_blank" 
+                                      rel="noreferrer referrer"
+                                      className="p-1 text-[#075618] hover:bg-slate-50 rounded-lg transition"
+                                      title="Baixar anexo"
+                                    >
+                                      <Download size={14} />
+                                    </a>
+                                  ) : (
+                                    <span className="text-[10px] text-amber-500 font-bold inline-block animate-pulse">...</span>
+                                  )}
                                 </div>
                               )}
                             </div>
+
+                            {(!showAvatar && (msg.status === "sending" || msg.status === "error")) && (
+                              <div className={`text-[8px] font-bold uppercase select-none ${idOwn ? "text-right text-slate-400" : "text-left text-slate-400"}`}>
+                                {msg.status === "sending" && <span className="text-amber-600 animate-pulse">Enviando...</span>}
+                                {msg.status === "error" && <span className="text-rose-500">Falha ao enviar</span>}
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       );
