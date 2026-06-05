@@ -864,7 +864,7 @@ export default function App() {
       {/* Mobile Header */}
       <div className="md:hidden bg-gradient-to-r from-[#075618] to-[#04330e] p-4 flex justify-between items-center border-b border-emerald-950 sticky top-0 z-50 text-white">
         <div className="flex items-center gap-2">
-          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA Logo" className="h-8 w-auto brightness-0 invert" />
+          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA – Laboratório Cedro" className="h-8 w-auto brightness-0 invert" />
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white">
@@ -886,18 +886,19 @@ export default function App() {
         <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#00d136]/4 to-transparent pointer-events-none blur-2xl opacity-60" />
 
         {/* Brand Header Container with Larger Logo */}
-        <div className={`hidden md:block border-b border-emerald-950/40 bg-[#03200b]/20 transition-all duration-300 overflow-hidden relative ${isSidebarCollapsed ? "h-20 p-3" : "h-36 p-6"}`}>
+        <div className={`hidden md:block border-b border-emerald-950/40 bg-[#03200b]/20 transition-all duration-300 overflow-hidden relative ${isSidebarCollapsed ? "h-20 p-3" : "h-32 px-6 py-6"}`}>
           <div className="absolute inset-0 bg-[#00d136]/8 blur-2xl rounded-full opacity-100 transition-opacity duration-300"></div>
           
-          <div className="relative w-full h-full flex items-center justify-center">
+          <div className="relative w-full h-full flex items-center">
             {/* Logo Completa (Visible when NOT collapsed) */}
-            <div className={`transition-all duration-300 absolute inset-0 flex items-center justify-center px-4 ${
+            <div className={`transition-all duration-300 absolute inset-0 flex items-center justify-start px-6 ${
               isSidebarCollapsed ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
             }`}>
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
-                alt="Laboratório Cedro" 
-                className="h-24 w-auto brightness-0 invert object-contain filter drop-shadow-[0_6px_16px_rgba(0,209,54,0.3)] hover:scale-102 transition-transform duration-300"
+                alt="Cedro IA – Laboratório Cedro" 
+                className="h-16 w-auto brightness-0 invert object-contain filter drop-shadow-[0_4px_12px_rgba(0,209,54,0.35)] hover:scale-102 transition-all duration-200"
+                referrerPolicy="no-referrer"
               />
             </div>
 
@@ -907,7 +908,7 @@ export default function App() {
             }`}>
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
-                alt="Símbolo Laboratório Cedro" 
+                alt="Símbolo Cedro IA" 
                 className="h-10 w-auto brightness-0 invert object-contain filter drop-shadow-[0_2px_8px_rgba(0,209,54,0.2)]" 
               />
             </div>
@@ -976,7 +977,7 @@ export default function App() {
             <div className="flex items-center gap-3">
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
-                alt="Laboratório Cedro" 
+                alt="Cedro IA – Laboratório Cedro" 
                 className="h-7 w-auto brightness-0 invert object-contain opacity-75"
               />
               <div className="flex flex-col">
@@ -987,7 +988,7 @@ export default function App() {
             <div className="flex flex-col items-center justify-center">
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
-                alt="Símbolo Cedro" 
+                alt="Símbolo Cedro IA" 
                 className="h-5 w-auto brightness-0 invert opacity-65"
               />
             </div>

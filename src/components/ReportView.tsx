@@ -184,7 +184,7 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
             ))}
           </div>
         </div>
-        <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="" className="absolute right-[-40px] top-[-40px] size-[400px] opacity-5 -rotate-12 brightness-0 pointer-events-none" />
+        <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA – Laboratório Cedro" className="absolute right-[-40px] top-[-40px] size-[400px] opacity-5 -rotate-12 brightness-0 pointer-events-none" />
       </div>
 
       {/* Conteúdo Laudo */}

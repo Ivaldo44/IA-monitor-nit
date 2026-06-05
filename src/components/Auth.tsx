@@ -88,7 +88,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           <div className="flex justify-center">
             <img 
               src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
-              alt="Cedro IA Logo" 
+              alt="Cedro IA – Laboratório Cedro" 
               className="h-32 w-auto [filter:var(--logo-filter)]" 
             />
           </div>
