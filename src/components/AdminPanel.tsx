@@ -347,7 +347,7 @@ export default function AdminPanel({
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-200">
         <div>
           <h1 id="admin-panel-title" className="text-3xl font-bold tracking-tight text-slate-900">
-            Gestão Admin
+            Administração IA
           </h1>
         </div>
         
