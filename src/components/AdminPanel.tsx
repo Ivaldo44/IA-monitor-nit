@@ -65,6 +65,12 @@ export default function AdminPanel({
   onNavigate
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>("approvals");
+
+  useEffect(() => {
+    if (activeTab === "system_controls") {
+      setActiveTab("approvals");
+    }
+  }, [activeTab]);
   const [approvalFilter, setApprovalFilter] = useState<StatusAuditoria | "all">(StatusAuditoria.PENDENTE);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
@@ -166,14 +172,15 @@ export default function AdminPanel({
     };
   }, [records, profiles, registeredSectorsList]);
 
-  // Custom 5 workflow steps config
+  // Custom 6 workflow steps config
   const workflowSteps = useMemo(() => {
     return approvalConfig?.steps ?? [
       { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false },
       { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false },
       { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false },
-      { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true },
-      { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false },
+      { stepNumber: 4, roleName: "Período de Teste", isOpinionOnly: false },
+      { stepNumber: 5, roleName: "Análise Financeira", isOpinionOnly: true },
+      { stepNumber: 6, roleName: "Presidência", isOpinionOnly: false },
     ];
   }, [approvalConfig]);
 
@@ -433,7 +440,6 @@ export default function AdminPanel({
             { id: "approvals", label: "Cadastro de IAs" },
             { id: "sectors", label: "Setores" },
             { id: "users", label: "Usuários" },
-            { id: "system_controls", label: "Controle do sistema" },
           ].map(tab => (
             <button
               key={tab.id}

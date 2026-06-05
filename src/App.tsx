@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck, Bell, ChevronLeft, ChevronDown, Search, HelpCircle } from "lucide-react";
+import { LayoutDashboard, ClipboardList, PlusCircle, FileText, Menu, X, ChevronRight, Activity, ShieldAlert, CheckCircle2, AlertTriangle, Users, Database, MessageSquare, UserCircle, Building2, ShieldCheck, Bell, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, StatusUso, UserProfile, StatusAuditoria, ApprovalWorkflow, ApprovalConfig } from "./types";
 import { getRecords, deleteRecord, addRecord, updateRecord, checkSupabaseStatus, saveRecordsToSupabase, getProfiles, updateUserProfile } from "./storage";
@@ -120,8 +120,9 @@ export default function App() {
       { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false },
       { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false },
       { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false },
-      { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true },
-      { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false },
+      { stepNumber: 4, roleName: "Período de Teste", isOpinionOnly: false },
+      { stepNumber: 5, roleName: "Análise Financeira", isOpinionOnly: true },
+      { stepNumber: 6, roleName: "Presidência", isOpinionOnly: false },
     ]
   });
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -209,7 +210,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.error("Erro ao carregar dados de aprovação:", e);
+      console.warn("Erro ao carregar dados de aprovação:", e);
     }
   };
 
@@ -819,7 +820,7 @@ export default function App() {
       itemIds: ["dashboard", "inventory", "new"]
     },
     {
-      title: "Administração e Governança",
+      title: "Administração",
       itemIds: ["approval_queue", "sectors", "sectors_mgr", "admin"],
       show: isCurrentUserAdmin
     },
@@ -862,7 +863,7 @@ export default function App() {
       <div className={`min-h-screen flex flex-col md:flex-row font-sans selection:bg-brand-green selection:text-black transition-colors duration-300 bg-[var(--bg-main)] ${isDarkMode ? "dark" : ""}`}>
       <LabBackground />
       {/* Mobile Header */}
-      <div className="md:hidden bg-gradient-to-r from-[#075618] to-[#04330e] p-4 flex justify-between items-center border-b border-emerald-950 sticky top-0 z-50 text-white">
+      <div className="md:hidden bg-gradient-to-r from-[#004D24] to-[#003F1D] p-4 flex justify-between items-center border-b-2 border-[#F58220] sticky top-0 z-50 text-white">
         <div className="flex items-center gap-2">
           <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA – Laboratório Cedro" className="h-8 w-auto brightness-0 invert" />
         </div>
@@ -879,26 +880,30 @@ export default function App() {
           isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         } ${
           isSidebarCollapsed ? "md:w-20" : "md:w-72"
-        } fixed md:static inset-y-0 left-0 z-40 bg-gradient-to-b from-[#03230c] via-[#011406] to-[#000902] text-white border-r border-emerald-950/70 transition-all duration-300 ease-in-out md:flex flex-col shrink-0 md:overflow-visible overflow-hidden relative shadow-[4px_0_24px_rgba(0,0,0,0.3)] animate-fade-in`}
+        } fixed md:static inset-y-0 left-0 z-40 bg-gradient-to-b from-[#004D24] via-[#003F1D] to-[#002F16] text-white border-r border-[#003F1D]/40 transition-all duration-300 ease-in-out md:flex flex-col shrink-0 md:overflow-visible overflow-hidden relative shadow-[4px_0_24px_rgba(0,0,0,0.3)] animate-fade-in`}
       >
         {/* Soft internal light overlay for visual thickness and premium glow */}
-        <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-[#00d136]/12 to-transparent pointer-events-none blur-3xl opacity-80" />
-        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#00d136]/4 to-transparent pointer-events-none blur-2xl opacity-60" />
+        <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-[#00d136]/10 to-transparent pointer-events-none blur-3xl opacity-80" />
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#00d136]/3 to-transparent pointer-events-none blur-2xl opacity-60" />
 
         {/* Brand Header Container with Larger Logo */}
-        <div className={`hidden md:block border-b border-emerald-950/40 bg-[#03200b]/20 transition-all duration-300 overflow-hidden relative ${isSidebarCollapsed ? "h-20 p-3" : "h-32 px-6 py-6"}`}>
+        <div className={`hidden md:block transition-all duration-300 border-b border-white/10 bg-black/15 overflow-hidden relative ${
+          isSidebarCollapsed 
+            ? "h-20 p-3" 
+            : "h-32 px-6 py-6"
+        }`}>
           <div className="absolute inset-0 bg-[#00d136]/8 blur-2xl rounded-full opacity-100 transition-opacity duration-300"></div>
           
-          <div className="relative w-full h-full flex items-center">
+          <div className="relative w-full h-full flex items-center justify-center">
             {/* Logo Completa (Visible when NOT collapsed) */}
-            <div className={`transition-all duration-300 absolute inset-0 flex items-center justify-start px-6 ${
+            <div className={`transition-all duration-300 absolute inset-0 flex items-center justify-center ${
               isSidebarCollapsed ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
             }`}>
-              <img 
-                src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
-                alt="Cedro IA – Laboratório Cedro" 
-                className="h-16 w-auto brightness-0 invert object-contain filter drop-shadow-[0_4px_12px_rgba(0,209,54,0.35)] hover:scale-102 transition-all duration-200"
-                referrerPolicy="no-referrer"
+              <img
+                src="/logo-cedro-ia-white.png"
+                alt="Cedro IA - Laboratório Cedro"
+                className="w-full max-w-[245px] h-auto object-contain drop-shadow-[0_4px_12px_rgba(0,209,54,0.15)]"
+                draggable={false}
               />
             </div>
 
@@ -910,26 +915,29 @@ export default function App() {
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
                 alt="Símbolo Cedro IA" 
                 className="h-10 w-auto brightness-0 invert object-contain filter drop-shadow-[0_2px_8px_rgba(0,209,54,0.2)]" 
+                referrerPolicy="no-referrer"
               />
             </div>
           </div>
         </div>
 
         {/* Navigation items with elegant styling */}
-        <nav className={`mt-8 flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar transition-all duration-300 relative z-10 ${isSidebarCollapsed ? "px-2" : ""}`}>
+        <nav className={`flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar transition-all duration-300 relative z-10 ${
+          isSidebarCollapsed ? "mt-4 px-2" : "mt-8"
+        }`}>
           {sidebarGroups.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-2 transition-all duration-300 relative">
               {/* Discrete horizontal group divider */}
               {groupIdx > 0 && (
                 <div className={`transition-all duration-300 ${
                   isSidebarCollapsed 
-                    ? "border-t border-emerald-950/50 mx-3 my-4" 
-                    : "border-t border-emerald-500/10 mx-3 pt-4 mb-2"
+                    ? "border-t border-white/10 mx-3 my-4" 
+                    : "border-t border-white/10 mx-3 pt-4 mb-2"
                 }`} />
               )}
               
-              {/* Section titles in uppercase, desaturated small green */}
-              <div className={`text-[9px] font-black uppercase tracking-[0.16em] text-emerald-400/50 transition-all duration-300 ${
+              {/* Section titles in uppercase, desaturated green-white */}
+              <div className={`text-[11px] font-black uppercase tracking-[0.16em] text-emerald-100/60 transition-all duration-300 ${
                 isSidebarCollapsed ? "opacity-0 h-0 my-0 overflow-hidden pointer-events-none" : "px-4 mb-2.5 opacity-100 h-auto mt-1"
               }`}>
                 {group.title}
@@ -945,19 +953,19 @@ export default function App() {
                       if (window.innerWidth < 768) setIsSidebarOpen(false);
                     }}
                     title={isSidebarCollapsed ? item.label : undefined}
-                    className={`w-full group flex items-center rounded-xl font-semibold transition-all duration-200 relative overflow-hidden ${
+                    className={`w-full group flex items-center rounded-xl font-bold transition-all duration-200 relative overflow-hidden ${
                       isSidebarCollapsed ? "justify-center p-3 gap-0" : "gap-3.5 px-4 py-3"
                     } ${
                       activeTab === item.id 
-                        ? "bg-gradient-to-r from-[#00d136]/18 to-[#00d136]/2 text-white border-l-4 border-l-[#00d136] shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]" 
-                        : "text-emerald-100/70 hover:text-white hover:bg-white/5"
+                        ? "bg-gradient-to-r from-[#00d136]/24 to-[#00d136]/4 text-white border-l-4 border-l-[#00d136] shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]" 
+                        : "text-emerald-100/85 hover:text-white hover:bg-white/10"
                     }`}
                   >
-                    <item.icon size={17} className={`shrink-0 transition-all duration-300 ${
-                      activeTab === item.id ? "text-[#00d136] scale-110" : "text-emerald-200/40 group-hover:text-emerald-50/90 group-hover:scale-105"
+                    <item.icon size={19} className={`shrink-0 transition-all duration-300 ${
+                      activeTab === item.id ? "text-[#00d136] scale-110" : "text-emerald-200/60 group-hover:text-emerald-50/90 group-hover:scale-105"
                     } ${isSidebarCollapsed ? "mx-auto" : ""}`} />
                     
-                    <span className={`tracking-tight transition-all duration-300 text-xs whitespace-nowrap origin-left ${
+                    <span className={`tracking-tight transition-all duration-300 text-sm whitespace-nowrap origin-left ${
                       isSidebarCollapsed 
                         ? "opacity-0 translate-x-3 w-0 max-w-0 overflow-hidden pointer-events-none" 
                         : "opacity-100 translate-x-0 w-auto max-w-[200px]"
@@ -972,17 +980,15 @@ export default function App() {
         </nav>
 
         {/* Sidebar Footer with brand */}
-        <div className="p-6 border-t border-emerald-950/40 bg-[#010a03]/50 mt-auto select-none md:block hidden relative z-10 shrink-0">
+        <div className="p-6 border-t border-white/10 bg-black/15 mt-auto select-none md:block hidden relative z-10 shrink-0">
           {!isSidebarCollapsed ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-start">
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
                 alt="Cedro IA – Laboratório Cedro" 
-                className="h-7 w-auto brightness-0 invert object-contain opacity-75"
+                className="h-8 w-auto brightness-0 invert object-contain opacity-75 hover:opacity-100 transition-opacity duration-200"
+                referrerPolicy="no-referrer"
               />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-white/90 uppercase tracking-wider leading-none">Cedro IA</span>
-              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center">
@@ -1008,92 +1014,53 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#FAF9F6]">
-        <header className="bg-white border-b border-slate-200/80 px-6 md:px-8 h-20 flex items-center justify-between sticky top-0 z-30 shadow-xs select-none shrink-0 w-full">
-          {/* Main Left Block */}
-          <div className="flex items-center gap-4.5 flex-1 min-w-0">
-            {/* Hamburger Button with Menu Icon */}
-            <button 
-              onClick={() => {
-                if (window.innerWidth >= 768) {
-                  setIsSidebarCollapsed(!isSidebarCollapsed);
-                } else {
-                  setIsSidebarOpen(!isSidebarOpen);
-                }
-              }}
-              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition-all cursor-pointer active:scale-95 shrink-0"
-              title="Menu Lateral"
-            >
-              <Menu size={20} />
-            </button>
-
-            {/* Gorgeous Rounded Horizontal Search Bar */}
-            <div className="relative flex items-center w-full max-w-sm md:w-80 lg:w-[24rem]">
-              <Search size={15} className="absolute left-4.5 text-slate-400 pointer-events-none" />
-              <input 
-                type="text"
-                placeholder="Buscar IAs, análises, alertas..."
-                className="w-full pl-11 pr-14 py-2.5 bg-white border border-slate-200/80 rounded-full text-xs text-slate-700 focus:outline-none focus:border-[#00d136] focus:ring-4 focus:ring-[#00d136]/5 shadow-2xs font-semibold placeholder-slate-400 transition-all"
-              />
-              <div className="absolute right-4.5 flex items-center select-none pointer-events-none">
-                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] font-extrabold text-slate-400 bg-slate-50 border border-slate-200 rounded font-sans leading-none">⌘ K</kbd>
-              </div>
-            </div>
-          </div>
-
+        <header className="bg-[#003F1D] border-b-3 border-[#F58220] px-6 md:px-8 h-20 flex items-center justify-end sticky top-0 z-30 shadow-md select-none shrink-0 w-full">
           {/* Main Right Block */}
           <div className="flex items-center gap-4 pl-4 shrink-0">
             
             {/* Alerts Bell (Sino) Button with real unread count */}
             <button 
               onClick={() => setActiveTab("alerts")} 
-              className="size-10 flex items-center justify-center p-2.5 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 rounded-full relative transition-all active:scale-95 text-slate-600 hover:text-[#00d136] shrink-0 cursor-pointer shadow-2xs"
+              className="size-10 flex items-center justify-center p-2.5 bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-800/40 hover:border-emerald-700/60 rounded-full relative transition-all active:scale-95 text-emerald-100 hover:text-white shrink-0 cursor-pointer shadow-sm"
               title="Notificações"
             >
               <Bell size={18} />
               {activeUnreadAlertsCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 size-2 bg-[#00d136] rounded-full border border-white shadow-xs animate-pulse" />
+                <span className="absolute top-1.5 right-1.5 size-2 bg-[#F58220] rounded-full border border-[#003F1D] shadow-sm animate-pulse" />
               )}
-            </button>
-
-            {/* Help/Interrogation button */}
-            <button 
-              className="size-10 flex items-center justify-center p-2.5 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 rounded-full relative transition-all active:scale-95 text-slate-600 hover:text-[#00d136] shrink-0 cursor-pointer shadow-2xs"
-              title="Ajuda"
-            >
-              <HelpCircle size={18} />
             </button>
 
             {/* User Block with perfect alignment */}
             <div 
               onClick={() => setActiveTab("profile")}
-              className="flex items-center gap-3 pl-4.5 border-l border-slate-200 cursor-pointer group select-none"
+              className="flex items-center gap-3 pl-4.5 border-l border-emerald-800/40 cursor-pointer group select-none"
               title="Meu Perfil"
             >
-              <div className="size-10.5 rounded-full border border-slate-100 overflow-hidden flex items-center justify-center p-0.5 bg-white group-hover:border-[#00d136] transition-all shadow-sm shrink-0">
+              <div className="size-10.5 rounded-full border border-emerald-900/40 overflow-hidden flex items-center justify-center p-0.5 bg-emerald-950/20 group-hover:border-emerald-400 transition-all shadow-sm shrink-0">
                 {profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-full" />
                 ) : (
-                  <UserCircle size={22} className="text-slate-400" />
+                  <UserCircle size={22} className="text-emerald-100" />
                 )}
               </div>
               
               <div className="flex flex-col text-left hidden sm:flex">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-black text-slate-800 group-hover:text-[#00d136] transition-colors leading-tight">
+                  <p className="text-xs font-black text-white group-hover:text-emerald-300 transition-colors leading-tight">
                     {profile?.full_name || "Membro Cedro"}
                   </p>
                   {isCurrentUserAdmin && (
-                    <span className="text-[8px] font-black bg-emerald-500/10 border border-emerald-500/20 text-[#00d136] px-1.5 py-0.5 rounded uppercase font-sans shrink-0 leading-none">
+                    <span className="text-[8px] font-black bg-emerald-800/30 border border-emerald-600/30 text-emerald-200 px-1.5 py-0.5 rounded uppercase font-sans shrink-0 leading-none">
                       ADMIN
                     </span>
                   )}
                 </div>
-                <p className="text-[10px] font-bold text-[#00d136] uppercase tracking-wider mt-0.5">
+                <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mt-0.5">
                   {profile?.cargo || "Colaborador"}
                 </p>
               </div>
               
-              <ChevronDown size={14} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
+              <ChevronDown size={14} className="text-emerald-200 group-hover:text-white transition-colors" />
             </div>
 
           </div>

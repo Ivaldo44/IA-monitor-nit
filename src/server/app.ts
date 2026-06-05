@@ -248,8 +248,9 @@ router.post("/workflow/init", async (req, res) => {
       { step_number: 1, role_name: "Coordenador NIT", is_opinion_only: false },
       { step_number: 2, role_name: "Gerente NIT", is_opinion_only: false },
       { step_number: 3, role_name: "Gerente TI", is_opinion_only: false },
-      { step_number: 4, role_name: "Análise Financeira", is_opinion_only: true },
-      { step_number: 5, role_name: "Presidência", is_opinion_only: false },
+      { step_number: 4, role_name: "Período de Teste", is_opinion_only: false },
+      { step_number: 5, role_name: "Análise Financeira", is_opinion_only: true },
+      { step_number: 6, role_name: "Presidência", is_opinion_only: false },
     ];
 
     const stepsToInsert = (configRows && configRows.length > 0)
@@ -376,8 +377,9 @@ router.post("/workflow/decide", async (req, res) => {
           { step_number: 1, role_name: "Coordenador NIT", is_opinion_only: false },
           { step_number: 2, role_name: "Gerente NIT", is_opinion_only: false },
           { step_number: 3, role_name: "Gerente TI", is_opinion_only: false },
-          { step_number: 4, role_name: "Análise Financeira", is_opinion_only: true },
-          { step_number: 5, role_name: "Presidência", is_opinion_only: false },
+          { step_number: 4, role_name: "Período de Teste", is_opinion_only: false },
+          { step_number: 5, role_name: "Análise Financeira", is_opinion_only: true },
+          { step_number: 6, role_name: "Presidência", is_opinion_only: false },
         ];
 
         const stepsToInsert = (configRows && configRows.length > 0)
@@ -438,8 +440,9 @@ router.post("/workflow/decide", async (req, res) => {
         { step_number: 1, role_name: "Coordenador NIT", is_opinion_only: false },
         { step_number: 2, role_name: "Gerente NIT", is_opinion_only: false },
         { step_number: 3, role_name: "Gerente TI", is_opinion_only: false },
-        { step_number: 4, role_name: "Análise Financeira", is_opinion_only: true },
-        { step_number: 5, role_name: "Presidência", is_opinion_only: false },
+        { step_number: 4, role_name: "Período de Teste", is_opinion_only: false },
+        { step_number: 5, role_name: "Análise Financeira", is_opinion_only: true },
+        { step_number: 6, role_name: "Presidência", is_opinion_only: false },
       ];
 
       const stepsToInsert = (configRows && configRows.length > 0)
@@ -528,7 +531,7 @@ router.post("/workflow/decide", async (req, res) => {
       .select("step_number")
       .eq("workflow_id", wfData.id);
 
-    const totalSteps = allSteps?.length ?? 5;
+    const totalSteps = allSteps?.length ?? 6;
     const nextStep = wfData.current_step + 1;
 
     let finalStatus = "pendente";
@@ -539,7 +542,7 @@ router.post("/workflow/decide", async (req, res) => {
       // Regra 6: Ao negar uma etapa, finaliza o workflow como negado e atualiza a IA correspondente
       finalStatus = "negado";
       newAuditStatus = "Negado";
-      newStatusUso = "Negado";
+      newStatusUso = "Não aprovado";
       await supabaseAdmin
         .from("approval_workflows")
         .update({ current_step: wfData.current_step, final_status: "negado", completed_at: new Date().toISOString() })
@@ -559,6 +562,14 @@ router.post("/workflow/decide", async (req, res) => {
         .from("approval_workflows")
         .update({ current_step: nextStep })
         .eq("id", wfData.id);
+
+      if (nextStep === 4) {
+        newStatusUso = "Em teste/piloto";
+      } else if (nextStep > 4) {
+        newStatusUso = "Em teste/piloto";
+      } else {
+        newStatusUso = "Em avaliação";
+      }
     }
 
     // 7. Atualizar o registro da IA no banco

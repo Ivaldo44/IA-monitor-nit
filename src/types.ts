@@ -231,7 +231,7 @@ export interface ApprovalStep {
   status: "aguardando" | "aprovado" | "negado" | "opiniao";
   comment?: string;
   decidedAt?: string;
-  isOpinionOnly?: boolean;   // true para etapa 4 (Análise Financeira)
+  isOpinionOnly?: boolean;   // true para etapa 5 (Análise Financeira)
 }
 
 export interface ApprovalWorkflow {

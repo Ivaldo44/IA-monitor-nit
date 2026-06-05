@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   CheckCircle2, XCircle, Users, LayoutGrid, Search, 
   Filter, MoreHorizontal, ShieldCheck, ShieldAlert, ShieldX, 
@@ -38,12 +38,30 @@ export default function ApprovalPage({
       { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false },
       { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false },
       { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false },
-      { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true },
-      { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false },
+      { stepNumber: 4, roleName: "Período de Teste", isOpinionOnly: false },
+      { stepNumber: 5, roleName: "Análise Financeira", isOpinionOnly: true },
+      { stepNumber: 6, roleName: "Presidência", isOpinionOnly: false },
     ]
   );
+
+  // Sincronizar estado ao carregar assincronamente do servidor
+  useEffect(() => {
+    if (approvalConfig?.steps && approvalConfig.steps.length > 0) {
+      setWorkflowConfig(approvalConfig.steps);
+    }
+  }, [approvalConfig]);
   const [workflowSaved, setWorkflowSaved] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [approvalSearchInput, setApprovalSearchInput] = useState("");
+  const [approvalSearchTerm, setApprovalSearchTerm] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setApprovalSearchTerm(approvalSearchInput);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [approvalSearchInput]);
+
   const [queueFilter, setQueueFilter] = useState<"pending" | "my_turn" | "all">("pending");
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   
@@ -87,6 +105,9 @@ export default function ApprovalPage({
   const [tiSeguranca, setTiSeguranca] = useState("Conforme (Criptografado e restrito)");
   const [tiIntegracao, setTiIntegracao] = useState("Não (Plataforma autônoma)");
 
+  // States for Período de Teste (Etapa 4)
+  const [periodoTesteConfirmado, setPeriodoTesteConfirmado] = useState<"Sim" | "Não">("Sim");
+
   // State to manage expanding/collapsing sections of the requester visualization
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     solicitante: true,
@@ -117,8 +138,9 @@ export default function ApprovalPage({
           { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false, userId: "", userName: "" },
           { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false, userId: "", userName: "" },
           { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false, userId: "", userName: "" },
-          { stepNumber: 4, roleName: "Análise Financeira", isOpinionOnly: true, userId: "", userName: "" },
-          { stepNumber: 5, roleName: "Presidência", isOpinionOnly: false, userId: "", userName: "" },
+          { stepNumber: 4, roleName: "Período de Teste", isOpinionOnly: false, userId: "", userName: "" },
+          { stepNumber: 5, roleName: "Análise Financeira", isOpinionOnly: true, userId: "", userName: "" },
+          { stepNumber: 6, roleName: "Presidência", isOpinionOnly: false, userId: "", userName: "" },
         ];
   }, [approvalConfig]);
 
@@ -129,9 +151,21 @@ export default function ApprovalPage({
 
   const filteredRecords = useMemo(() => {
     let list = records.filter(r => {
-      const matchesSearch = r.nomeFerramenta.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           r.unidadeSetor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           r.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const term = approvalSearchTerm.toLowerCase().trim();
+      if (!term) return true;
+
+      const wf = getRecordWf(r.id);
+      const currentStepNum = wf ? wf.currentStep : 1;
+      const stepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
+      const stageName = stepDef?.roleName || "";
+
+      const matchesSearch = 
+        r.nomeFerramenta.toLowerCase().includes(term) || 
+        r.unidadeSetor.toLowerCase().includes(term) ||
+        r.id.toLowerCase().includes(term) ||
+        (r.responsavelPreenchimento && r.responsavelPreenchimento.toLowerCase().includes(term)) ||
+        stageName.toLowerCase().includes(term);
+
       return matchesSearch;
     });
 
@@ -168,7 +202,7 @@ export default function ApprovalPage({
     }
 
     return list;
-  }, [records, queueFilter, searchTerm, workflows, currentSteps, currentUserId, profiles, isAdmin]);
+  }, [records, queueFilter, approvalSearchTerm, workflows, currentSteps, currentUserId, profiles, isAdmin]);
 
   const stats = useMemo(() => {
     const total = records.length;
@@ -257,7 +291,7 @@ export default function ApprovalPage({
 
       <AnimatePresence mode="wait">
         <motion.div
-          key={activeTab + queueFilter + searchTerm}
+          key={activeTab + queueFilter}
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -15 }}
@@ -267,7 +301,12 @@ export default function ApprovalPage({
             const activeRecord = (() => {
               if (filteredRecords.length === 0) return null;
               const found = filteredRecords.find(r => r.id === selectedRecordId);
-              return found || filteredRecords[0];
+              if (found) return found;
+              // Only do automatic fallback to first item on initial load/when search is not active
+              if (approvalSearchInput.trim() !== "") {
+                return null;
+              }
+              return filteredRecords[0];
             })();
 
             return (
@@ -277,7 +316,6 @@ export default function ApprovalPage({
                 <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-4 flex flex-col space-y-4 shadow-sm">
                   <div>
                     <h2 className="text-xs font-bold text-slate-800 uppercase tracking-tight">Fila de aprovação</h2>
-                    <p className="text-[11px] text-slate-400">Selecione uma solicitação para revisar</p>
                   </div>
 
                   {/* Filtros compactos - Minha vez, Pendentes, Todos */}
@@ -310,10 +348,9 @@ export default function ApprovalPage({
                     <input
                       type="text"
                       placeholder="Buscar ferramenta, ID, setor..."
-                      value={searchTerm}
+                      value={approvalSearchInput}
                       onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setSelectedRecordId(null);
+                        setApprovalSearchInput(e.target.value);
                       }}
                       className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-emerald-600 focus:bg-white transition-all shadow-inner"
                     />
@@ -454,7 +491,7 @@ export default function ApprovalPage({
 
                                   setTiInfra("Compatível / Cloud nativa");
                                   setTiSeguranca("Conforme (Criptografado e restrito)");
-                                  setTiIntegracao("Não (Plataforma autônoma)");
+                                  setTiIntegracao("Não (Plataforma autônoma)"); setPeriodoTesteConfirmado("Sim");;
                                 }}
                                 className="bg-[#03440c] hover:bg-[#03440c]/90 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                               >
@@ -645,9 +682,6 @@ export default function ApprovalPage({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Definir Responsáveis pelas Etapas</h3>
-                  <p className="text-xs text-[var(--text-muted)] font-bold mt-1">
-                    Atribua quais administradores ou moderadores do Laboratório Cedro assinam as decisões de conformidade.
-                  </p>
                 </div>
                 {workflowSaved && (
                   <span className="text-xs font-black text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-xl uppercase">✓ Configuração salva</span>
@@ -793,8 +827,10 @@ export default function ApprovalPage({
                              `• Segurança e LGPD: ${tiSeguranca}\n` +
                              `• Integração Sistemas TI: ${tiIntegracao}\n\n` +
                              `**Parecer:** ${auditComment || "Etapa validada tecnicamente pelo departamento de TI."}`;
+            } else if (currentStepNum === 4) {
+              finalComment = `Confirmação do Período de Teste: ${periodoTesteConfirmado}. Observações: ${auditComment || "Nenhuma observação informada."}`;
             } else {
-              // 4 e 5
+              // 5 e 6
               finalComment = auditComment || (status === StatusAuditoria.APROVADO ? "Parecer estratégico aprovado na íntegra." : "Recusado.");
             }
 
@@ -1805,33 +1841,89 @@ export default function ApprovalPage({
                       </div>
                     )}
 
-                    {/* Contas 4 (Análise Financeira) e 5 (Presidência) têm modo de visualização nua */}
-                    {(currentStepNum === 4 || currentStepNum === 5) && (
-                      <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
-                        <div className="flex items-center gap-2 text-amber-600">
-                          <ShieldAlert size={18} />
-                          <p className="text-[10px] font-black uppercase tracking-wider">Modo Exclusivo de Governança e Decisão</p>
+                    {/* Etapas de decisão / Formulários dinâmicos baseados no tipo de etapa */}
+                    {currentStepNum === 4 ? (
+                      <div className="bg-emerald-50/25 border-l-4 border-emerald-600 p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
+                        <div className="flex items-center gap-2 text-emerald-800">
+                          <CheckCircle2 size={18} />
+                          <h3 className="text-sm font-black uppercase tracking-wider">Confirmação do Período de Teste</h3>
                         </div>
-                        <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                          Este perfil de avaliador corporativo (<span className="text-slate-900 font-extrabold">{activeStepDef?.roleName}</span>) possui atribuição de análise estratégica direta.
-                          Você não necessita preencher campos técnicos adicionais. Avalie atentamente as informações prestadas pelo solicitante e os pareceres registrados de inovação, governança e TI para assinar sua decisão de etapa no final deste formulário.
+                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          Antes de avançar no fluxo, confirme se a ferramenta foi testada em ambiente adequado e se apresentou condições mínimas de uso.
                         </p>
-                      </div>
-                    )}
+                        
+                        <div className="space-y-2.5">
+                          <p className="text-xs font-bold text-slate-800">
+                            O período de teste foi realizado e a ferramenta demonstrou condições mínimas para seguir no fluxo de aprovação?
+                          </p>
+                          <div className="flex gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setPeriodoTesteConfirmado("Sim")}
+                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                                periodoTesteConfirmado === "Sim"
+                                  ? "bg-emerald-100/70 border-emerald-500 text-emerald-800 shadow-sm ring-2 ring-emerald-500/10"
+                                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                              }`}
+                            >
+                              <CheckCircle2 size={14} className={periodoTesteConfirmado === "Sim" ? "text-emerald-700" : "text-slate-400"} /> Sim
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPeriodoTesteConfirmado("Não")}
+                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                                periodoTesteConfirmado === "Não"
+                                  ? "bg-red-50/75 border-red-500 text-red-800 shadow-xs ring-2 ring-red-500/15"
+                                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                              }`}
+                            >
+                              <XCircle size={14} className={periodoTesteConfirmado === "Não" ? "text-red-650" : "text-slate-400"} /> Não
+                            </button>
+                          </div>
+                        </div>
 
-                    {/* Parecer de Texto Livre Comum a Todos */}
-                    <div className="space-y-2 pt-2">
-                      <label className="text-[10px] font-black text-[#03440c] uppercase tracking-[0.2em] flex items-center gap-1.5">
-                        <MessageSquare size={13} /> Parecer Técnico Justificado
-                      </label>
-                      <textarea 
-                        value={auditComment}
-                        onChange={(e) => setAuditComment(e.target.value)}
-                        placeholder="Insira aqui as considerações técnicas, recomendações ou motivos fundamentadores do parecer de aprovação ou repúdio técnica..."
-                        className="w-full h-32 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-2xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-inner"
-                        required
-                      />
-                    </div>
+                        {/* Campo Observações Opcional */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Observações (opcional)</label>
+                          <textarea
+                            value={auditComment}
+                            onChange={(e) => setAuditComment(e.target.value)}
+                            placeholder="Insira detalhes adicionais sobre o período de teste e suas condições técnicas..."
+                            className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-xs font-semibold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/10 outline-none transition-all resize-none shadow-inner"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Etapas 5 (Análise Financeira) e 6 (Presidência) têm modo de visualização nua */}
+                        {(currentStepNum === 5 || currentStepNum === 6) && (
+                          <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
+                            <div className="flex items-center gap-2 text-amber-600">
+                              <ShieldAlert size={18} />
+                              <p className="text-[10px] font-black uppercase tracking-wider">Modo Exclusivo de Governança e Decisão</p>
+                            </div>
+                            <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                              Este perfil de avaliador corporativo (<span className="text-slate-900 font-extrabold">{activeStepDef?.roleName}</span>) possui atribuição de análise estratégica direta.
+                              Você não necessita preencher campos técnicos adicionais. Avalie atentamente as informações prestadas pelo solicitante e os pareceres registrados de inovação, governança e TI para assinar sua decisão de etapa no final deste formulário.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Parecer de Texto Livre Comum a Todos (exceto Etapa 4 que é embutido) */}
+                        <div className="space-y-2 pt-2">
+                          <label className="text-[10px] font-black text-[#03440c] uppercase tracking-[0.2em] flex items-center gap-1.5">
+                            <MessageSquare size={13} /> Parecer Técnico Justificado
+                          </label>
+                          <textarea 
+                            value={auditComment}
+                            onChange={(e) => setAuditComment(e.target.value)}
+                            placeholder="Insira aqui as considerações técnicas, recomendações ou motivos fundamentadores do parecer de aprovação ou repúdio técnica..."
+                            className="w-full h-32 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-2xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-inner"
+                            required
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Ações / Botões Finais de Aprovar ou Negar no Final do Formulário */}
@@ -1842,20 +1934,44 @@ export default function ApprovalPage({
                     >
                       Cancelar
                     </button>
-                    <div className="flex items-center gap-3">
+                    {currentStepNum === 4 ? (
                       <button 
-                        onClick={() => handleDecisionSubmit(StatusAuditoria.NEGADO)}
-                        className="py-4 px-6 text-xs font-black text-white tracking-widest uppercase transition-all bg-red-600 hover:bg-red-700 hover:shadow-lg rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-200"
+                        onClick={() => {
+                          const statusToSubmit = periodoTesteConfirmado === "Sim" ? StatusAuditoria.APROVADO : StatusAuditoria.NEGADO;
+                          handleDecisionSubmit(statusToSubmit);
+                        }}
+                        className={`py-4 px-8 text-xs font-black text-white tracking-widest uppercase transition-all border rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                          periodoTesteConfirmado === "Sim" 
+                            ? "bg-emerald-700 hover:bg-emerald-800 border-emerald-600 shadow-emerald-200 hover:shadow-lg" 
+                            : "bg-red-600 hover:bg-red-750 border-red-500 shadow-red-200 hover:shadow-lg"
+                        }`}
                       >
-                        <XCircle size={15} /> Negar Etapa
+                        {periodoTesteConfirmado === "Sim" ? (
+                          <>
+                            <CheckCircle2 size={15} /> Confirmar Decisão (Aprovar)
+                          </>
+                        ) : (
+                          <>
+                            <XCircle size={15} /> Confirmar Decisão (Negar)
+                          </>
+                        )}
                       </button>
-                      <button 
-                        onClick={() => handleDecisionSubmit(StatusAuditoria.APROVADO)}
-                        className="py-4 px-7 text-xs font-black text-white tracking-widest uppercase transition-all bg-emerald-700 hover:bg-emerald-800 hover:shadow-lg rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
-                      >
-                        <CheckCircle2 size={15} /> Aprovar Etapa
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={() => handleDecisionSubmit(StatusAuditoria.NEGADO)}
+                          className="py-4 px-6 text-xs font-black text-white tracking-widest uppercase transition-all bg-red-600 hover:bg-red-700 hover:shadow-lg rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-200"
+                        >
+                          <XCircle size={15} /> Negar Etapa
+                        </button>
+                        <button 
+                          onClick={() => handleDecisionSubmit(StatusAuditoria.APROVADO)}
+                          className="py-4 px-7 text-xs font-black text-white tracking-widest uppercase transition-all bg-emerald-700 hover:bg-emerald-800 hover:shadow-lg rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
+                        >
+                          <CheckCircle2 size={15} /> Aprovar Etapa
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
