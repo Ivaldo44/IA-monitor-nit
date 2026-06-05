@@ -67,8 +67,8 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState<AdminTab>("approvals");
 
   useEffect(() => {
-    if (activeTab === "system_controls") {
-      setActiveTab("approvals");
+   if (activeTab === "system_controls" || activeTab === "sectors") {
+  setActiveTab("approvals");
     }
   }, [activeTab]);
   const [approvalFilter, setApprovalFilter] = useState<StatusAuditoria | "all">(StatusAuditoria.PENDENTE);
@@ -438,7 +438,6 @@ export default function AdminPanel({
         <div className="flex flex-wrap items-center gap-1">
           {[
             { id: "approvals", label: "Cadastro de IAs" },
-            { id: "sectors", label: "Setores" },
             { id: "users", label: "Usuários" },
           ].map(tab => (
             <button
@@ -777,8 +776,8 @@ export default function AdminPanel({
             </div>
           )}
 
-          {/* ==================== SETORES TAB ==================== */}
-          {activeTab === "sectors" && (
+         {/* ==================== SETORES TAB (OCULTA) ==================== */}
+            {false && activeTab === "sectors" && (
             <div className="space-y-6">
               
               {/* Sector Management Mode Selection */}
