@@ -807,7 +807,7 @@ export default function App() {
     { id: "approval_queue", label: "Aprovação de IAs", icon: ShieldCheck, privilegedOnly: true },
     { id: "sectors", label: "Mapa de IAs", icon: Users, adminOnly: true },
     { id: "sectors_mgr", label: "Setores", icon: Building2, adminOnly: true },
-    { id: "admin", label: "Gestão Admin", icon: ShieldAlert, adminOnly: false, privilegedOnly: true },
+    { id: "admin", label: "Administração IA", icon: ShieldAlert, adminOnly: false, privilegedOnly: true },
     { id: "new", label: "Nova Solicitação", icon: PlusCircle },
     { id: "alerts", label: "Alertas", icon: Bell },
     { id: "chat", label: "Chat", icon: MessageSquare },
