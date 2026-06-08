@@ -185,6 +185,7 @@ export interface IARecord {
 
   // 10. OBSERVAÇÕES
   observacoesGerais: string;
+  observacoesGeraisOriginais?: string;
   anexos: string;
   historico: Array<{ date: string; action: string; user?: string; message?: string }>;
 }

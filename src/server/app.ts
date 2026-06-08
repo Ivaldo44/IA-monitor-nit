@@ -525,52 +525,79 @@ router.post("/workflow/decide", async (req, res) => {
       })
       .eq("id", currentStepData.id);
 
-    // 6. Contar total de etapas
+    // 6. Contar total de etapas e calcular regras de fluxo dinamicamente
     const { data: allSteps } = await supabaseAdmin
       .from("approval_steps")
       .select("step_number")
       .eq("workflow_id", wfData.id);
 
-    const totalSteps = allSteps?.length ?? 6;
-    const nextStep = wfData.current_step + 1;
+    const stepNumbers = (allSteps || []).map((step: any) => Number(step.step_number));
+    const maxStep = stepNumbers.length > 0 ? Math.max(...stepNumbers) : 6;
+
+    const currentStepNumber = Number(wfData.current_step);
+    const nextStep = currentStepNumber + 1;
+    const isFinalStep = currentStepNumber === maxStep;
+    const isFinancialStep = currentStepNumber === 5;
 
     let finalStatus = "pendente";
     let newAuditStatus = "Pendente";
     let newStatusUso = "Em avaliação";
+    let workflowUpdatePayload: any = {};
 
-    if (decision === "negado") {
-      // Regra 6: Ao negar uma etapa, finaliza o workflow como negado e atualiza a IA correspondente
+    if (decision === "negado" && isFinancialStep) {
+      // Exceção: Análise Financeira desfavorável não reprova a IA.
+      finalStatus = "pendente";
+      newAuditStatus = "Pendente";
+      newStatusUso = "Em teste/piloto";
+
+      workflowUpdatePayload = {
+        current_step: nextStep,
+        final_status: "pendente",
+        completed_at: null
+      };
+    } else if (decision === "negado") {
+      // Negativa real nas demais etapas encerra o fluxo.
       finalStatus = "negado";
       newAuditStatus = "Negado";
       newStatusUso = "Não aprovado";
-      await supabaseAdmin
-        .from("approval_workflows")
-        .update({ current_step: wfData.current_step, final_status: "negado", completed_at: new Date().toISOString() })
-        .eq("id", wfData.id);
-    } else if (nextStep > totalSteps) {
-      // Regra 7: Ao aprovar a última etapa, finaliza o workflow como aprovado e atualiza a IA correspondente
+
+      workflowUpdatePayload = {
+        current_step: currentStepNumber,
+        final_status: "negado",
+        completed_at: new Date().toISOString()
+      };
+    } else if (decision === "aprovado" && isFinalStep) {
+      // Aprovação da Presidência encerra o fluxo como aprovado.
       finalStatus = "aprovado";
       newAuditStatus = "Aprovado";
       newStatusUso = "Aprovado";
-      await supabaseAdmin
-        .from("approval_workflows")
-        .update({ current_step: nextStep, final_status: "aprovado", completed_at: new Date().toISOString() })
-        .eq("id", wfData.id);
-    } else {
-      // Regra 5: Ao aprovar etapa intermediária, avança o current_step para a próxima etapa
-      await supabaseAdmin
-        .from("approval_workflows")
-        .update({ current_step: nextStep })
-        .eq("id", wfData.id);
 
-      if (nextStep === 4) {
-        newStatusUso = "Em teste/piloto";
-      } else if (nextStep > 4) {
+      workflowUpdatePayload = {
+        current_step: currentStepNumber,
+        final_status: "aprovado",
+        completed_at: new Date().toISOString()
+      };
+    } else {
+      // Aprovação de etapa intermediária avança normalmente.
+      finalStatus = "pendente";
+      newAuditStatus = "Pendente";
+
+      if (nextStep >= 4) {
         newStatusUso = "Em teste/piloto";
       } else {
         newStatusUso = "Em avaliação";
       }
+
+      workflowUpdatePayload = {
+        current_step: nextStep,
+        final_status: "pendente"
+      };
     }
+
+    await supabaseAdmin
+      .from("approval_workflows")
+      .update(workflowUpdatePayload)
+      .eq("id", wfData.id);
 
     // 7. Atualizar o registro da IA no banco
     const { data: iaRecord } = await supabaseAdmin
@@ -581,15 +608,20 @@ router.post("/workflow/decide", async (req, res) => {
 
     if (iaRecord?.data) {
       const recordData = iaRecord.data as any;
-      const actionLabel = decision === "aprovado"
-        ? `Etapa ${wfData.current_step}/${totalSteps} aprovada por ${fullName}`
-        : `Etapa ${wfData.current_step}/${totalSteps} negada por ${fullName}`;
+      let actionLabel = decision === "aprovado"
+        ? `Etapa ${currentStepNumber}/${maxStep} aprovada por ${fullName}`
+        : `Etapa ${currentStepNumber}/${maxStep} negada por ${fullName}`;
+
+      if (decision === "negado" && isFinancialStep) {
+        actionLabel = `Análise Financeira: parecer desfavorável. Fluxo encaminhado para decisão da Presidência.`;
+      }
 
       const updatedData = {
         ...recordData,
         ...(coordinatorData || {}),
         statusAuditoria: newAuditStatus,
         statusUso: newStatusUso,
+        observacoesGeraisOriginais: recordData.observacoesGeraisOriginais || recordData.observacoesGerais || "",
         historico: [{
           date: new Date().toISOString(),
           user: fullName,
@@ -605,22 +637,24 @@ router.post("/workflow/decide", async (req, res) => {
 
       const currentDateStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
-      if (decision === "negado") {
-        updatePayload.status_uso = "Negado";
-        updatePayload.parecer_tecnico = "IA negada no fluxo de aprovação.";
+      if (decision === "negado" && isFinancialStep) {
+        updatePayload.status_uso = "Em teste/piloto";
+        updatedData.statusUso = "Em teste/piloto";
+        updatedData.statusAuditoria = "Pendente";
+        updatePayload.observacoes_gerais = comment || "Análise Financeira: parecer desfavorável. Fluxo encaminhado para decisão da Presidência.";
+      } else if (decision === "negado") {
+        updatePayload.status_uso = "Não aprovado";
+        updatePayload.parecer_tecnico = "IA indeferida no fluxo de aprovação.";
         updatePayload.data_aprovacao = currentDateStr;
         if (comment) {
           updatePayload.observacoes_gerais = comment;
         }
 
-        // Also update JSON inner fields
-        updatedData.statusUso = "Negado";
-        updatedData.parecerTecnico = "IA negada no fluxo de aprovação.";
+        updatedData.statusUso = "Não aprovado";
+        updatedData.statusAuditoria = "Negado";
+        updatedData.parecerTecnico = "IA indeferida no fluxo de aprovação.";
         updatedData.dataAprovacao = currentDateStr;
-        if (comment) {
-          updatedData.observacoesGerais = comment;
-        }
-      } else if (nextStep > totalSteps) {
+      } else if (decision === "aprovado" && isFinalStep) {
         updatePayload.status_uso = "Aprovado";
         updatePayload.parecer_tecnico = "IA aprovada no fluxo de aprovação.";
         updatePayload.data_aprovacao = currentDateStr;
@@ -628,13 +662,10 @@ router.post("/workflow/decide", async (req, res) => {
           updatePayload.observacoes_gerais = comment;
         }
 
-        // Also update JSON inner fields
         updatedData.statusUso = "Aprovado";
+        updatedData.statusAuditoria = "Aprovado";
         updatedData.parecerTecnico = "IA aprovada no fluxo de aprovação.";
         updatedData.dataAprovacao = currentDateStr;
-        if (comment) {
-          updatedData.observacoesGerais = comment;
-        }
       }
 
       await supabaseAdmin
@@ -643,13 +674,22 @@ router.post("/workflow/decide", async (req, res) => {
         .eq("id", recordId);
     }
 
+    let responseMessage = "";
+    if (decision === "negado" && isFinancialStep) {
+      responseMessage = "Parecer financeiro desfavorável registrado. Fluxo encaminhado para decisão da Presidência.";
+    } else if (finalStatus === "aprovado") {
+      responseMessage = "IA aprovada com sucesso.";
+    } else if (finalStatus === "negado") {
+      responseMessage = "IA indeferida.";
+    } else {
+      responseMessage = `Aprovado! Aguardando etapa ${nextStep}.`;
+    }
+
     return res.json({ 
       success: true, 
       finalStatus,
       nextStep: finalStatus === "pendente" ? nextStep : null,
-      message: finalStatus === "aprovado" ? "IA aprovada com sucesso!" 
-             : finalStatus === "negado" ? "IA indeferida."
-             : `Aprovado! Aguardando etapa ${nextStep}.`
+      message: responseMessage
     });
 
   } catch (err: any) {

@@ -613,8 +613,8 @@ export default function AdminPanel({
                                   const sNum = step.stepNumber;
                                   const wfStep = recordWorkflow?.steps?.find(s => s.stepNumber === sNum);
                                   
-                                  const isPassed = wfStep?.status === "aprovado" || wfStep?.status === "opiniao" || (sNum < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO);
                                   const isFailed = wfStep?.status === "negado" || (record.statusAuditoria === StatusAuditoria.NEGADO && sNum === currentStepNum);
+                                  const isPassed = !isFailed && (wfStep?.status === "aprovado" || wfStep?.status === "opiniao" || (sNum < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
                                   const isCurrent = sNum === currentStepNum && (record.statusAuditoria || StatusAuditoria.PENDENTE) === StatusAuditoria.PENDENTE;
 
                                   let circleStyle = "bg-slate-200 text-slate-400 border-slate-300";

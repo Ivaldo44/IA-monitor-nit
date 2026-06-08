@@ -399,8 +399,15 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
 
   const visibleSections = sections;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    const nativeEvent = e.nativeEvent as any;
+    const submitter = nativeEvent.submitter as HTMLButtonElement | null;
+
+    if (submitter && submitter.getAttribute("data-action") !== "save-record") {
+      return;
+    }
     
     // Rule 5: Não permitir salvar a solicitação se a Etapa 1 estiver incompleta
     if (isStep1Incomplete || isProfileIncompleteForStep1) {
@@ -429,8 +436,13 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     const now = new Date().toISOString();
     const history = formData.historico || [];
     
+    const cleanObservacoesGerais = (formData.observacoesGerais || "").trim();
+    const originalObs = initialData?.observacoesGeraisOriginais || formData.observacoesGeraisOriginais || cleanObservacoesGerais;
+
     onSave({
       ...formData,
+      observacoesGerais: cleanObservacoesGerais,
+      observacoesGeraisOriginais: originalObs,
       utilizaIA: formData.utilizaIA || "Sim",
       fornecedor: formData.fornecedor || "Interno",
       createdAt: initialData ? initialData.createdAt : now,
@@ -440,11 +452,10 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // If the user presses "Enter" on an input field, prevent default form submission
+    // Prevent implicit submission when pressing Enter inside input fields
     if (e.key === "Enter") {
       const target = e.target as HTMLElement;
-      // Allow Enter on textareas or if it's explicitly a submit button, otherwise prevent
-      if (target.tagName !== "TEXTAREA" && target.getAttribute("type") !== "submit") {
+      if (target.tagName === "INPUT") {
         e.preventDefault();
       }
     }
@@ -737,6 +748,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
              ) : (
                <button 
                  type="submit" 
+                 data-action="save-record"
                  className="px-10 py-3 bg-[#075618] text-white text-xs font-bold uppercase tracking-tight rounded-xl hover:bg-[#075618]/90 transition-all shadow-md shadow-[0_4px_10px_rgba(7,86,24,0.15)] active:scale-95 flex items-center gap-2"
                >
                  Salvar Registro <Save size={14} />

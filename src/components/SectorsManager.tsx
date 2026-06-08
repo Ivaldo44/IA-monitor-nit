@@ -967,7 +967,7 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
                         disabled={modalMode === "view"}
                         checked={formStatus === "Inativo"}
                         onChange={() => setFormStatus("Inativo")}
-                        className="accent-red-650"
+                        className="accent-red-600"
                       />
                       Setor Inativo
                     </label>

@@ -814,43 +814,73 @@ export default function App() {
           .select("step_number")
           .eq("workflow_id", activeWf.id);
 
-        const totalSteps = allSteps?.length ?? 6;
-        const nextStep = activeWf.current_step + 1;
+        const stepNumbers = (allSteps || []).map((step: any) => Number(step.step_number));
+        const maxStep = stepNumbers.length > 0 ? Math.max(...stepNumbers) : 6;
+
+        const currentStepNumber = Number(activeWf.current_step);
+        const nextStep = currentStepNumber + 1;
+        const isFinalStep = currentStepNumber === maxStep;
+        const isFinancialStep = currentStepNumber === 5;
 
         let finalStatus = "pendente";
         let newAuditStatus = "Pendente";
         let newStatusUso = "Em avaliação";
+        let workflowUpdatePayload: any = {};
 
-        if (decision === "negado") {
+        if (decision === "negado" && isFinancialStep) {
+          // Exceção: Análise Financeira desfavorável não reprova a IA.
+          finalStatus = "pendente";
+          newAuditStatus = "Pendente";
+          newStatusUso = "Em teste/piloto";
+
+          workflowUpdatePayload = {
+            current_step: nextStep,
+            final_status: "pendente",
+            completed_at: null
+          };
+        } else if (decision === "negado") {
+          // Negativa real nas demais etapas encerra o fluxo.
           finalStatus = "negado";
           newAuditStatus = "Negado";
           newStatusUso = "Não aprovado";
-          await supabase
-            .from("approval_workflows")
-            .update({ current_step: activeWf.current_step, final_status: "negado", completed_at: new Date().toISOString() })
-            .eq("id", activeWf.id);
-        } else if (nextStep > totalSteps) {
+
+          workflowUpdatePayload = {
+            current_step: currentStepNumber,
+            final_status: "negado",
+            completed_at: new Date().toISOString()
+          };
+        } else if (decision === "aprovado" && isFinalStep) {
+          // Aprovação da Presidência encerra o fluxo como aprovado.
           finalStatus = "aprovado";
           newAuditStatus = "Aprovado";
           newStatusUso = "Aprovado";
-          await supabase
-            .from("approval_workflows")
-            .update({ current_step: nextStep, final_status: "aprovado", completed_at: new Date().toISOString() })
-            .eq("id", activeWf.id);
-        } else {
-          await supabase
-            .from("approval_workflows")
-            .update({ current_step: nextStep })
-            .eq("id", activeWf.id);
 
-          if (nextStep === 4) {
-            newStatusUso = "Em teste/piloto";
-          } else if (nextStep > 4) {
+          workflowUpdatePayload = {
+            current_step: currentStepNumber,
+            final_status: "aprovado",
+            completed_at: new Date().toISOString()
+          };
+        } else {
+          // Aprovação de etapa intermediária avança normalmente.
+          finalStatus = "pendente";
+          newAuditStatus = "Pendente";
+
+          if (nextStep >= 4) {
             newStatusUso = "Em teste/piloto";
           } else {
             newStatusUso = "Em avaliação";
           }
+
+          workflowUpdatePayload = {
+            current_step: nextStep,
+            final_status: "pendente"
+          };
         }
+
+        await supabase
+          .from("approval_workflows")
+          .update(workflowUpdatePayload)
+          .eq("id", activeWf.id);
 
         const { data: iaRecord } = await supabase
           .from("ia_records")
@@ -860,15 +890,20 @@ export default function App() {
 
         if (iaRecord?.data) {
           const recordData = iaRecord.data as any;
-          const actionLabel = decision === "aprovado"
-            ? `Etapa ${activeWf.current_step}/${totalSteps} aprovada por ${fullName}`
-            : `Etapa ${activeWf.current_step}/${totalSteps} negada por ${fullName}`;
+          let actionLabel = decision === "aprovado"
+            ? `Etapa ${currentStepNumber}/${maxStep} aprovada por ${fullName}`
+            : `Etapa ${currentStepNumber}/${maxStep} negada por ${fullName}`;
+
+          if (decision === "negado" && isFinancialStep) {
+            actionLabel = `Análise Financeira: parecer desfavorável. Fluxo encaminhado para decisão da Presidência.`;
+          }
 
           const updatedData = {
             ...recordData,
             ...(extraFields || {}),
             statusAuditoria: newAuditStatus,
             statusUso: newStatusUso,
+            observacoesGeraisOriginais: recordData.observacoesGeraisOriginais || recordData.observacoesGerais || "",
             historico: [{
               date: new Date().toISOString(),
               user: fullName,
@@ -884,21 +919,24 @@ export default function App() {
 
           const currentDateStr = new Date().toISOString().split("T")[0];
 
-          if (decision === "negado") {
-            updatePayload.status_uso = "Negado";
-            updatePayload.parecer_tecnico = "IA negada no fluxo de aprovação.";
+          if (decision === "negado" && isFinancialStep) {
+            updatePayload.status_uso = "Em teste/piloto";
+            updatedData.statusUso = "Em teste/piloto";
+            updatedData.statusAuditoria = "Pendente";
+            updatePayload.observacoes_gerais = comment || "Análise Financeira: parecer desfavorável. Fluxo encaminhado para decisão da Presidência.";
+          } else if (decision === "negado") {
+            updatePayload.status_uso = "Não aprovado";
+            updatePayload.parecer_tecnico = "IA indeferida no fluxo de aprovacão.";
             updatePayload.data_aprovacao = currentDateStr;
             if (comment) {
               updatePayload.observacoes_gerais = comment;
             }
 
-            updatedData.statusUso = "Negado";
-            updatedData.parecerTecnico = "IA negada no fluxo de aprovação.";
+            updatedData.statusUso = "Não aprovado";
+            updatedData.statusAuditoria = "Negado";
+            updatedData.parecerTecnico = "IA indeferida no fluxo de aprovação.";
             updatedData.dataAprovacao = currentDateStr;
-            if (comment) {
-              updatedData.observacoesGerais = comment;
-            }
-          } else if (nextStep > totalSteps) {
+          } else if (decision === "aprovado" && isFinalStep) {
             updatePayload.status_uso = "Aprovado";
             updatePayload.parecer_tecnico = "IA aprovada no fluxo de aprovação.";
             updatePayload.data_aprovacao = currentDateStr;
@@ -907,11 +945,9 @@ export default function App() {
             }
 
             updatedData.statusUso = "Aprovado";
+            updatedData.statusAuditoria = "Aprovado";
             updatedData.parecerTecnico = "IA aprovada no fluxo de aprovação.";
             updatedData.dataAprovacao = currentDateStr;
-            if (comment) {
-              updatedData.observacoesGerais = comment;
-            }
           }
 
           await supabase
@@ -920,11 +956,20 @@ export default function App() {
             .eq("id", recordId);
         }
 
+        let responseMessage = "";
+        if (decision === "negado" && isFinancialStep) {
+          responseMessage = "Parecer financeiro desfavorável registrado. Fluxo encaminhado para decisão da Presidência.";
+        } else if (finalStatus === "aprovado") {
+          responseMessage = "IA aprovada com sucesso.";
+        } else if (finalStatus === "negado") {
+          responseMessage = "IA indeferida.";
+        } else {
+          responseMessage = `Aprovado! Aguardando etapa ${nextStep}.`;
+        }
+
         result = {
           finalStatus,
-          message: finalStatus === "aprovado" ? "IA aprovada com sucesso!" 
-                 : finalStatus === "negado" ? "IA indeferida."
-                 : `Aprovado! Aguardando etapa ${nextStep}.`
+          message: responseMessage
         };
       }
 

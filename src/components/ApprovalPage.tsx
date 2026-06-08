@@ -21,6 +21,36 @@ interface ApprovalPageProps {
   isAdmin: boolean;
 }
 
+const getOriginalObservacoes = (record: IARecord | null | undefined): string => {
+  if (!record) return "Não informado pelo solicitante.";
+  
+  if (record.observacoesGeraisOriginais && record.observacoesGeraisOriginais.trim() !== "") {
+    return record.observacoesGeraisOriginais;
+  }
+  
+  const currentObs = record.observacoesGerais;
+  if (!currentObs || currentObs.trim() === "") {
+    return "Não informado pelo solicitante.";
+  }
+
+  const trimmed = currentObs.trim();
+  const isDecision = 
+    trimmed.startsWith("### FORMULÁRIO") ||
+    trimmed.startsWith("### Parecer") ||
+    trimmed.startsWith("Confirmação do Período de Teste") ||
+    trimmed.includes("FORMULÁRIO DE AVALIAÇÃO") ||
+    trimmed.includes("FORMULÁRIO DE GESTÃO DE RISCOS") ||
+    trimmed.includes("Parecer Final da Etapa:") ||
+    trimmed.startsWith("Análise Financeira:") ||
+    trimmed.includes("Parecer:");
+
+  if (isDecision) {
+    return "Não informado pelo solicitante.";
+  }
+
+  return currentObs;
+};
+
 export default function ApprovalPage({
   records,
   profiles,
@@ -117,8 +147,65 @@ export default function ApprovalPage({
     integracao: false,
     riscos: false,
     conformidade: false,
-    classificacao: false
+    classificacao: false,
+    observacoes: false
   });
+
+  const renderValue = (val: any, mode: "informado" | "preenchido" | "registrada" = "informado") => {
+    const fallbackMap = {
+      informado: "Não informado",
+      preenchido: "Não preenchido na solicitação",
+      registrada: "Sem informação registrada"
+    };
+    const fallback = fallbackMap[mode];
+    if (val === undefined || val === null || (Array.isArray(val) && val.length === 0) || String(val).trim() === "") {
+      return <span className="text-slate-400 italic font-medium">{fallback}</span>;
+    }
+    if (Array.isArray(val)) {
+      return val.join(", ");
+    }
+    const str = String(val).trim();
+    if (str.toLowerCase() === "null" || str.toLowerCase() === "undefined" || str === "") {
+      return <span className="text-slate-400 italic font-medium">{fallback}</span>;
+    }
+    return str;
+  };
+
+  useEffect(() => {
+    if (analysisModal.isOpen && analysisModal.record) {
+      const record = analysisModal.record;
+      setAuditComment("");
+      setCoordAlinhamento("Alinhado");
+      setCoordTransferencia("Médio");
+      setCoordViabilidade("Sim");
+      
+      setCoordUsaDadosPessoais(record.usaDadosPessoais || "Não");
+      setCoordUsaDadosSensiveis(record.usaDadosSensiveis || "Não");
+      setCoordQuaisDados(record.quaisDados || "");
+      setCoordDadosAnonimizados(record.dadosAnonimizados || "Não");
+      setCoordEnvioFornecedorExterno(record.envioFornecedorExterno || "Não");
+      setCoordDadosTreinamentoModelo(record.dadosTreinamentoModelo || "Não");
+
+      setGerenteTRL("TRL 7-9 (Pronto para Produção)");
+      setGerenteCustos("Baixo (Sem investimento adicional)");
+      setGerenteRiscos("Aprovado sem restrição");
+      
+      setG1RiscosRelevantes("Não identificado");
+      setG1TiposRisk([]);
+      setG1Descricao("");
+      setG2ControlesExistentes("Não se aplica");
+      setG2ControlesTipos([]);
+      setG2ControlesAdicionais("");
+      setG3RiscoResidual("Não avaliado");
+      setG3Responsavel("NIT");
+      setG3Observacoes("");
+
+      setTiInfra("Compatível / Cloud nativa");
+      setTiSeguranca("Conforme (Criptografado e restrito)");
+      setTiIntegracao("Não (Plataforma autônoma)");
+      setPeriodoTesteConfirmado("Sim");
+    }
+  }, [analysisModal.record, analysisModal.isOpen]);
 
   const toggleSection = (sec: string) => {
     setExpandedSections(prev => ({ ...prev, [sec]: !prev[sec] }));
@@ -561,13 +648,13 @@ export default function ApprovalPage({
                               const wfStep = wf?.steps?.find(s => s.stepNumber === step.stepNumber);
                               const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
 
-                              const isPassed = hasWfStepDecision
-                                ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
-                                : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO);
-
                               const isFailed = hasWfStepDecision
                                 ? (wfStep.status === "negado")
                                 : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
+
+                              const isPassed = !isFailed && (hasWfStepDecision
+                                ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
+                                : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
 
                               const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
 
@@ -579,7 +666,7 @@ export default function ApprovalPage({
                                       isPassed
                                         ? "bg-emerald-600 border-emerald-600 text-white"
                                         : isFailed
-                                          ? "bg-red-650 border-red-650 text-white"
+                                          ? "bg-red-600 border-red-600 text-white"
                                           : isCurrent
                                             ? "bg-amber-500 border-amber-500 text-white ring-2 ring-amber-100 ring-offset-1 animate-pulse"
                                             : "bg-white border-slate-200 text-slate-400"
@@ -606,13 +693,13 @@ export default function ApprovalPage({
                               const wfStep = wf?.steps?.find(s => s.stepNumber === step.stepNumber);
                               const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
                               
-                              const isPassed = hasWfStepDecision
-                                ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
-                                : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO);
-
                               const isFailed = hasWfStepDecision
                                 ? (wfStep.status === "negado")
                                 : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
+
+                              const isPassed = !isFailed && (hasWfStepDecision
+                                ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
+                                : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
 
                               const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
 
@@ -648,7 +735,9 @@ export default function ApprovalPage({
                                     {isPassed ? (
                                       <span className="px-2 py-0.5 text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold uppercase rounded">Aprovado</span>
                                     ) : isFailed ? (
-                                      <span className="px-2 py-0.5 text-[8px] bg-red-50 text-red-700 border border-red-200 font-bold uppercase rounded">Negado</span>
+                                      <span className="px-2 py-0.5 text-[8px] bg-red-50 text-red-700 border border-red-200 font-bold uppercase rounded">
+                                        {step.stepNumber === 5 ? "Parecer desfavorável" : "Indeferido"}
+                                      </span>
                                     ) : isCurrent ? (
                                       <span className="px-2 py-0.5 text-[8px] bg-amber-50 text-amber-700 border border-amber-200 font-bold uppercase rounded animate-pulse">Atual</span>
                                     ) : (
@@ -852,442 +941,389 @@ export default function ApprovalPage({
                 initial={{ scale: 0.95, opacity: 0, y: 15 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 15 }}
-                className="relative w-full max-w-6xl bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden flex flex-col lg:flex-row h-full max-h-[90vh]"
+                className="relative w-[90vw] max-w-[92vw] h-[92vh] max-h-[92vh] bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
               >
-                {/* COLUNA ESQUERDA: Formulário do Solicitante (Visualização) */}
-                <div className="lg:w-1/2 border-r border-slate-100 flex flex-col h-full bg-slate-50/50">
-                  <div className="p-6 md:p-8 border-b border-slate-200/60 bg-white">
-                    <span className="text-[10px] font-black uppercase text-[#03440c] tracking-widest block mb-1">DADOS DA NOVA SOLICITAÇÃO</span>
-                    <h4 className="text-xl font-black text-slate-800 uppercase tracking-tight">{record.nomeFerramenta || "SISTEMA DE IA"}</h4>
-                    <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[11px] font-bold text-slate-500">
-                      <span className="px-2.5 py-0.5 bg-black/5 rounded-md font-mono">Protocolo: {record.id}</span>
-                      <span>•</span>
-                      <span>Criado em: {new Date(record.createdAt).toLocaleDateString()}</span>
-                    </div>
+                {/* CABEÇALHO DO POPUP (Full-width) */}
+                <div className="bg-slate-50 border-b border-slate-200/60 p-6 md:px-8 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6 relative shrink-0">
+                  <div className="space-y-1.5 max-w-md">
+                    <span className="text-[10px] font-black uppercase text-[#03440c] tracking-[0.2em] block">Análise de Solicitação</span>
+                    <h4 className="text-xl md:text-2xl font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-2.5">
+                      <span className="p-2 rounded-xl bg-[#03440c]/10 text-[#03440c] shadow-xs shrink-0">
+                        <Activity size={20} />
+                      </span>
+                      <span className="truncate" title={record.nomeFerramenta || ""}>
+                        {renderValue(record.nomeFerramenta)}
+                      </span>
+                    </h4>
                   </div>
 
-                  <div className="p-6 md:p-8 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
-                    {/* Folder 1: Solicitante */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("solicitante")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Users size={14} className="text-[#03440c]" /> 1. Solicitante
-                        </span>
-                        {expandedSections.solicitante ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.solicitante && (
-                        <div className="p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Setor Solicitante</p>
-                            <p className="uppercase font-extrabold">{record.unidadeSetor}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Cargo</p>
-                            <p className="capitalize">{record.cargo || "Não cadastrado"}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Solicitante</p>
-                            <p>{record.responsavelPreenchimento}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Data da Solicitação</p>
-                            <p>{record.dataRegistro ? new Date(record.dataRegistro + "T00:00:00").toLocaleDateString() : "-"}</p>
-                          </div>
-                        </div>
-                      )}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-semibold text-slate-650 flex-1 max-w-3xl items-center lg:ml-4">
+                    <div className="bg-white border border-slate-200/70 rounded-xl p-3 shadow-xs flex flex-col justify-center min-h-[60px]">
+                      <p className="text-[8px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Protocolo / ID</p>
+                      <p className="font-mono text-slate-950 font-bold truncate pr-1">{record.id}</p>
                     </div>
-
-                    {/* Folder 2: Identificação */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("identificacao")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Sliders size={14} className="text-[#03440c]" /> 2. Identificação da IA
-                        </span>
-                        {expandedSections.identificacao ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.identificacao && (
-                        <div className="p-4 space-y-3 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Nome da Ferramenta</p>
-                              <p className="font-extrabold uppercase text-[#03440c]">{record.nomeFerramenta}</p>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Fornecedor / Desenvolvedor</p>
-                              <p className="uppercase">{record.fornecedor || "Interno"}</p>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Versão / Plano</p>
-                              <p>{record.versao || "Não especificada"}</p>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Tipo de Tecnologia</p>
-                            <div className="flex flex-wrap gap-1.5 mt-1.5">
-                              {(record.tipoIA || []).map((t: string) => (
-                                <span key={t} className="px-2.5 py-1 bg-[#03440c]/10 text-emerald-800 text-[10px] rounded-lg font-black uppercase tracking-tight">{t}</span>
-                              ))}
-                              {(!(record.tipoIA && record.tipoIA.length)) && <span className="text-slate-400 italic">Mapeamento não preenchido</span>}
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                    <div className="bg-emerald-50/20 border border-emerald-500/10 rounded-xl p-3 shadow-xs flex flex-col justify-center min-h-[60px]">
+                      <p className="text-[8px] text-[#03440c]/70 uppercase font-bold tracking-wider mb-0.5">Etapa Atual</p>
+                      <p className="text-[#03440c] font-black uppercase truncate pr-1">
+                        {wf ? `Etapa ${wf.currentStep} de ${currentSteps.length}` : "Etapa inicial"}
+                      </p>
                     </div>
-
-                    {/* Folder 3: Objetivo */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("objetivo")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Info size={14} className="text-[#03440c]" /> 3. Finalidade e Objetivos
-                        </span>
-                        {expandedSections.objetivo ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.objetivo && (
-                        <div className="p-4 space-y-3 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Descrição da Atividade</p>
-                            <p className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 italic mt-1 font-medium leading-relaxed">"{record.descricaoAtividade}"</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Objetivos de Negócio / Clínicos</p>
-                            <div className="flex flex-wrap gap-1 md:gap-1.5 mt-1.5">
-                              {(record.objetivos || []).map((t: string) => (
-                                <span key={t} className="px-2.5 py-1 bg-blue-50 border border-blue-100/50 text-blue-700 text-[10px] rounded-lg font-black uppercase tracking-tight">{t}</span>
-                              ))}
-                              {(!(record.objetivos && record.objetivos.length)) && <span className="text-slate-400 italic">Sem objetivos definidos</span>}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Etapa do Processo</p>
-                              <p className="font-extrabold uppercase mt-0.5">{record.etapaProcesso || "Outros"}</p>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Benefícios Esperados</p>
-                            <p className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 italic mt-1 font-medium leading-relaxed">"{record.beneficiosEsperados}"</p>
-                          </div>
-                        </div>
-                      )}
+                    <div className="bg-white border border-slate-200/70 rounded-xl p-3 shadow-xs flex flex-col justify-center min-h-[60px]">
+                      <p className="text-[8px] text-slate-400 uppercase font-bold tracking-wider mb-0.5">Avaliador da Etapa</p>
+                      <p className="text-slate-900 font-extrabold uppercase truncate pr-1" title={(() => {
+                        const activeWfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+                        return activeWfStep?.assignedUserName || activeStepDef?.assignedUserName || "Qualquer usuário qualificado";
+                      })()}>
+                        {(() => {
+                          const activeWfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+                          return activeWfStep?.assignedUserName || activeStepDef?.assignedUserName || "Qualquer usuário";
+                        })()}
+                      </p>
                     </div>
-
-                    {/* Folder 4: Dados */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("dados")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Database size={14} className="text-[#03440c]" /> 4. Fluxo de Dados e Privacidade
-                        </span>
-                        {expandedSections.dados ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.dados && (
-                        <div className="p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Trata Dados Pessoais?</p>
-                            <span className={`inline-block mt-1 px-3 py-1 rounded-md text-[10px] font-black uppercase ${record.usaDadosPessoais === "Sim" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
-                              {record.usaDadosPessoais}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Trata Dados Sensíveis?</p>
-                            <span className={`inline-block mt-1 px-3 py-1 rounded-md text-[10px] font-black uppercase ${record.usaDadosSensiveis === "Sim" ? "bg-red-100 text-red-800" : "bg-emerald-100 text-emerald-800"}`}>
-                              {record.usaDadosSensiveis}
-                            </span>
-                          </div>
-                          <div className="col-span-2">
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Quais Dados são Processados?</p>
-                            <p className="text-slate-600 mt-1 font-medium bg-slate-50 p-3 rounded-lg border border-slate-100">{record.quaisDados || "Nenhum dado informado ou aplicável."}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Os Dados são Anonimizados?</p>
-                            <p className="uppercase mt-0.5">{record.dadosAnonimizados || "Não"}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Compartilha com Fornecedor?</p>
-                            <p className="uppercase mt-0.5">{record.envioFornecedorExterno || "Não"}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Folder 5: Integração */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("integracao")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Activity size={14} className="text-[#03440c]" /> 5. Integração e Homologação
-                        </span>
-                        {expandedSections.integracao ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.integracao && (
-                        <div className="p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Integrada ao Sistema Cedro?</p>
-                            <p className="uppercase mt-0.5">{record.integradaSistemaInterno}</p>
-                          </div>
-                          {record.integradaSistemaInterno === "Sim" && (
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Qual Sistema?</p>
-                              <p className="uppercase mt-0.5 font-extrabold text-[#03440c]">{record.qualSistema || "-"}</p>
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Impacto em Laudos de Exames?</p>
-                            <p className="uppercase mt-0.5 font-extrabold">{record.impactoResultadosLaboratoriais}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Exige Validação Humana?</p>
-                            <p className="uppercase mt-0.5 font-extrabold">{record.validacaoHumana}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Folder 6: Riscos */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("riscos")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <AlertTriangle size={14} className="text-[#03440c]" /> 6. Riscos e Controles
-                        </span>
-                        {expandedSections.riscos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.riscos && (
-                        <div className="p-4 space-y-3 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Viés/Erro Identificados?</p>
-                              <p className="uppercase mt-0.5">{record.riscosIdentificados}</p>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Controles Existentes?</p>
-                              <p className="uppercase mt-0.5">{record.controlesImplementados}</p>
-                            </div>
-                          </div>
-                          {record.riscoResidual && (
-                            <div className="pt-1.5 border-t border-slate-100">
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Nível de Risco Residual</p>
-                              <span className={`inline-block mt-1 px-3 py-1 rounded text-[10px] font-black uppercase bg-slate-100 text-slate-800`}>
-                                {record.riscoResidual}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Folder 7: Conformidade */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("conformidade")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <ShieldCheck size={14} className="text-[#03440c]" /> 7. Conformidade Legal
-                        </span>
-                        {expandedSections.conformidade ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.conformidade && (
-                        <div className="p-4 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Alinhado com a LGPD?</p>
-                            <p className="uppercase mt-0.5 font-extrabold text-[#03440c]">{record.alinhadoLGPD}</p>
-                          </div>
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Tem Política de Uso de IA?</p>
-                            <p className="uppercase mt-0.5">{record.politicaInterna}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Folder 8: Classificação */}
-                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => toggleSection("classificacao")}
-                        className="w-full p-4 flex items-center justify-between font-bold text-xs uppercase text-slate-700 bg-slate-50/70 border-b border-slate-100"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Scale size={14} className="text-[#03440c]" /> 8. Classificação de Impacto
-                        </span>
-                        {expandedSections.classificacao ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                      {expandedSections.classificacao && (
-                        <div className="p-4 space-y-2 text-xs font-semibold text-slate-700 border-t border-slate-50">
-                          <div>
-                            <p className="text-[8px] text-slate-400 uppercase font-black">Classificação de Criticidade</p>
-                            <p className="uppercase font-extrabold text-slate-800 mt-0.5">{record.criticidade}</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 pt-1.5 border-t border-slate-100">
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Enquadramento Calculado (Auto)</p>
-                              <span className="inline-block mt-1 px-3 py-1 bg-[#03440c]/10 text-emerald-800 text-[10px] font-black rounded-lg uppercase tracking-tight">
-                                {record.classificacaoRiscoAutomatico || "Baixo risco"}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-slate-400 uppercase font-black">Risco Manual Cadastrado</p>
-                              <span className="inline-block mt-1 px-3 py-1 bg-amber-50 border border-amber-100 text-amber-800 text-[10px] font-black rounded-lg uppercase tracking-tight">
-                                {record.classificacaoRiscoManual || "Baixo risco"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                    <div className="bg-white border border-slate-200/70 rounded-xl p-3 shadow-xs flex flex-col items-start justify-center min-h-[60px]">
+                      <p className="text-[8px] text-slate-400 uppercase font-bold tracking-wider mb-1">Status Geral</p>
+                      <span className={`inline-block px-2.5 py-1 rounded text-[8px] font-black uppercase border leading-none ${
+                        record.status === "Aprovado" 
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+                          : record.status === "Rejeitado" || record.status === "Negado"
+                          ? "bg-rose-50 border-rose-200 text-rose-800"
+                          : "bg-amber-50 border-amber-200 text-amber-800"
+                      }`}>
+                        {record.status || "Pendente"}
+                      </span>
                     </div>
                   </div>
+                  
+                  {/* Botão de Fechar */}
+                  <button
+                    onClick={() => setAnalysisModal({ isOpen: false, record: null })}
+                    className="absolute top-5 right-5 text-slate-450 hover:text-slate-700 transition-all p-1.5 rounded-full hover:bg-slate-200/60 cursor-pointer flex items-center justify-center"
+                  >
+                    <XCircle size={22} />
+                  </button>
                 </div>
 
-                {/* COLUNA DIREITA: Form de Preenchimento de Aprovação do Decisor */}
-                <div className="lg:w-1/2 flex flex-col h-full bg-white p-6 md:p-8 justify-between overflow-y-auto">
-                  <div className="space-y-6">
-                    {/* Header do Formulário */}
-                    <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                      <div className="size-11 rounded-xl bg-[#03440c]/10 text-[#03440c] flex items-center justify-center font-black shadow-inner text-sm">
-                        {currentStepNum}
+                {/* PRINCIPAL CORPO EM DUAS COLUNAS */}
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+                  {/* COLUNA ESQUERDA: Formulário do Solicitante (Visualização) [40%] */}
+                  <div className="lg:w-[40%] border-r border-slate-200 flex flex-col h-full bg-slate-50/50 overflow-y-auto custom-scrollbar">
+                    <div className="p-6 md:p-8 space-y-4">
+                      {/* Folder 1: Solicitante */}
+                      <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 ${
+                        expandedSections.solicitante 
+                          ? "border-[#03440c]/30 shadow-md shadow-[#03440c]/5 ring-1 ring-[#03440c]/5" 
+                          : "border-slate-200/80 shadow-sm"
+                      }`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSection("solicitante")}
+                          className={`w-full p-4.5 flex items-center justify-between font-bold text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+                            expandedSections.solicitante 
+                              ? "bg-emerald-50/60 text-[#03440c] border-b border-emerald-100/50" 
+                              : "bg-slate-50/70 text-slate-700 hover:bg-slate-100/80 border-b border-transparent"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Users size={14} className={expandedSections.solicitante ? "text-[#03440c]" : "text-slate-500"} /> 1. Solicitante
+                          </span>
+                          {expandedSections.solicitante ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {expandedSections.solicitante && (
+                          <div className="p-4.5 grid grid-cols-2 gap-4 text-xs font-semibold text-slate-700 border-t border-slate-100 bg-white">
+                            <div>
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Setor Solicitante</p>
+                              <p className="uppercase font-extrabold text-slate-800">{renderValue(record.unidadeSetor, "preenchido")}</p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Cargo</p>
+                              <p className="capitalize text-slate-800">{renderValue(record.cargo, "preenchido")}</p>
+                            </div>
+                            <div className="col-span-2 pt-2 border-t border-slate-100/50">
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Solicitante</p>
+                              <p className="text-slate-850 font-bold">{renderValue(record.responsavelPreenchimento, "preenchido")}</p>
+                            </div>
+                            <div className="col-span-2 pt-2 border-t border-slate-100/50">
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Contato</p>
+                              <p className="text-slate-850 font-bold">
+                                {(() => {
+                                  const matchingProfile = profiles.find(p => p.full_name === record.responsavelPreenchimento || p.id === record.ownerId);
+                                  const contactVal = record.contato || matchingProfile?.contato;
+                                  return renderValue(contactVal, "preenchido");
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <span className="text-[9px] text-[#03440c] font-black uppercase tracking-widest block">Parecer d0 Decisor Responsável</span>
-                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
-                          Formulário de Aprovação: <strong className="text-[#03440c] font-black">{activeStepDef?.roleName || "Avaliador Autorizado"}</strong>
-                        </h4>
+
+                      {/* Folder 2: Identificação */}
+                      <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 ${
+                        expandedSections.identificacao 
+                          ? "border-[#03440c]/30 shadow-md shadow-[#03440c]/5 ring-1 ring-[#03440c]/5" 
+                          : "border-slate-200/80 shadow-sm"
+                      }`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSection("identificacao")}
+                          className={`w-full p-4.5 flex items-center justify-between font-bold text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+                            expandedSections.identificacao 
+                              ? "bg-emerald-50/60 text-[#03440c] border-b border-emerald-100/50" 
+                              : "bg-slate-50/70 text-slate-700 hover:bg-slate-100/80 border-b border-transparent"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Sliders size={14} className={expandedSections.identificacao ? "text-[#03440c]" : "text-slate-500"} /> 2. Identificação da IA
+                          </span>
+                          {expandedSections.identificacao ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {expandedSections.identificacao && (
+                          <div className="p-4.5 space-y-4 text-xs font-semibold text-slate-700 border-t border-slate-100 bg-white">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="col-span-2">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Nome da Ferramenta</p>
+                                <p className="font-black uppercase text-[#03440c] text-sm tracking-tight">{renderValue(record.nomeFerramenta, "preenchido")}</p>
+                              </div>
+                              <div className="pt-2 border-t border-slate-100/50">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Fornecedor / Desenvolvedor</p>
+                                <p className="uppercase text-slate-800">{renderValue(record.fornecedor, "preenchido")}</p>
+                              </div>
+                              <div className="pt-2 border-t border-slate-100/50">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Versão / Plano</p>
+                                <p className="text-slate-800">{renderValue(record.versao, "preenchido")}</p>
+                              </div>
+                              <div className="col-span-2 pt-2 border-t border-slate-100/50">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Utiliza ou Exige IA?</p>
+                                <p className="uppercase text-slate-800 font-bold">{renderValue(record.utilizaIA, "preenchido")}</p>
+                              </div>
+                            </div>
+                            <div className="pt-2 border-t border-slate-100/50">
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Tipo de IA / Tecnologia</p>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {record.tipoIA && record.tipoIA.length > 0 ? (
+                                  record.tipoIA.map((t: string) => (
+                                    <span key={t} className="px-2.5 py-1 bg-[#03440c]/8 text-emerald-900 text-[10px] rounded-lg font-black uppercase tracking-tight">{t}</span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 italic">Mapeamento não preenchido</span>
+                                )}
+                              </div>
+                            </div>
+                            {record.tipoIAOutro && record.tipoIAOutro.trim() !== "" && (
+                              <div className="pt-2 border-t border-slate-100/50">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Tipo de IA (Outro Especificado)</p>
+                                <p className="mt-1 font-medium bg-slate-50 p-3 rounded-xl border border-slate-150 text-slate-700 leading-relaxed text-[11px]">{record.tipoIAOutro}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Folder 3: Objetivo */}
+                      <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 ${
+                        expandedSections.objetivo 
+                          ? "border-[#03440c]/30 shadow-md shadow-[#03440c]/5 ring-1 ring-[#03440c]/5" 
+                          : "border-slate-200/80 shadow-sm"
+                      }`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSection("objetivo")}
+                          className={`w-full p-4.5 flex items-center justify-between font-bold text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+                            expandedSections.objetivo 
+                              ? "bg-emerald-50/60 text-[#03440c] border-b border-emerald-100/50" 
+                              : "bg-slate-50/70 text-slate-700 hover:bg-slate-100/80 border-b border-transparent"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Info size={14} className={expandedSections.objetivo ? "text-[#03440c]" : "text-slate-500"} /> 3. Finalidade e Objetivos
+                          </span>
+                          {expandedSections.objetivo ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {expandedSections.objetivo && (
+                          <div className="p-4.5 space-y-4 text-xs font-semibold text-slate-700 border-t border-slate-100 bg-white">
+                            <div>
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Descrição da Atividade</p>
+                              <p className="bg-slate-50/75 p-3.5 rounded-xl border border-slate-150/80 italic mt-1 font-medium leading-relaxed text-slate-650">
+                                {record.descricaoAtividade ? `"${record.descricaoAtividade}"` : <span className="text-slate-400 italic">Não informado</span>}
+                              </p>
+                            </div>
+                            <div className="pt-2 border-t border-slate-100/50">
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Objetivos / Finalidade</p>
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {record.objetivos && record.objetivos.length > 0 ? (
+                                  record.objetivos.map((t: string) => (
+                                    <span key={t} className="px-2.5 py-1 bg-blue-50/80 border border-blue-250/50 text-blue-700 text-[10px] rounded-lg font-black uppercase tracking-tight">{t}</span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 italic">Não preenchido na solicitação</span>
+                                )}
+                              </div>
+                            </div>
+                            {record.objetivoOutro && record.objetivoOutro.trim() !== "" && (
+                              <div className="pt-2 border-t border-slate-100/50">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Outro Objetivo Mapeado</p>
+                                <p className="mt-1 font-medium bg-slate-50 p-3 rounded-xl border border-slate-150 text-slate-700 leading-relaxed text-[11px]">{record.objetivoOutro}</p>
+                              </div>
+                            )}
+                            <div className="pt-2 border-t border-slate-100/50">
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Etapa do Processo</p>
+                              <p className="font-extrabold uppercase mt-0.5 text-slate-800">
+                                {record.etapaProcesso ? (record.etapaProcesso + (record.etapaOutro ? ` (${record.etapaOutro})` : "")) : <span className="text-slate-400 italic">Não preenchido</span>}
+                              </p>
+                            </div>
+                            <div className="pt-2 border-t border-slate-100/50">
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Benefícios Esperados</p>
+                              <p className="bg-slate-50/75 p-3.5 rounded-xl border border-slate-150/80 italic mt-1 font-medium leading-relaxed text-slate-650">
+                                {record.beneficiosEsperados ? `"${record.beneficiosEsperados}"` : <span className="text-slate-400 italic">Não informado</span>}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Folder 9: Observações e Envio */}
+                      <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 ${
+                        expandedSections.observacoes 
+                          ? "border-[#03440c]/30 shadow-md shadow-[#03440c]/5 ring-1 ring-[#03440c]/5" 
+                          : "border-slate-200/80 shadow-sm"
+                      }`}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSection("observacoes")}
+                          className={`w-full p-4.5 flex items-center justify-between font-bold text-xs uppercase tracking-wider transition-all duration-300 cursor-pointer ${
+                            expandedSections.observacoes 
+                              ? "bg-emerald-50/60 text-[#03440c] border-b border-emerald-100/50" 
+                              : "bg-slate-50/70 text-slate-700 hover:bg-slate-100/80 border-b border-transparent"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <ClipboardCheck size={14} className={expandedSections.observacoes ? "text-[#03440c]" : "text-slate-500"} /> 9. Observações e Envio
+                          </span>
+                          {expandedSections.observacoes ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {expandedSections.observacoes && (
+                          <div className="p-4.5 space-y-4 text-xs font-semibold text-slate-700 border-t border-slate-100 bg-white">
+                            <div>
+                              <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Observações Gerais do Solicitante</p>
+                              <p className="bg-slate-50/75 p-3.5 rounded-xl border border-slate-150/80 italic mt-1 font-medium leading-relaxed text-slate-650">
+                                {getOriginalObservacoes(record) === "Não informado pelo solicitante." ? (
+                                  <span className="text-slate-400 italic">Não informado pelo solicitante.</span>
+                                ) : (
+                                  `"${getOriginalObservacoes(record)}"`
+                                )}
+                              </p>
+                            </div>
+                            {record.anexos && record.anexos.trim() !== "" && (
+                              <div className="pt-2 border-t border-slate-100/50">
+                                <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Anexos / Links de Referência</p>
+                                <div className="mt-1 bg-indigo-55/35 border border-indigo-100 p-3 rounded-xl flex items-center gap-2 shadow-xs">
+                                  <span className="text-indigo-850 text-xs font-semibold truncate max-w-full">
+                                    📎 {record.anexos}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Histórico Recente de pareceres de etapas concluídas */}
-                    {(() => {
-                      const prevSteps = wf?.steps?.filter((s) => s.stepNumber < currentStepNum && s.status !== "aguardando") || [];
-                      if (prevSteps.length === 0) return null;
-                      return (
-                        <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-xl space-y-2">
-                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Pareceres Registrados das Etapas Anteriores</p>
-                          <div className="divide-y divide-slate-100 max-h-36 overflow-y-auto custom-scrollbar space-y-2.5 pr-2">
-                            {prevSteps.map((s) => (
-                              <div key={s.stepNumber} className="pt-2 text-[11px] font-semibold text-slate-700">
-                                <div className="flex items-center justify-between text-[9px] font-black uppercase">
-                                  <span className="text-[#023309] font-black">{s.stepNumber}. {s.roleName} : {s.assignedUserName || "Assinatura livre"}</span>
-                                  <span className={s.status === "negado" ? "text-red-600 font-black" : "text-emerald-700 font-black"}>{s.status.toUpperCase()}</span>
-                                </div>
-                                <p className="text-slate-600 font-medium italic mt-1 text-[11px] leading-relaxed whitespace-pre-wrap">
-                                  {s.comment || "Sem comentários específicos registrados."}
-                                </p>
-                              </div>
-                            ))}
+                  {/* COLUNA DIREITA: Form de Preenchimento de Aprovação do Decisor [60%] */}
+                  <div className="lg:w-[60%] flex flex-col h-full bg-white p-6 md:p-8 justify-between overflow-y-auto custom-scrollbar border-l border-slate-150 space-y-6">
+                    <div>
+                      {/* Header do Formulário */}
+                      <div className="flex items-center gap-3.5 border-b border-slate-100 pb-5">
+                        <div className="size-11 rounded-1.5xl bg-emerald-50 text-[#03440c] border border-emerald-100 flex items-center justify-center font-black text-base shadow-xs">
+                          {currentStepNum}
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-[#03440c] font-bold uppercase tracking-wider block">Estágio de Governança Ativo</span>
+                          <h4 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight">
+                            Formulário de Parecer: <span className="text-[#03440c]">{activeStepDef?.roleName || "Decisor Autorizado"}</span>
+                          </h4>
+                        </div>
+                      </div>
+
+                      {/* Card: Resumo Rápido da Solicitação */}
+                      <div className="bg-slate-50 border border-slate-200/50 rounded-2xl p-5 space-y-4 shadow-xs mt-4">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                          <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest block">Briefing para Tomada de Decisão</span>
+                          <span className="text-[8px] bg-[#03440c]/8 text-[#03440c] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">Dados Principais</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Setor Solicitante</p>
+                            <p className="font-extrabold text-slate-800 uppercase truncate text-[11px]">{renderValue(record.unidadeSetor)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-0.5">Criticidade Declarada</p>
+                            <span className={`inline-block mt-0.5 px-2.5 py-1 rounded text-[8px] font-black uppercase border leading-none ${
+                              record.criticidade?.toLowerCase().includes("alta") || record.criticidade?.toLowerCase().includes("crít")
+                                ? "bg-rose-50 border-rose-250 text-rose-850"
+                                : record.criticidade?.toLowerCase().includes("méd")
+                                ? "bg-amber-50 border-amber-250 text-amber-850"
+                                : "bg-emerald-50 border-emerald-250 text-emerald-850"
+                            }`}>
+                              {record.criticidade || "Baixa"}
+                            </span>
+                          </div>
+                          <div className="col-span-2 pt-2 border-t border-slate-200/40">
+                            <p className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Finalidade declarada do uso</p>
+                            <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic bg-white p-3 border border-slate-200/60 rounded-xl max-h-24 overflow-y-auto custom-scrollbar">
+                              {record.descricaoAtividade ? `"${record.descricaoAtividade}"` : "Descrição não fornecida."}
+                            </p>
                           </div>
                         </div>
-                      );
-                    })()}
+                      </div>
+
+                      {/* Histórico Recente de pareceres de etapas concluídas */}
+                      {(() => {
+                        const prevSteps = wf?.steps?.filter((s) => s.stepNumber < currentStepNum && s.status !== "aguardando") || [];
+                        if (prevSteps.length === 0) return null;
+                        return (
+                          <div className="bg-slate-50/40 border border-slate-200/60 rounded-2xl p-5 space-y-3.5 mt-4">
+                            <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Histórico de Pareceres Anteriores</h5>
+                            <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                              {prevSteps.map((s) => (
+                                <div key={s.stepNumber} className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-xs text-xs">
+                                  <div className="flex items-center justify-between mb-1.5 text-[9px] font-black uppercase tracking-wider">
+                                    <span className="text-slate-800 font-extrabold">{s.stepNumber}. {s.roleName} • {s.assignedUserName || "Assinatura Livre"}</span>
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black leading-none border ${s.status === "negado" ? "text-rose-850 bg-rose-50 border-rose-200" : "text-emerald-850 bg-emerald-50 border-emerald-200"}`}>
+                                      {s.status === "negado" ? "INDEFERIDO" : "APROVADO"}
+                                    </span>
+                                  </div>
+                                  <p className="text-slate-650 font-medium italic leading-relaxed text-[11px] pl-2 border-l-2 border-[#03440c]/30 whitespace-pre-wrap">
+                                    {s.comment || "Parecer sem comentários específicos."}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                     {/* FORMULÁRIO DE PREENCHIMENTO EXCLUSIVO DAS CONTAS ATIVAS DE COORDENADOR NIT, GERENTE NIT, E GERENTE TI */}
                     {currentStepNum === 1 && (
-                      <div className="space-y-4 pt-1">
-                        <p className="text-[9px] font-black text-[#03440c] uppercase tracking-wider bg-[#03440c]/5 border border-[#03440c]/10 px-3 py-1.5 rounded-lg">✓ RECURSOS OBRIGATÓRIOS DO COORDENADOR NIT</p>
-                        
-                        {/* Campo 1 */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Alinhamento Estratégico de Inovação</label>
-                          <div className="flex gap-2">
-                            {["Alinhado", "Parcialmente Alinhado", "Não Alinhado"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setCoordAlinhamento(opt)}
-                                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                  coordAlinhamento === opt
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-800"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Campo 2 */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Potencial de Transferência ou Patente</label>
-                          <div className="flex gap-2">
-                            {["Alto", "Médio", "Baixo", "Não avaliado"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setCoordTransferencia(opt)}
-                                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                  coordTransferencia === opt
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-800"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Campo 3 */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Viabilidade de Registro de Software</label>
-                          <div className="flex gap-2">
-                            {["Sim", "Não", "Em estudo"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setCoordViabilidade(opt)}
-                                className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                  coordViabilidade === opt
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-800"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Divisor */}
-                        <div className="h-px bg-slate-100 my-4" />
-                        
-                        <p className="text-[9px] font-black text-indigo-700 uppercase tracking-wider bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg">🛡️ Análise de Dados e Privacidade — Coordenador NIT</p>
-                        
-                        {/* Campo Dados Pessoais */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Utiliza dados pessoais?</label>
+                      <div className="space-y-6 pt-2">
+                        {/* CARD 1: RECURSOS OBRIGATÓRIOS DO COORDENADOR NIT */}
+                        <div className="bg-[#03440c]/3 border border-[#03440c]/10 rounded-2xl p-5 space-y-4">
+                          <p className="text-[10px] font-black text-[#03440c] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#03440c]/10 pb-2">
+                            <span>✓</span> RECURSOS OBRIGATÓRIOS DO COORDENADOR NIT
+                          </p>
+                          
+                          {/* Campo 1 */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Alinhamento Estratégico de Inovação</label>
                             <div className="flex gap-2">
-                              {["Sim", "Não"].map(opt => (
+                              {["Alinhado", "Parcialmente Alinhado", "Não Alinhado"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
-                                  onClick={() => setCoordUsaDadosPessoais(opt)}
-                                  className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                    coordUsaDadosPessoais === opt
-                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800"
-                                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                                  onClick={() => setCoordAlinhamento(opt)}
+                                  className={`flex-1 py-3 px-1 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    coordAlinhamento === opt
+                                      ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                   }`}
                                 >
                                   {opt}
@@ -1296,52 +1332,19 @@ export default function ApprovalPage({
                             </div>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Utiliza dados sensíveis?</label>
+                          {/* Campo 2 */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Potencial de Transferência ou Patente</label>
                             <div className="flex gap-2">
-                              {["Sim", "Não"].map(opt => (
+                              {["Alto", "Médio", "Baixo", "Não avaliado"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
-                                  onClick={() => setCoordUsaDadosSensiveis(opt)}
-                                  className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                    coordUsaDadosSensiveis === opt
-                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800"
-                                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                  }`}
-                                >
-                                  {opt}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Campo Quais Dados são Processados */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Quais Dados são Processados?</label>
-                          <textarea
-                            value={coordQuaisDados}
-                            onChange={(e) => setCoordQuaisDados(e.target.value)}
-                            placeholder="Descreva detalhadamente os dados analisados/processados pela ferramenta (ex: CPF, nome, prontuário, exames, etc.)."
-                            className="w-full text-xs font-semibold p-3 outline-none rounded-xl border border-slate-200 focus:border-indigo-400 focus:bg-indigo-50/10 placeholder-slate-400 bg-slate-50 text-slate-700 min-h-[60px] resize-none"
-                          />
-                        </div>
-
-                        {/* Campo Dados Anonimizados */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Os dados são anonimizados?</label>
-                            <div className="flex gap-1">
-                              {["Sim", "Não", "Parcial"].map(opt => (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => setCoordDadosAnonimizados(opt)}
-                                  className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                    coordDadosAnonimizados === opt
-                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800"
-                                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                                  onClick={() => setCoordTransferencia(opt)}
+                                  className={`flex-1 py-3 px-1 rounded-xl text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    coordTransferencia === opt
+                                      ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                   }`}
                                 >
                                   {opt}
@@ -1350,18 +1353,19 @@ export default function ApprovalPage({
                             </div>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Compartilha ambiente externo / Fornecedor?</label>
+                          {/* Campo 3 */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Viabilidade de Registro de Software</label>
                             <div className="flex gap-2">
-                              {["Sim", "Não"].map(opt => (
+                              {["Sim", "Não", "Em estudo"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
-                                  onClick={() => setCoordEnvioFornecedorExterno(opt)}
-                                  className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                    coordEnvioFornecedorExterno === opt
-                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800"
-                                      : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                                  onClick={() => setCoordViabilidade(opt)}
+                                  className={`flex-1 py-3 px-1 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    coordViabilidade === opt
+                                      ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                   }`}
                                 >
                                   {opt}
@@ -1371,93 +1375,197 @@ export default function ApprovalPage({
                           </div>
                         </div>
 
-                        {/* Campo Armazenamento de treinamento de dados */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">A ferramenta armazena ou utiliza os dados para treinamento?</label>
-                          <div className="flex gap-2">
-                            {["Sim", "Não", "Não sei"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setCoordDadosTreinamentoModelo(opt)}
-                                className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                  coordDadosTreinamentoModelo === opt
-                                    ? "bg-indigo-50 border-indigo-400 text-indigo-800"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
+                        {/* CARD 2: PRIVACIDADE E DADOS */}
+                        <div className="bg-indigo-50/20 border border-indigo-200/50 rounded-2xl p-5 space-y-4">
+                          <p className="text-[10px] font-black text-indigo-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-indigo-200/20 pb-2">
+                            <span>🛡️</span> ANÁLISE DE DADOS E PRIVACIDADE — COORDENADOR NIT
+                          </p>
+                          
+                          {/* Campo Dados Pessoais */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">Utiliza dados pessoais?</label>
+                              <div className="flex gap-2">
+                                {["Sim", "Não"].map(opt => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setCoordUsaDadosPessoais(opt)}
+                                    className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                      coordUsaDadosPessoais === opt
+                                        ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">Utiliza dados sensíveis?</label>
+                              <div className="flex gap-2">
+                                {["Sim", "Não"].map(opt => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setCoordUsaDadosSensiveis(opt)}
+                                    className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                      coordUsaDadosSensiveis === opt
+                                        ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-555/15"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Campo Quais Dados são Processados */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">Quais Dados são Processados?</label>
+                            <textarea
+                              value={coordQuaisDados}
+                              onChange={(e) => setCoordQuaisDados(e.target.value)}
+                              placeholder="Descreva detalhadamente os dados analisados/processados pela ferramenta (ex: CPF, nome, prontuário, exames, etc.)."
+                              className="w-full text-xs font-semibold p-4 outline-none rounded-xl border border-slate-200 focus:border-indigo-400 focus:bg-indigo-50/10 placeholder-slate-400 bg-white text-slate-750 min-h-[70px] resize-none shadow-sm transition-all"
+                            />
+                          </div>
+
+                          {/* Campo Dados Anonimizados */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">Os dados são anonimizados?</label>
+                              <div className="flex gap-1.5">
+                                {["Sim", "Não", "Parcial"].map(opt => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setCoordDadosAnonimizados(opt)}
+                                    className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                      coordDadosAnonimizados === opt
+                                        ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">Compartilha ambiente externo / Fornecedor?</label>
+                              <div className="flex gap-2">
+                                {["Sim", "Não"].map(opt => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => setCoordEnvioFornecedorExterno(opt)}
+                                    className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                      coordEnvioFornecedorExterno === opt
+                                        ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Campo Armazenamento de treinamento de dados */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">A ferramenta armazena ou utiliza os dados para treinamento?</label>
+                            <div className="flex gap-2">
+                              {["Sim", "Não", "Não sei"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setCoordDadosTreinamentoModelo(opt)}
+                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    coordDadosTreinamentoModelo === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
                     )}
 
                     {currentStepNum === 2 && (
-                      <div className="space-y-6 pt-1">
+                      <div className="space-y-6 pt-2">
                         {/* PAINEL EXECUTIVO DE DECISÃO RÁPIDA (PARA O GERENTE DO NIT) */}
-                        <div className="bg-gradient-to-br from-indigo-50/70 via-emerald-50/30 to-slate-50 border border-slate-200/80 rounded-[1.25rem] p-4 shadow-sm space-y-4">
-                          <div className="flex items-center justify-between border-b border-dashed border-slate-200 pb-2">
+                        <div className="bg-gradient-to-br from-indigo-50/40 via-emerald-50/10 to-slate-50 border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+                          <div className="flex items-center justify-between border-b border-dashed border-slate-200 pb-3">
                             <div className="flex items-center gap-2">
-                              <div className="p-1 rounded-lg bg-[#03440c]/10 text-[#03440c]">
+                              <div className="p-1.5 rounded-lg bg-[#03440c]/10 text-[#03440c]">
                                 <Activity size={14} />
                               </div>
                               <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Painel Executivo de Decisão Rápida</p>
                             </div>
-                            <span className="text-[8px] bg-indigo-100 text-indigo-700 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
-                              ⚡ Leitura Veloz
+                            <span className="text-[8px] bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+                              ⚡ Painel de Síntese
                             </span>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Bloco A: Resumo Crítico do Solicitante */}
-                            <div className="bg-white border border-slate-100 p-3 rounded-xl space-y-2">
-                              <p className="text-[8px] font-black uppercase text-slate-400 tracking-tight flex items-center gap-1.5">
+                            <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-3 shadow-2xs">
+                              <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
                                 <Info size={10} className="text-slate-500" /> DADOS DA SOLICITAÇÃO
                               </p>
                               
-                              <div className="space-y-1 text-xs text-slate-700 font-semibold">
-                                <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                              <div className="space-y-2 text-xs text-slate-705 font-semibold">
+                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
                                   <span className="text-[8px] text-[#03440c]/70 font-black uppercase">IA Proposta</span>
                                   <span className="font-extrabold text-slate-900 truncate max-w-[140px] uppercase text-[10px]">{record.nomeFerramenta}</span>
                                 </div>
-                                <div className="flex justify-between items-center text-[10px]">
+                                <div className="flex justify-between items-center text-[10px] px-1">
                                   <span className="text-[8px] text-slate-400 uppercase">Setor / Cargo</span>
-                                  <span className="font-medium text-slate-600 truncate max-w-[150px] uppercase">{record.unidadeSetor} • {record.cargo || "Não inf."}</span>
+                                  <span className="font-semibold text-slate-600 truncate max-w-[150px] uppercase">{record.unidadeSetor} • {record.cargo || "Não inf."}</span>
                                 </div>
                                 
                                 {/* Alerta de Risco LGPD */}
-                                <div className="flex justify-between items-center text-[10px]">
+                                <div className="flex justify-between items-center text-[10px] px-1">
                                   <span className="text-[8px] text-slate-400 uppercase">Tratamento de Dados</span>
                                   <div className="flex gap-1">
-                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${record.usaDadosPessoais === "Sim" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black ${record.usaDadosPessoais === "Sim" ? "bg-amber-100 text-amber-805" : "bg-slate-100 text-slate-500"}`}>
                                       {record.usaDadosPessoais === "Sim" ? "PESSOAIS ⚠️" : "NÃO PESSOAIS"}
                                     </span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${record.usaDadosSensiveis === "Sim" ? "bg-red-100 text-red-800 animate-pulse" : "bg-slate-100 text-slate-500"}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black ${record.usaDadosSensiveis === "Sim" ? "bg-rose-100 text-rose-805" : "bg-slate-100 text-slate-500"}`}>
                                       {record.usaDadosSensiveis === "Sim" ? "SENSÍVEIS 🔥" : "NÃO SENSÍVEIS"}
                                     </span>
                                   </div>
                                 </div>
 
                                 {/* Criticidade Estimada */}
-                                <div className="flex justify-between items-center text-[10px]">
+                                <div className="flex justify-between items-center text-[10px] px-1">
                                   <span className="text-[8px] text-slate-400 uppercase">Criticidade Geral</span>
-                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
                                     record.criticidade?.toLowerCase().includes("alta") || record.criticidade?.toLowerCase().includes("crít")
-                                      ? "bg-red-50 border border-red-200 text-red-700"
+                                      ? "bg-rose-50 border-rose-200 text-rose-850"
                                       : record.criticidade?.toLowerCase().includes("méd")
-                                      ? "bg-amber-50 border border-amber-200 text-amber-700"
-                                      : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                                      ? "bg-amber-50 border-amber-200 text-amber-850"
+                                      : "bg-emerald-50 border-emerald-200 text-emerald-850"
                                   }`}>
                                     {record.criticidade || "Baixa"}
                                   </span>
                                 </div>
 
                                 {/* Resumo da descrição */}
-                                <div className="pt-1.5 border-t border-slate-100">
-                                  <span className="text-[8px] text-slate-400 uppercase block mb-0.5">Finalidade do Uso</span>
-                                  <p className="text-[10px] text-slate-600 font-medium leading-relaxed italic bg-emerald-50/10 p-2 rounded-lg border border-emerald-100/20 truncate">
+                                <div className="pt-2 border-t border-slate-100">
+                                  <span className="text-[8px] text-slate-400 uppercase block mb-1">Finalidade do Uso</span>
+                                  <p className="text-[10px] text-slate-600 font-medium leading-relaxed italic bg-emerald-50/5 p-2 rounded-lg border border-emerald-100/10 truncate">
                                     {record.descricaoAtividade || "Nenhuma descrição fornecida."}
                                   </p>
                                 </div>
@@ -1480,35 +1588,35 @@ export default function ApprovalPage({
                               const parecerJustificativa = matchParecerText ? matchParecerText[1].trim() : (commentRaw ? commentRaw : "Sem parecer detalhado do coordenador do NIT.");
 
                               return (
-                                <div className="bg-white border border-slate-100 p-3 rounded-xl space-y-2">
-                                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-tight flex items-center gap-1.5">
+                                <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-3 shadow-2xs">
+                                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
                                     <ShieldCheck size={10} className="text-[#03440c]" /> PARECER COORDENADOR NIT
                                   </p>
                                   
-                                  <div className="space-y-1 text-xs text-slate-700 font-semibold">
-                                    <div className="flex justify-between items-center text-[10px]">
+                                  <div className="space-y-2 text-xs text-slate-705 font-semibold">
+                                    <div className="flex justify-between items-center text-[10px] px-1">
                                       <span className="text-[8px] text-slate-400 uppercase">Alinhamento</span>
-                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${
-                                        alinhamentoVal.includes("Não") ? "bg-red-50 text-red-800" : alinhamentoVal.includes("Parcial") ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                        alinhamentoVal.includes("Não") ? "bg-rose-50 border-rose-220 text-rose-850" : alinhamentoVal.includes("Parcial") ? "bg-amber-50 border-amber-220 text-amber-850" : "bg-emerald-50 border-emerald-220 text-emerald-850"
                                       }`}>{alinhamentoVal}</span>
                                     </div>
                                     
-                                    <div className="flex justify-between items-center text-[10px]">
+                                    <div className="flex justify-between items-center text-[10px] px-1">
                                       <span className="text-[8px] text-slate-400 uppercase">Transferência</span>
-                                      <span className="text-slate-950 font-extrabold uppercase">{transferenciaVal}</span>
+                                      <span className="text-slate-905 font-extrabold uppercase">{transferenciaVal}</span>
                                     </div>
 
-                                    <div className="flex justify-between items-center text-[10px]">
+                                    <div className="flex justify-between items-center text-[10px] px-1">
                                       <span className="text-[8px] text-slate-400 uppercase">Reg. Software</span>
-                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${
-                                        viabilidadeVal === "Sim" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-500"
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black border ${
+                                        viabilidadeVal === "Sim" ? "bg-emerald-50 text-emerald-805 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
                                       }`}>{viabilidadeVal}</span>
                                     </div>
 
                                     {/* Parecer textual reduzido */}
-                                    <div className="pt-1.5 border-t border-slate-100">
-                                      <span className="text-[8px] text-slate-400 uppercase block mb-0.5">Parecer Coordenador</span>
-                                      <p className="text-[10px] text-slate-600 font-medium leading-relaxed italic bg-indigo-50/10 p-2 rounded-lg border border-indigo-100/20 truncate">
+                                    <div className="pt-2 border-t border-slate-100">
+                                      <span className="text-[8px] text-slate-400 uppercase block mb-1">Parecer Coordenador</span>
+                                      <p className="text-[10px] text-slate-650 font-medium leading-relaxed italic bg-indigo-50/5 p-2 rounded-lg border border-indigo-100/10 truncate">
                                         {parecerJustificativa}
                                       </p>
                                     </div>
@@ -1520,27 +1628,27 @@ export default function ApprovalPage({
                         </div>
 
                         {/* FORMULÁRIO GESTÃO DE RISCO DO GERENTE NIT */}
-                        <div className="space-y-5">
+                        <div className="space-y-6">
                           {/* BLOCO 1 - IDENTIFICAÇÃO DOS RISCOS */}
-                          <div className="bg-slate-50/60 p-4 rounded-2xl border border-slate-200/80 space-y-3.5">
-                            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-200/60">
-                              <span className="text-xs bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">1</span>
+                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
+                              <span className="text-[10px] bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">1</span>
                               <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Bloco 1 — Identificação dos riscos</h5>
                             </div>
 
                             {/* Campo 1.1 */}
-                            <div className="space-y-1.5">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight">1. Foram identificados riscos relevantes no uso da IA?</label>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">1. Foram identificados riscos relevantes no uso da IA?</label>
                               <div className="flex gap-2">
                                 {["Sim", "Não", "Não identificado"].map((opt) => (
                                   <button
                                     key={opt}
                                     type="button"
                                     onClick={() => setG1RiscosRelevantes(opt as any)}
-                                    className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
+                                    className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                       g1RiscosRelevantes === opt
-                                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 font-extrabold shadow-sm"
-                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
+                                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                     }`}
                                   >
                                     {opt}
@@ -1551,7 +1659,7 @@ export default function ApprovalPage({
 
                             {/* Campo 1.2 */}
                             <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight block">2. Tipo de risco identificado (Multi-escolha)</label>
+                              <label className="text-[10px] font-black text-slate-550 uppercase tracking-wider block">2. Tipo de risco identificado (Multi-escolha)</label>
                               <div className="grid grid-cols-2 gap-2 text-[9px] font-semibold">
                                 {[
                                   "Dados e sigilo",
@@ -1576,14 +1684,18 @@ export default function ApprovalPage({
                                           setG1TiposRisk([...g1TiposRisk, opt]);
                                         }
                                       }}
-                                      className={`py-1.5 px-3 rounded-lg border text-[9px] font-bold uppercase transition-all text-left flex items-center justify-between ${
+                                      className={`py-2.5 px-3.5 rounded-xl border text-[10px] font-bold uppercase transition-all duration-200 text-left flex items-center justify-between cursor-pointer ${
                                         isSelected
-                                          ? "bg-indigo-50 border-indigo-400 text-indigo-800"
+                                          ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-1 ring-indigo-500/10"
                                           : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                                       }`}
                                     >
                                       <span>{opt}</span>
-                                      {isSelected && <span className="text-[8px] text-indigo-700 font-black">✓</span>}
+                                      {isSelected ? (
+                                        <span className="size-4 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-[9px]">✓</span>
+                                      ) : (
+                                        <span className="size-4 rounded-full border border-slate-250 flex items-center justify-center text-[10px] text-slate-300"></span>
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -1591,37 +1703,37 @@ export default function ApprovalPage({
                             </div>
 
                             {/* Campo 1.3 */}
-                            <div className="space-y-1.5">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight block">3. Descrição dos riscos identificados</label>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">3. Descrição dos riscos identificados</label>
                               <textarea
                                 value={g1Descricao}
                                 onChange={(e) => setG1Descricao(e.target.value)}
                                 placeholder="Descreva tecnicamente os riscos mapeados nesta IA, como viés na tomada de decisões, problemas na segurança dos dados ou vazamentos..."
-                                className="w-full h-20 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-[11px] font-semibold focus:border-indigo-550 focus:ring-1 focus:ring-indigo-500/10 outline-none transition-all resize-none shadow-sm"
+                                className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/10 outline-none transition-all resize-none shadow-sm"
                               />
                             </div>
                           </div>
 
                           {/* BLOCO 2 - CONTROLES E MITIGAÇÃO */}
-                          <div className="bg-slate-50/60 p-4 rounded-2xl border border-slate-200/80 space-y-3.5">
-                            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-200/60">
-                              <span className="text-xs bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">2</span>
+                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
+                              <span className="text-[10px] bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">2</span>
                               <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Bloco 2 — Controles e mitigação</h5>
                             </div>
 
                             {/* Campo 2.1 */}
-                            <div className="space-y-1.5">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight">1. Existem controles previstos ou implementados para reduzir os riscos?</label>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">1. Existem controles previstos ou implementados para reduzir os riscos?</label>
                               <div className="flex gap-2">
                                 {["Sim", "Não", "Parcialmente", "Não se aplica"].map((opt) => (
                                   <button
                                     key={opt}
                                     type="button"
                                     onClick={() => setG2ControlesExistentes(opt as any)}
-                                    className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
+                                    className={`flex-1 py-3 rounded-xl text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                       g2ControlesExistentes === opt
-                                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 font-extrabold shadow-sm"
-                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
+                                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                     }`}
                                   >
                                     {opt}
@@ -1632,7 +1744,7 @@ export default function ApprovalPage({
 
                             {/* Campo 2.2 */}
                             <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight block">2. Quais controles existem? (Multi-escolha)</label>
+                              <label className="text-[10px] font-black text-slate-550 uppercase tracking-wider block">2. Quais controles existem? (Multi-escolha)</label>
                               <div className="grid grid-cols-2 gap-2 text-[9px] font-semibold">
                                 {[
                                   "Revisão humana obrigatória",
@@ -1659,14 +1771,18 @@ export default function ApprovalPage({
                                           setG2ControlesTipos([...g2ControlesTipos, opt]);
                                         }
                                       }}
-                                      className={`py-1.5 px-3 rounded-lg border text-[9px] font-bold uppercase transition-all text-left flex items-center justify-between ${
+                                      className={`py-2 px-3 rounded-xl border text-[9px] font-bold uppercase transition-all duration-200 text-left flex items-center justify-between cursor-pointer ${
                                         isSelected
-                                          ? "bg-indigo-50 border-indigo-400 text-indigo-800"
+                                          ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-1 ring-indigo-500/10"
                                           : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                                       }`}
                                     >
                                       <span>{opt}</span>
-                                      {isSelected && <span className="text-[8px] text-indigo-700 font-black">✓</span>}
+                                      {isSelected ? (
+                                        <span className="size-4 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-[9px]">✓</span>
+                                      ) : (
+                                        <span className="size-4 rounded-full border border-slate-250 flex items-center justify-center text-[10px] text-slate-350"></span>
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -1674,13 +1790,13 @@ export default function ApprovalPage({
                             </div>
 
                             {/* Campo 2.3 */}
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight">
+                                <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">
                                   3. Controles adicionais necessários
                                 </label>
                                 {(g2ControlesExistentes === "Não" || g2ControlesExistentes === "Parcialmente") && (
-                                  <span className="text-[8px] bg-red-100 text-red-700 font-extrabold tracking-widest uppercase px-2 py-0.5 rounded animate-pulse">
+                                  <span className="text-[8px] bg-rose-50 border border-rose-200 text-rose-800 font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-lg">
                                     Obrigatório ⚠️
                                   </span>
                                 )}
@@ -1689,30 +1805,30 @@ export default function ApprovalPage({
                                 value={g2ControlesAdicionais}
                                 onChange={(e) => setG2ControlesAdicionais(e.target.value)}
                                 placeholder="Liste e descreva quais medidas preventivas adicionais são sugeridas ou necessárias para mitigar os riscos mapeados..."
-                                className="w-full h-20 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-[11px] font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
+                                className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
                                 required={g2ControlesExistentes === "Não" || g2ControlesExistentes === "Parcialmente"}
                               />
                             </div>
                           </div>
 
                           {/* BLOCO 3 - RISCO RESIDUAL E RESPONSABILIDADE */}
-                          <div className="bg-slate-50/60 p-4 rounded-2xl border border-slate-200/80 space-y-3.5">
-                            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-200/60">
-                              <span className="text-xs bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">3</span>
+                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
+                              <span className="text-[10px] bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">3</span>
                               <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Bloco 3 — Risco residual e responsabilidade</h5>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3">
+                            <div className="grid grid-cols-1 gap-4">
                               {/* Risco Residual com Pill Colors */}
-                              <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight">1. Risco residual após os controles</label>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">1. Risco residual após os controles</label>
                                 <div className="flex flex-wrap gap-1.5">
                                   {[
-                                    { val: "Baixo", col: "active:bg-emerald-600 bg-emerald-50 border-emerald-200 text-emerald-800", selCol: "bg-emerald-600 border-emerald-600 text-white" },
-                                    { val: "Médio", col: "active:bg-amber-500 bg-amber-50 border-amber-200 text-amber-850", selCol: "bg-amber-500 border-amber-500 text-white animate-pulse" },
-                                    { val: "Alto", col: "active:bg-orange-600 bg-orange-50 border-orange-200 text-orange-800", selCol: "bg-orange-500 border-orange-500 text-white text-[9px]" },
-                                    { val: "Crítico", col: "active:bg-red-700 bg-red-50 border-red-200 text-red-800", selCol: "bg-red-600 border-red-600 text-white text-[9px] animate-pulse" },
-                                    { val: "Não avaliado", col: "active:bg-slate-500 bg-slate-50 border-slate-200 text-slate-550", selCol: "bg-slate-500 border-slate-500 text-white" }
+                                    { val: "Baixo", col: "active:bg-emerald-600 bg-emerald-50 border-emerald-250 text-emerald-800", selCol: "bg-emerald-600 border-emerald-600 text-white shadow-xs" },
+                                    { val: "Médio", col: "active:bg-amber-500 bg-amber-50 border-amber-250 text-amber-850", selCol: "bg-amber-500 border-amber-500 text-white shadow-xs" },
+                                    { val: "Alto", col: "active:bg-orange-600 bg-orange-50 border-orange-250 text-orange-850", selCol: "bg-orange-505 border-orange-505 text-white shadow-xs" },
+                                    { val: "Crítico", col: "active:bg-rose-700 bg-rose-50 border-rose-250 text-rose-850", selCol: "bg-rose-600 border-rose-600 text-white shadow-xs" },
+                                    { val: "Não avaliado", col: "active:bg-slate-500 bg-slate-50 border-slate-250 text-slate-550 inline-block", selCol: "bg-slate-500 border-slate-500 text-white shadow-xs" }
                                   ].map((opt) => {
                                     const isSelected = g3RiscoResidual === opt.val;
                                     return (
@@ -1720,8 +1836,8 @@ export default function ApprovalPage({
                                         key={opt.val}
                                         type="button"
                                         onClick={() => setG3RiscoResidual(opt.val as any)}
-                                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                          isSelected ? opt.selCol : `${opt.col} hover:opacity-90`
+                                        className={`px-3.5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                          isSelected ? opt.selCol : `${opt.col} hover:opacity-90 hover:bg-white`
                                         }`}
                                       >
                                         {opt.val}
@@ -1732,12 +1848,12 @@ export default function ApprovalPage({
                               </div>
 
                               {/* Responsável pelo Acompanhamento (Dropdown) */}
-                              <div className="space-y-1.5">
-                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight">2. Responsável pelo acompanhamento do risco</label>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">2. Responsável pelo acompanhamento do risco</label>
                                 <select
                                   value={g3Responsavel}
                                   onChange={(e) => setG3Responsavel(e.target.value)}
-                                  className="w-full py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider border border-slate-200 text-slate-700 bg-white hover:border-[#03440c] outline-none transition-all shadow-sm"
+                                  className="w-full py-3.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-200 text-slate-750 bg-white hover:border-[#03440c] focus:border-[#03440c] outline-none transition-all shadow-sm cursor-pointer"
                                 >
                                   {[
                                     "NIT",
@@ -1749,7 +1865,7 @@ export default function ApprovalPage({
                                     "Gestor da área",
                                     "Outro"
                                   ].map((opt) => (
-                                    <option key={opt} value={opt} className="font-extrabold uppercase text-[10px] text-slate-700 p-2">
+                                    <option key={opt} value={opt} className="font-extrabold uppercase text-[10px] text-slate-700 p-2 leading-loose">
                                       {opt}
                                     </option>
                                   ))}
@@ -1758,13 +1874,13 @@ export default function ApprovalPage({
                             </div>
 
                             {/* Campo 3.3 */}
-                            <div className="space-y-1.5">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-tight block">3. Observações de riscos e controles</label>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">3. Observações de riscos e controles</label>
                               <textarea
                                 value={g3Observacoes}
                                 onChange={(e) => setG3Observacoes(e.target.value)}
                                 placeholder="Insira quaisquer notas, observações jurídicas, de patentes ou recomendações especiais sobre os riscos e formas de mitigação planejados..."
-                                className="w-full h-20 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-[11px] font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
+                                className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
                               />
                             </div>
                           </div>
@@ -1772,70 +1888,83 @@ export default function ApprovalPage({
                       </div>
                     )}
 
+
                     {currentStepNum === 3 && (
-                      <div className="space-y-4 pt-1">
-                        <p className="text-[9px] font-black text-[#03440c] uppercase tracking-wider bg-[#03440c]/5 border border-[#03440c]/10 px-3 py-1.5 rounded-lg">✓ RECURSOS OBRIGATÓRIOS DO GERENTE TI</p>
-                        
-                        {/* Campo Infra */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Compatibilidade de Rede e APIs</label>
-                          <div className="flex gap-2">
-                            {["Compatível / Cloud nativa", "Requer novas VMs", "Incompatível"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setTiInfra(opt)}
-                                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                  tiInfra === opt
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-800 font-extrabold"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
+                      <div className="space-y-5 pt-2">
+                        {/* Título da seção */}
+                        <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex items-center gap-2.5">
+                          <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-700">
+                            <ShieldCheck size={14} />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-900 uppercase tracking-wider">Homologação Gerente TI</p>
+                            <span className="text-[9px] text-slate-500 font-medium tracking-tight">Avaliação estrita de compliance, infraestrutura de rede, LGPD e integrações corporativas.</span>
                           </div>
                         </div>
 
-                        {/* Campo Segurança */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Garantias de Segurança de Dados e LGPD</label>
-                          <div className="flex gap-2">
-                            {["Conforme", "Alerta", "Crítico"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setTiSeguranca(opt)}
-                                className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
-                                  tiSeguranca === opt
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-800 font-extrabold"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
+                        {/* Bloco de Campos de TI */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5 shadow-2xs">
+                          {/* Campo Infra */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">1. Compatibilidade de Rede, Recursos e APIs</label>
+                            <div className="flex gap-2">
+                              {["Compatível / Cloud nativa", "Requer novas VMs", "Incompatível"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiInfra(opt)}
+                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiInfra === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Campo Integração */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">Integração com Sistemas de TI Cedro</label>
-                          <div className="flex gap-2">
-                            {["Não (Autônoma)", "Sim (Requer API)", "Sim (Requer Customização)"].map(opt => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => setTiIntegracao(opt)}
-                                className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border transition-all ${
-                                  tiIntegracao === opt
-                                    ? "bg-emerald-50 border-emerald-500 text-emerald-800 font-extrabold"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
+                          {/* Campo Segurança */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">2. Garantias de Segurança de Dados e LGPD</label>
+                            <div className="flex gap-2">
+                              {["Conforme", "Alerta", "Crítico"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiSeguranca(opt)}
+                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiSeguranca === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Campo Integração */}
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">3. Integração com Sistemas de TI Cedro</label>
+                            <div className="flex gap-2">
+                              {["Não (Autônoma)", "Sim (Requer API)", "Sim (Requer Customização)"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiIntegracao(opt)}
+                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiIntegracao === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1843,53 +1972,59 @@ export default function ApprovalPage({
 
                     {/* Etapas de decisão / Formulários dinâmicos baseados no tipo de etapa */}
                     {currentStepNum === 4 ? (
-                      <div className="bg-emerald-50/25 border-l-4 border-emerald-600 p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
-                        <div className="flex items-center gap-2 text-emerald-800">
-                          <CheckCircle2 size={18} />
-                          <h3 className="text-sm font-black uppercase tracking-wider">Confirmação do Período de Teste</h3>
+                      <div className="bg-gradient-to-br from-emerald-50/40 via-white to-slate-50 border border-emerald-250 p-6 rounded-2xl space-y-5 shadow-xs">
+                        <div className="flex items-center gap-3 border-b border-dashed border-emerald-200 pb-3">
+                          <div className="p-2 bg-emerald-50 text-emerald-800 rounded-xl">
+                            <CheckCircle2 size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-black uppercase text-emerald-850 tracking-wider">Confirmação Geral de Período de Teste</h3>
+                            <span className="text-[10px] text-slate-505 font-semibold block">Inovação e Homologabilidade Prática da IA</span>
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                          Antes de avançar no fluxo, confirme se a ferramenta foi testada em ambiente adequado e se apresentou condições mínimas de uso.
+                        
+                        <p className="text-xs text-slate-650 leading-relaxed font-semibold">
+                          Antes de avançar no fluxo para a análise orçamentária e financeira, confirme formalmente se a ferramenta de IA foi exaustivamente simulada ou testada e demonstrou a utilidade pretendida em conformidade com as diretivas das comissões do Cedro.
                         </p>
                         
-                        <div className="space-y-2.5">
-                          <p className="text-xs font-bold text-slate-800">
-                            O período de teste foi realizado e a ferramenta demonstrou condições mínimas para seguir no fluxo de aprovação?
+                        <div className="bg-emerald-50/10 border border-emerald-100 p-4 rounded-xl space-y-3">
+                          <p className="text-[10px] font-black text-slate-800 uppercase tracking-wider">
+                            O período de teste foi realizado e a ferramenta demonstrou condições operacionais mínimas?
                           </p>
                           <div className="flex gap-3">
                             <button
                               type="button"
                               onClick={() => setPeriodoTesteConfirmado("Sim")}
-                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                              className={`flex-1 py-3.5 px-4 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer ${
                                 periodoTesteConfirmado === "Sim"
-                                  ? "bg-emerald-100/70 border-emerald-500 text-emerald-800 shadow-sm ring-2 ring-emerald-500/10"
+                                  ? "bg-[#03440c] border-[#03440c] text-white shadow-md shadow-emerald-100"
                                   : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                               }`}
                             >
-                              <CheckCircle2 size={14} className={periodoTesteConfirmado === "Sim" ? "text-emerald-700" : "text-slate-400"} /> Sim
+                              <CheckCircle2 size={14} className={periodoTesteConfirmado === "Sim" ? "text-white" : "text-emerald-700"} /> SIM, HOMOLOGADA ✅
                             </button>
                             <button
                               type="button"
                               onClick={() => setPeriodoTesteConfirmado("Não")}
-                              className={`flex-1 py-3 px-4 rounded-xl text-xs font-extrabold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                              className={`flex-1 py-3.5 px-4 rounded-xl text-xs font-black transition-all border flex items-center justify-center gap-2 cursor-pointer ${
                                 periodoTesteConfirmado === "Não"
-                                  ? "bg-red-50/75 border-red-500 text-red-800 shadow-xs ring-2 ring-red-500/15"
+                                  ? "bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-100 animate-pulse"
                                   : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                               }`}
                             >
-                              <XCircle size={14} className={periodoTesteConfirmado === "Não" ? "text-red-650" : "text-slate-400"} /> Não
+                              <XCircle size={14} className={periodoTesteConfirmado === "Não" ? "text-white" : "text-rose-600"} /> NÃO HOMOLOGADA ❌
                             </button>
                           </div>
                         </div>
 
                         {/* Campo Observações Opcional */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Observações (opcional)</label>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">Observações do Solicitador / Comentários Técnicos (Opcional)</label>
                           <textarea
                             value={auditComment}
                             onChange={(e) => setAuditComment(e.target.value)}
-                            placeholder="Insira detalhes adicionais sobre o período de teste e suas condições técnicas..."
-                            className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-xs font-semibold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/10 outline-none transition-all resize-none shadow-inner"
+                            placeholder="Insira detalhes adicionais sobre o período de teste e suas condições técnicas observadas no laboratório..."
+                            className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/10 outline-none transition-all resize-none shadow-sm"
                           />
                         </div>
                       </div>
@@ -1897,28 +2032,28 @@ export default function ApprovalPage({
                       <>
                         {/* Etapas 5 (Análise Financeira) e 6 (Presidência) têm modo de visualização nua */}
                         {(currentStepNum === 5 || currentStepNum === 6) && (
-                          <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3">
-                            <div className="flex items-center gap-2 text-amber-600">
-                              <ShieldAlert size={18} />
-                              <p className="text-[10px] font-black uppercase tracking-wider">Modo Exclusivo de Governança e Decisão</p>
+                          <div className="bg-gradient-to-br from-amber-500/10 via-amber-200/5 to-slate-50 border border-amber-250 p-5 rounded-2xl space-y-3 shadow-2xs">
+                            <div className="flex items-center gap-2.5 text-amber-900 border-b border-dashed border-amber-200 pb-2">
+                              <ShieldAlert size={16} />
+                              <p className="text-[10px] font-black uppercase tracking-widest">Modo Exclusivo de Governança e Decisão</p>
                             </div>
-                            <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                              Este perfil de avaliador corporativo (<span className="text-slate-900 font-extrabold">{activeStepDef?.roleName}</span>) possui atribuição de análise estratégica direta.
-                              Você não necessita preencher campos técnicos adicionais. Avalie atentamente as informações prestadas pelo solicitante e os pareceres registrados de inovação, governança e TI para assinar sua decisão de etapa no final deste formulário.
+                            <p className="text-[11px] text-amber-950 leading-relaxed font-semibold">
+                              Como <span className="text-slate-950 font-black uppercase underline">{activeStepDef?.roleName}</span>, você possui prerrogativa de análise de viabilidade direta.
+                              Não é necessária a inserção de formulários técnicos específicos adicionais. Revise os relatórios detalhados na coluna esquerda e assine sua deliberação estratégica.
                             </p>
                           </div>
                         )}
 
                         {/* Parecer de Texto Livre Comum a Todos (exceto Etapa 4 que é embutido) */}
-                        <div className="space-y-2 pt-2">
-                          <label className="text-[10px] font-black text-[#03440c] uppercase tracking-[0.2em] flex items-center gap-1.5">
-                            <MessageSquare size={13} /> Parecer Técnico Justificado
+                        <div className="space-y-2.5 pt-2">
+                          <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-1.5">
+                            <MessageSquare size={13} className="text-[#03440c]" /> Parecer Técnico Justificado
                           </label>
                           <textarea 
                             value={auditComment}
                             onChange={(e) => setAuditComment(e.target.value)}
-                            placeholder="Insira aqui as considerações técnicas, recomendações ou motivos fundamentadores do parecer de aprovação ou repúdio técnica..."
-                            className="w-full h-32 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-2xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-inner"
+                            placeholder="Descreva aqui sua justificativa técnica detalhada corporativa. Seus argumentos de parecer fundamentarão documentalmente o histórico desta IA no banco do Cedro..."
+                            className="w-full h-32 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-2xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-2 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
                             required
                           />
                         </div>
@@ -1927,10 +2062,10 @@ export default function ApprovalPage({
                   </div>
 
                   {/* Ações / Botões Finais de Aprovar ou Negar no Final do Formulário */}
-                  <div className="border-t border-slate-100 pt-6 flex items-center justify-between gap-4">
+                  <div className="border-t border-slate-250 pt-5 flex items-center justify-between gap-4">
                     <button 
                       onClick={() => setAnalysisModal({ isOpen: false, record: null })}
-                      className="px-5 py-4 text-sm font-black text-[#03440c] hover:text-[#006400] tracking-wide uppercase transition-all rounded-full hover:bg-slate-50 text-center"
+                      className="px-6 py-3.5 text-[10px] font-black text-slate-500 hover:text-slate-800 tracking-wider uppercase transition-all duration-200 rounded-xl hover:bg-slate-100 text-center cursor-pointer border border-transparent hover:border-slate-205"
                     >
                       Cancelar
                     </button>
@@ -1940,19 +2075,19 @@ export default function ApprovalPage({
                           const statusToSubmit = periodoTesteConfirmado === "Sim" ? StatusAuditoria.APROVADO : StatusAuditoria.NEGADO;
                           handleDecisionSubmit(statusToSubmit);
                         }}
-                        className={`py-4 px-8 text-xs font-black text-white tracking-widest uppercase transition-all border rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                        className={`py-3.5 px-8 text-[11px] font-black text-white tracking-widest uppercase transition-all duration-200 border rounded-xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
                           periodoTesteConfirmado === "Sim" 
-                            ? "bg-emerald-700 hover:bg-emerald-800 border-emerald-600 shadow-emerald-200 hover:shadow-lg" 
-                            : "bg-red-600 hover:bg-red-750 border-red-500 shadow-red-200 hover:shadow-lg"
+                            ? "bg-[#03440c] hover:bg-emerald-800 border-transparent shadow-[#03440c]/10 hover:shadow-md" 
+                            : "bg-rose-600 hover:bg-rose-700 border-transparent shadow-rose-650/15 hover:shadow-md"
                         }`}
                       >
                         {periodoTesteConfirmado === "Sim" ? (
                           <>
-                            <CheckCircle2 size={15} /> Confirmar Decisão (Aprovar)
+                            <CheckCircle2 size={14} /> Confirmar Decisão (Aprovar)
                           </>
                         ) : (
                           <>
-                            <XCircle size={15} /> Confirmar Decisão (Negar)
+                            <XCircle size={14} /> Confirmar Decisão (Negar)
                           </>
                         )}
                       </button>
@@ -1960,21 +2095,22 @@ export default function ApprovalPage({
                       <div className="flex items-center gap-3">
                         <button 
                           onClick={() => handleDecisionSubmit(StatusAuditoria.NEGADO)}
-                          className="py-4 px-6 text-xs font-black text-white tracking-widest uppercase transition-all bg-red-600 hover:bg-red-700 hover:shadow-lg rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-red-200"
+                          className="py-3.5 px-6.5 text-[11px] font-black text-white tracking-widest uppercase transition-all duration-200 bg-rose-600 hover:bg-rose-700 hover:shadow-md rounded-xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-rose-500/10 border border-transparent"
                         >
-                          <XCircle size={15} /> Negar Etapa
+                          <XCircle size={14} /> Negar Etapa
                         </button>
                         <button 
                           onClick={() => handleDecisionSubmit(StatusAuditoria.APROVADO)}
-                          className="py-4 px-7 text-xs font-black text-white tracking-widest uppercase transition-all bg-emerald-700 hover:bg-emerald-800 hover:shadow-lg rounded-2xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-200"
+                          className="py-3.5 px-7 text-[11px] font-black text-white tracking-widest uppercase transition-all duration-200 bg-[#03440c] hover:bg-emerald-800 hover:shadow-md rounded-xl text-center active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-emerald-500/10 border border-transparent"
                         >
-                          <CheckCircle2 size={15} /> Aprovar Etapa
+                          <CheckCircle2 size={14} /> Aprovar Etapa
                         </button>
                       </div>
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </div>
+            </motion.div>
             </div>
           );
         })()}
