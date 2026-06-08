@@ -737,7 +737,7 @@ export default function ApprovalPage({
                       </select>
                       {privilegedProfiles.length === 0 && (
                         <p className="text-[9px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 font-bold mt-1">
-                          Nenhum administrador ou moderador cadastrado. Promova usuários na aba Gestão Admin.
+                          Nenhum administrador ou moderador cadastrado. Promova usuários na aba Administração IA.
                         </p>
                       )}
                     </div>

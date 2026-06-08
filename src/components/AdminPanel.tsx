@@ -67,8 +67,8 @@ export default function AdminPanel({
   const [activeTab, setActiveTab] = useState<AdminTab>("approvals");
 
   useEffect(() => {
-   if (activeTab === "system_controls" || activeTab === "sectors") {
-  setActiveTab("approvals");
+    if (activeTab === "system_controls" || activeTab === "sectors") {
+      setActiveTab("approvals");
     }
   }, [activeTab]);
   const [approvalFilter, setApprovalFilter] = useState<StatusAuditoria | "all">(StatusAuditoria.PENDENTE);
@@ -776,8 +776,8 @@ export default function AdminPanel({
             </div>
           )}
 
-         {/* ==================== SETORES TAB (OCULTA) ==================== */}
-            {false && activeTab === "sectors" && (
+          {/* ==================== SETORES TAB ==================== */}
+          {activeTab === "sectors" && (
             <div className="space-y-6">
               
               {/* Sector Management Mode Selection */}
