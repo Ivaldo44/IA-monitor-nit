@@ -51,6 +51,71 @@ const getOriginalObservacoes = (record: IARecord | null | undefined): string => 
   return currentObs;
 };
 
+const parseApprovalComment = (rawComment?: string) => {
+  const raw = rawComment || "";
+
+  const normalized = raw
+    .replace(/###\s*FORMULÁRIO DE AVALIAÇÃO\s*-\s*[^\n\r]*/gi, "")
+    .replace(/###\s*FORMULÁRIO DE GESTÃO DE RISCOS\s*\([^\)]*\)/gi, "")
+    .replace(/###/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/\*/g, "")
+    .trim();
+
+  const lines = normalized
+    .split(/\n|•/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const criteria: { label: string; value: string }[] = [];
+  let parecer = "";
+
+  lines.forEach(line => {
+    const cleanLine = line.trim();
+
+    if (/^parecer final da etapa:/i.test(cleanLine)) {
+      parecer = cleanLine.replace(/^parecer final da etapa:\s*/i, "").trim();
+      return;
+    }
+
+    if (/^parecer:/i.test(cleanLine)) {
+      parecer = cleanLine.replace(/^parecer:\s*/i, "").trim();
+      return;
+    }
+
+    if (/^confirmação do período de teste:/i.test(cleanLine)) {
+      criteria.push({
+        label: "Período de Teste",
+        value: cleanLine.replace(/^confirmação do período de teste:\s*/i, "").trim(),
+      });
+      return;
+    }
+
+    if (cleanLine.includes(":")) {
+      const [label, ...rest] = cleanLine.split(":");
+      const value = rest.join(":").trim();
+
+      if (label.trim() && value) {
+        // Skip adding the "Etapa" as a criteria parameter to keep the view cleaner since stage title card will be shown separately
+        if (label.trim().toLowerCase() === "etapa") {
+          return;
+        }
+        criteria.push({
+          label: label.trim(),
+          value,
+        });
+      }
+    } else if (!parecer && cleanLine.length > 0) {
+      parecer = cleanLine;
+    }
+  });
+
+  return {
+    criteria,
+    parecer: parecer || "Parecer não informado pelo avaliador.",
+  };
+};
+
 export default function ApprovalPage({
   records,
   profiles,
@@ -112,10 +177,7 @@ export default function ApprovalPage({
   const [coordEnvioFornecedorExterno, setCoordEnvioFornecedorExterno] = useState("Não");
   const [coordDadosTreinamentoModelo, setCoordDadosTreinamentoModelo] = useState("Não");
 
-  // States for NIT Gerente (Etapa 2)
-  const [gerenteTRL, setGerenteTRL] = useState("TRL 7-9 (Pronto para Produção)");
-  const [gerenteCustos, setGerenteCustos] = useState("Baixo (Sem investimento adicional)");
-  const [gerenteRiscos, setGerenteRiscos] = useState("Aprovado sem restrição");
+  const [showPainelExecutivo, setShowPainelExecutivo] = useState(false);
 
   // New detailed states for NIT Gerente (Etapa 2) Form
   const [g1RiscosRelevantes, setG1RiscosRelevantes] = useState<"Sim" | "Não" | "Não identificado">("Não identificado");
@@ -132,8 +194,12 @@ export default function ApprovalPage({
 
   // States for TI Gerente (Etapa 3)
   const [tiInfra, setTiInfra] = useState("Compatível / Cloud nativa");
-  const [tiSeguranca, setTiSeguranca] = useState("Conforme (Criptografado e restrito)");
-  const [tiIntegracao, setTiIntegracao] = useState("Não (Plataforma autônoma)");
+  const [tiSeguranca, setTiSeguranca] = useState("Conforme");
+  const [tiIntegracao, setTiIntegracao] = useState("Não / Plataforma autônoma");
+  const [tiAmbiente, setTiAmbiente] = useState("Cloud externa");
+  const [tiControleAcesso, setTiControleAcesso] = useState("Adequado");
+  const [tiLogs, setTiLogs] = useState("Possui logs");
+  const [tiAcao, setTiAcao] = useState("Não");
 
   // States for Período de Teste (Etapa 4)
   const [periodoTesteConfirmado, setPeriodoTesteConfirmado] = useState<"Sim" | "Não">("Sim");
@@ -186,9 +252,7 @@ export default function ApprovalPage({
       setCoordEnvioFornecedorExterno(record.envioFornecedorExterno || "Não");
       setCoordDadosTreinamentoModelo(record.dadosTreinamentoModelo || "Não");
 
-      setGerenteTRL("TRL 7-9 (Pronto para Produção)");
-      setGerenteCustos("Baixo (Sem investimento adicional)");
-      setGerenteRiscos("Aprovado sem restrição");
+      setShowPainelExecutivo(false);
       
       setG1RiscosRelevantes("Não identificado");
       setG1TiposRisk([]);
@@ -201,8 +265,12 @@ export default function ApprovalPage({
       setG3Observacoes("");
 
       setTiInfra("Compatível / Cloud nativa");
-      setTiSeguranca("Conforme (Criptografado e restrito)");
-      setTiIntegracao("Não (Plataforma autônoma)");
+      setTiSeguranca("Conforme");
+      setTiIntegracao("Não / Plataforma autônoma");
+      setTiAmbiente("Cloud externa");
+      setTiControleAcesso("Adequado");
+      setTiLogs("Possui logs");
+      setTiAcao("Não");
       setPeriodoTesteConfirmado("Sim");
     }
   }, [analysisModal.record, analysisModal.isOpen]);
@@ -562,9 +630,7 @@ export default function ApprovalPage({
                                   setCoordDadosAnonimizados(record.dadosAnonimizados || "Não");
                                   setCoordEnvioFornecedorExterno(record.envioFornecedorExterno || "Não");
                                   setCoordDadosTreinamentoModelo(record.dadosTreinamentoModelo || "Não");
-                                  setGerenteTRL("TRL 7-9 (Pronto para Produção)");
-                                  setGerenteCustos("Baixo (Sem investimento adicional)");
-                                  setGerenteRiscos("Aprovado sem restrição");
+                                  setShowPainelExecutivo(false);
                                   
                                   setG1RiscosRelevantes("Não identificado");
                                   setG1TiposRisk([]);
@@ -577,8 +643,13 @@ export default function ApprovalPage({
                                   setG3Observacoes("");
 
                                   setTiInfra("Compatível / Cloud nativa");
-                                  setTiSeguranca("Conforme (Criptografado e restrito)");
-                                  setTiIntegracao("Não (Plataforma autônoma)"); setPeriodoTesteConfirmado("Sim");;
+                                  setTiSeguranca("Conforme");
+                                  setTiIntegracao("Não / Plataforma autônoma");
+                                  setTiAmbiente("Cloud externa");
+                                  setTiControleAcesso("Adequado");
+                                  setTiLogs("Possui logs");
+                                  setTiAcao("Não");
+                                  setPeriodoTesteConfirmado("Sim");
                                 }}
                                 className="bg-[#03440c] hover:bg-[#03440c]/90 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                               >
@@ -623,18 +694,73 @@ export default function ApprovalPage({
                         </div>
 
                         {/* Seção: Último Parecer */}
-                        {latestDecision && (
-                          <div className="p-3 bg-emerald-50/15 border border-emerald-100 rounded-xl">
-                            <span className="text-[9px] font-bold uppercase text-emerald-800 tracking-wider block mb-1">Último parecer</span>
-                            <p className="text-[11px] text-slate-600 italic leading-relaxed">
-                              "{latestDecision.message || latestDecision.action}"
-                            </p>
-                            <div className="mt-1 flex items-center gap-1 text-[9px] font-bold uppercase text-emerald-700">
-                              <CheckCircle2 size={10} />
-                              <span>{latestDecision.action}</span>
+                        {latestDecision && (() => {
+                          const parsedLatestDecision = parseApprovalComment(
+                            latestDecision.message || latestDecision.action
+                          );
+
+                          return (
+                            <div className="mt-5 rounded-2xl border border-[#BFD8C5] bg-[#F4FAF5] p-5 shadow-sm">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-[#EAF4EC] border border-[#BFD8C5] flex items-center justify-center text-[#075618] shrink-0">
+                                    <MessageSquare size={17} />
+                                  </div>
+
+                                  <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#075618]">
+                                      Último parecer registrado
+                                    </p>
+
+                                    <p className="mt-1 text-xs text-[#667085] font-semibold">
+                                      Registro mais recente do fluxo de aprovação
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <span className="shrink-0 px-3 py-1 rounded-full bg-[#EAF4EC] border border-[#BFD8C5] text-[10px] font-black uppercase tracking-wider text-[#075618]">
+                                  Parecer
+                                </span>
+                              </div>
+
+                              {parsedLatestDecision.criteria.length > 0 && (
+                                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                  {parsedLatestDecision.criteria.map((item, index) => (
+                                    <div
+                                      key={`${item.label}-${index}`}
+                                      className="rounded-xl border border-[#E3E8E1] bg-white px-4 py-3"
+                                    >
+                                      <p className="text-[9px] font-black uppercase tracking-widest text-[#667085]">
+                                        {item.label}
+                                      </p>
+
+                                      <p className="mt-1 text-xs font-bold text-[#1F2933]">
+                                        {item.value}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="mt-4 rounded-xl border border-[#E3E8E1] bg-white px-4 py-3">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2">
+                                  Parecer
+                                </p>
+
+                                <p className="text-sm leading-relaxed text-[#1F2933] font-medium whitespace-pre-line">
+                                  {parsedLatestDecision.parecer}
+                                </p>
+                              </div>
+
+                              {latestDecision.action && (
+                                <div className="mt-3 flex items-center gap-2 text-[11px] font-bold text-[#075618] uppercase tracking-wide">
+                                  <CheckCircle2 size={14} />
+                                  <span>{latestDecision.action}</span>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Seção: Fluxo de Governança (Horizontal Stepper) */}
                         <div className="space-y-3 pt-1">
@@ -879,11 +1005,11 @@ export default function ApprovalPage({
             let finalComment = "";
             let extraFields: any = undefined;
             if (currentStepNum === 1) {
-              finalComment = `### FORMULÁRIO DE AVALIAÇÃO - COORDENADOR NIT\n` +
-                             `• Alinhamento Estratégico: ${coordAlinhamento}\n` +
-                             `• Potencial de Transferência: ${coordTransferencia}\n` +
-                             `• Viabilidade de Patentes: ${coordViabilidade}\n\n` +
-                             `**Parecer:** ${auditComment || "Etapa aprovada com ressalvas mínimas."}`;
+              finalComment = `Etapa: Coordenador NIT\n` +
+                             `Alinhamento Estratégico: ${coordAlinhamento}\n` +
+                             `Potencial de Transferência: ${coordTransferencia}\n` +
+                             `Viabilidade de Patentes: ${coordViabilidade}\n` +
+                             `Parecer: ${auditComment || "Etapa aprovada com ressalvas mínimas."}`;
               
               extraFields = {
                 usaDadosPessoais: coordUsaDadosPessoais,
@@ -896,28 +1022,31 @@ export default function ApprovalPage({
             } else if (currentStepNum === 2) {
               const riscosStr = g1TiposRisk.length > 0 ? g1TiposRisk.join(", ") : "Nenhum tipo de risco relevante selecionado";
               const controlesStr = g2ControlesTipos.length > 0 ? g2ControlesTipos.join(", ") : "Nenhum controle específico listado";
-              finalComment = `### FORMULÁRIO DE GESTÃO DE RISCOS (GERENTE NIT)\n` +
-                             `* BLOCO 1 - RISCOS IDENTIFICADOS *\n` +
-                             `• Riscos Relevantes? ${g1RiscosRelevantes}\n` +
-                             `• Tipos de Risco: ${riscosStr}\n` +
-                             `• Detalhamento de Riscos: ${g1Descricao || "Nenhum"}\n\n` +
-                             `* BLOCO 2 - CONTROLES & MITIGAÇÃO *\n` +
-                             `• Há Controles Implementados? ${g2ControlesExistentes}\n` +
-                             `• Tipos de Controle: ${controlesStr}\n` +
-                             `• Controles Adicionais Necessários: ${g2ControlesAdicionais || "Nenhum"}\n\n` +
-                             `* BLOCO 3 - RISCO RESIDUAL & RESPONSABILIDADES *\n` +
-                             `• Risco Residual após Controles: ${g3RiscoResidual}\n` +
-                             `• Responsável pelo Acompanhamento: ${g3Responsavel}\n` +
-                             `• Observações Críticas de Risco: ${g3Observacoes || "Nenhuma"}\n\n` +
-                             `**Parecer Final da Etapa:** ${auditComment || "Etapa assinada sob conformidade de processos corporativos do NIT."}`;
+              finalComment = `Etapa: Gerente NIT (Gestão de Riscos)\n` +
+                             `Riscos Relevantes?: ${g1RiscosRelevantes}\n` +
+                             `Tipos de Risco: ${riscosStr}\n` +
+                             `Detalhamento de Riscos: ${g1Descricao || "Nenhum"}\n` +
+                             `Há Controles Implementados?: ${g2ControlesExistentes}\n` +
+                             `Tipos de Controle: ${controlesStr}\n` +
+                             `Controles Adicionais Necessários: ${g2ControlesAdicionais || "Nenhum"}\n` +
+                             `Risco Residual após Controles: ${g3RiscoResidual}\n` +
+                             `Responsável pelo Acompanhamento: ${g3Responsavel}\n` +
+                             `Observações Críticas de Risco: ${g3Observacoes || "Nenhuma"}\n` +
+                             `Parecer: ${auditComment || "Etapa assinada sob conformidade de processos corporativos do NIT."}`;
             } else if (currentStepNum === 3) {
-              finalComment = `### FORMULÁRIO DE AVALIAÇÃO - GERENTE TI\n` +
-                             `• Infraestrutura e APIs: ${tiInfra}\n` +
-                             `• Segurança e LGPD: ${tiSeguranca}\n` +
-                             `• Integração Sistemas TI: ${tiIntegracao}\n\n` +
-                             `**Parecer:** ${auditComment || "Etapa validada tecnicamente pelo departamento de TI."}`;
+              finalComment = `Etapa: Gerente TI\n` +
+                             `1. Compatibilidade de Rede, Recursos e APIs: ${tiInfra}\n` +
+                             `2. Garantias de Segurança de Dados e LGPD: ${tiSeguranca}\n` +
+                             `3. Integração com Sistemas de TI Cedro: ${tiIntegracao}\n` +
+                             `4. Ambiente de uso da ferramenta: ${tiAmbiente}\n` +
+                             `5. Controle de acesso: ${tiControleAcesso}\n` +
+                             `6. Logs e rastreabilidade: ${tiLogs}\n` +
+                             `7. Necessita ação técnica da TI?: ${tiAcao}\n` +
+                             `Parecer Técnico Justificado: ${auditComment || "Etapa validada tecnicamente pelo departamento de TI."}`;
             } else if (currentStepNum === 4) {
-              finalComment = `Confirmação do Período de Teste: ${periodoTesteConfirmado}. Observações: ${auditComment || "Nenhuma observação informada."}`;
+              finalComment = `Etapa: Período de Teste\n` +
+                             `Período de Teste Realizado: ${periodoTesteConfirmado}\n` +
+                             `Parecer: ${auditComment || "Nenhuma observação informada."}`;
             } else {
               // 5 e 6
               finalComment = auditComment || (status === StatusAuditoria.APROVADO ? "Parecer estratégico aprovado na íntegra." : "Recusado.");
@@ -935,8 +1064,7 @@ export default function ApprovalPage({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setAnalysisModal({ isOpen: false, record: null })}
-                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-              />
+                className="absolute inset-0 bg-[#003F1D]/45 backdrop-blur-sm"              />
               <motion.div
                 initial={{ scale: 0.95, opacity: 0, y: 15 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -997,8 +1125,7 @@ export default function ApprovalPage({
                   {/* Botão de Fechar */}
                   <button
                     onClick={() => setAnalysisModal({ isOpen: false, record: null })}
-                    className="absolute top-5 right-5 text-slate-450 hover:text-slate-700 transition-all p-1.5 rounded-full hover:bg-slate-200/60 cursor-pointer flex items-center justify-center"
-                  >
+                      className="absolute top-5 right-5 text-[#075618] hover:text-white transition-all p-2 rounded-full bg-[#EAF4EC] hover:bg-[#075618] cursor-pointer flex items-center justify-center shadow-sm"                  >
                     <XCircle size={22} />
                   </button>
                 </div>
@@ -1279,25 +1406,84 @@ export default function ApprovalPage({
                       {/* Histórico Recente de pareceres de etapas concluídas */}
                       {(() => {
                         const prevSteps = wf?.steps?.filter((s) => s.stepNumber < currentStepNum && s.status !== "aguardando") || [];
-                        if (prevSteps.length === 0) return null;
                         return (
                           <div className="bg-slate-50/40 border border-slate-200/60 rounded-2xl p-5 space-y-3.5 mt-4">
                             <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Histórico de Pareceres Anteriores</h5>
-                            <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                              {prevSteps.map((s) => (
-                                <div key={s.stepNumber} className="bg-white border border-slate-200 p-3.5 rounded-xl shadow-xs text-xs">
-                                  <div className="flex items-center justify-between mb-1.5 text-[9px] font-black uppercase tracking-wider">
-                                    <span className="text-slate-800 font-extrabold">{s.stepNumber}. {s.roleName} • {s.assignedUserName || "Assinatura Livre"}</span>
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black leading-none border ${s.status === "negado" ? "text-rose-850 bg-rose-50 border-rose-200" : "text-emerald-850 bg-emerald-50 border-emerald-200"}`}>
-                                      {s.status === "negado" ? "INDEFERIDO" : "APROVADO"}
-                                    </span>
-                                  </div>
-                                  <p className="text-slate-650 font-medium italic leading-relaxed text-[11px] pl-2 border-l-2 border-[#03440c]/30 whitespace-pre-wrap">
-                                    {s.comment || "Parecer sem comentários específicos."}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
+                            {prevSteps.length === 0 ? (
+                              <div className="rounded-2xl border border-[#E3E8E1] bg-white p-4 text-center">
+                                <p className="text-xs font-semibold text-[#667085]">
+                                  Não há pareceres anteriores registrados.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-4 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                                {prevSteps.map((s) => {
+                                  const parsed = parseApprovalComment(s.comment);
+
+                                  return (
+                                    <div
+                                      key={s.stepNumber}
+                                      className="rounded-2xl border border-[#E3E8E1] bg-white p-4 shadow-sm"
+                                    >
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#075618]">
+                                            Etapa {s.stepNumber}
+                                          </p>
+
+                                          <h4 className="mt-1 text-sm font-black text-[#1F2933]">
+                                            {s.roleName}
+                                          </h4>
+
+                                          <p className="mt-1 text-xs font-semibold text-[#667085]">
+                                            Responsável: {s.assignedUserName || "Assinatura livre"}
+                                          </p>
+                                        </div>
+
+                                        <span
+                                          className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider border ${
+                                            s.status === "negado"
+                                              ? "bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]"
+                                              : "bg-[#EAF4EC] text-[#075618] border-[#BFD8C5]"
+                                          }`}
+                                        >
+                                          {s.status === "negado" ? "Indeferido" : "Aprovado"}
+                                        </span>
+                                      </div>
+
+                                      {parsed.criteria.length > 0 && (
+                                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                          {parsed.criteria.map((item, index) => (
+                                            <div
+                                              key={`${s.stepNumber}-${item.label}-${index}`}
+                                              className="rounded-xl border border-[#E3E8E1] bg-[#F6F8F5] px-3 py-2"
+                                            >
+                                              <p className="text-[9px] font-black uppercase tracking-widest text-[#667085]">
+                                                {item.label}
+                                              </p>
+
+                                              <p className="mt-1 text-[11px] font-bold text-[#1F2933]">
+                                                {item.value}
+                                              </p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      <div className="mt-3 rounded-xl border border-[#BFD8C5] bg-[#F4FAF5] px-4 py-3">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-1.5">
+                                          Parecer registrado
+                                        </p>
+
+                                        <p className="text-xs leading-relaxed text-[#1F2933] font-medium whitespace-pre-line">
+                                          {parsed.parecer}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -1503,152 +1689,160 @@ export default function ApprovalPage({
                     )}
 
                     {currentStepNum === 2 && (
-                      <div className="space-y-6 pt-2">
+                      <div className="space-y-4 pt-1">
                         {/* PAINEL EXECUTIVO DE DECISÃO RÁPIDA (PARA O GERENTE DO NIT) */}
-                        <div className="bg-gradient-to-br from-indigo-50/40 via-emerald-50/10 to-slate-50 border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-                          <div className="flex items-center justify-between border-b border-dashed border-slate-200 pb-3">
+                        <div className="bg-gradient-to-br from-[#075618]/5 via-[#075618]/0 to-slate-50/40 border border-[#BFD8C5]/50 rounded-2xl p-4 shadow-2xs space-y-3 transition-all">
+                          <button
+                            type="button"
+                            onClick={() => setShowPainelExecutivo(prev => !prev)}
+                            className="w-full flex items-center justify-between cursor-pointer group hover:opacity-95"
+                          >
                             <div className="flex items-center gap-2">
-                              <div className="p-1.5 rounded-lg bg-[#03440c]/10 text-[#03440c]">
-                                <Activity size={14} />
+                              <div className="p-1.5 rounded-lg bg-[#075618]/10 text-[#075618]">
+                                <Activity size={13} />
                               </div>
-                              <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Painel Executivo de Decisão Rápida</p>
+                              <p className="text-[10px] font-black uppercase text-[#075618] tracking-wider">Painel Executivo de Decisão Rápida</p>
                             </div>
-                            <span className="text-[8px] bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
-                              ⚡ Painel de Síntese
-                            </span>
-                          </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[8px] bg-white border border-[#BFD8C5] text-[#075618] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest group-hover:bg-[#EAF4EC]/40 transition-all">
+                                {showPainelExecutivo ? "Ocultar Síntese ✖" : "Ver Síntese ⚡"}
+                              </span>
+                            </div>
+                          </button>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Bloco A: Resumo Crítico do Solicitante */}
-                            <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-3 shadow-2xs">
-                              <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                                <Info size={10} className="text-slate-500" /> DADOS DA SOLICITAÇÃO
-                              </p>
-                              
-                              <div className="space-y-2 text-xs text-slate-705 font-semibold">
-                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                  <span className="text-[8px] text-[#03440c]/70 font-black uppercase">IA Proposta</span>
-                                  <span className="font-extrabold text-slate-900 truncate max-w-[140px] uppercase text-[10px]">{record.nomeFerramenta}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[10px] px-1">
-                                  <span className="text-[8px] text-slate-400 uppercase">Setor / Cargo</span>
-                                  <span className="font-semibold text-slate-600 truncate max-w-[150px] uppercase">{record.unidadeSetor} • {record.cargo || "Não inf."}</span>
-                                </div>
+                          {showPainelExecutivo && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pt-3 border-t border-dashed border-[#BFD8C5]/40 transition-all duration-300">
+                              {/* Bloco A: Resumo Crítico do Solicitante */}
+                              <div className="bg-white border border-slate-200/60 p-3.5 rounded-xl space-y-2.5 shadow-2xs">
+                                <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                                  <Info size={10} className="text-slate-505" /> DADOS DA SOLICITAÇÃO
+                                </p>
                                 
-                                {/* Alerta de Risco LGPD */}
-                                <div className="flex justify-between items-center text-[10px] px-1">
-                                  <span className="text-[8px] text-slate-400 uppercase">Tratamento de Dados</span>
-                                  <div className="flex gap-1">
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black ${record.usaDadosPessoais === "Sim" ? "bg-amber-100 text-amber-805" : "bg-slate-100 text-slate-500"}`}>
-                                      {record.usaDadosPessoais === "Sim" ? "PESSOAIS ⚠️" : "NÃO PESSOAIS"}
-                                    </span>
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black ${record.usaDadosSensiveis === "Sim" ? "bg-rose-100 text-rose-805" : "bg-slate-100 text-slate-500"}`}>
-                                      {record.usaDadosSensiveis === "Sim" ? "SENSÍVEIS 🔥" : "NÃO SENSÍVEIS"}
+                                <div className="space-y-2 text-xs text-slate-705 font-semibold">
+                                  <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                    <span className="text-[8px] text-[#075618]/70 font-black uppercase">IA Proposta</span>
+                                    <span className="font-extrabold text-slate-900 truncate max-w-[140px] uppercase text-[10px]">{record.nomeFerramenta}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-[10px] px-1">
+                                    <span className="text-[8px] text-slate-400 uppercase">Setor / Cargo</span>
+                                    <span className="font-semibold text-slate-600 truncate max-w-[150px] uppercase">{record.unidadeSetor} • {record.cargo || "Não inf."}</span>
+                                  </div>
+                                  
+                                  {/* Alerta de Risco LGPD */}
+                                  <div className="flex justify-between items-center text-[10px] px-1">
+                                    <span className="text-[8px] text-slate-400 uppercase">Tratamento de Dados</span>
+                                    <div className="flex gap-1">
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black ${record.usaDadosPessoais === "Sim" ? "bg-amber-100 text-amber-805" : "bg-slate-100 text-slate-500"}`}>
+                                        {record.usaDadosPessoais === "Sim" ? "PESSOAIS ⚠️" : "NÃO PESSOAIS"}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black ${record.usaDadosSensiveis === "Sim" ? "bg-rose-100 text-rose-805" : "bg-slate-100 text-slate-500"}`}>
+                                        {record.usaDadosSensiveis === "Sim" ? "SENSÍVEIS 🔥" : "NÃO SENSÍVEIS"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Criticidade Estimada */}
+                                  <div className="flex justify-between items-center text-[10px] px-1">
+                                    <span className="text-[8px] text-slate-400 uppercase">Criticidade Geral</span>
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                      record.criticidade?.toLowerCase().includes("alta") || record.criticidade?.toLowerCase().includes("crít")
+                                        ? "bg-rose-50 border-rose-200 text-rose-850"
+                                        : record.criticidade?.toLowerCase().includes("méd")
+                                        ? "bg-amber-50 border-amber-200 text-amber-850"
+                                        : "bg-emerald-50 border-emerald-200 text-emerald-850"
+                                    }`}>
+                                      {record.criticidade || "Baixa"}
                                     </span>
                                   </div>
-                                </div>
 
-                                {/* Criticidade Estimada */}
-                                <div className="flex justify-between items-center text-[10px] px-1">
-                                  <span className="text-[8px] text-slate-400 uppercase">Criticidade Geral</span>
-                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
-                                    record.criticidade?.toLowerCase().includes("alta") || record.criticidade?.toLowerCase().includes("crít")
-                                      ? "bg-rose-50 border-rose-200 text-rose-850"
-                                      : record.criticidade?.toLowerCase().includes("méd")
-                                      ? "bg-amber-50 border-amber-200 text-amber-850"
-                                      : "bg-emerald-50 border-emerald-200 text-emerald-850"
-                                  }`}>
-                                    {record.criticidade || "Baixa"}
-                                  </span>
-                                </div>
-
-                                {/* Resumo da descrição */}
-                                <div className="pt-2 border-t border-slate-100">
-                                  <span className="text-[8px] text-slate-400 uppercase block mb-1">Finalidade do Uso</span>
-                                  <p className="text-[10px] text-slate-600 font-medium leading-relaxed italic bg-emerald-50/5 p-2 rounded-lg border border-emerald-100/10 truncate">
-                                    {record.descricaoAtividade || "Nenhuma descrição fornecida."}
-                                  </p>
+                                  {/* Resumo da descrição */}
+                                  <div className="pt-2 border-t border-slate-100">
+                                    <span className="text-[8px] text-slate-400 uppercase block mb-1">Finalidade do Uso</span>
+                                    <p className="text-[10px] text-slate-650 font-medium leading-relaxed italic bg-emerald-50/5 p-2 rounded-lg border border-emerald-100/10 truncate">
+                                      {record.descricaoAtividade || "Nenhuma descrição fornecida."}
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Bloco B: Parecer Consolidado do Coordenador NIT */}
-                            {(() => {
-                              const coordStep = wf?.steps?.find(s => s.stepNumber === 1);
-                              const commentRaw = coordStep?.comment || "";
-                              
-                              const matchAlinhamento = commentRaw.match(/Alinhamento Estratégico:\s*([^\n•]+)/i);
-                              const matchTransferencia = commentRaw.match(/Potencial de Transferência:\s*([^\n•]+)/i);
-                              const matchViabilidade = commentRaw.match(/Viabilidade de Patentes:\s*([^\n•]+)/i);
-                              const matchParecerText = commentRaw.match(/\*\*Parecer:\*\*\s*(.+)$/is) || commentRaw.match(/Parecer Final:\s*(.+)$/is) || commentRaw.match(/\*\*Parecer Final da Etapa:\*\*\s*(.+)$/is);
+                              {/* Bloco B: Parecer Consolidado do Coordenador NIT */}
+                              {(() => {
+                                const coordStep = wf?.steps?.find(s => s.stepNumber === 1);
+                                const commentRaw = coordStep?.comment || "";
+                                
+                                const matchAlinhamento = commentRaw.match(/Alinhamento Estratégico:\s*([^\n•]+)/i);
+                                const matchTransferencia = commentRaw.match(/Potencial de Transferência:\s*([^\n•]+)/i);
+                                const matchViabilidade = commentRaw.match(/Viabilidade de Patentes:\s*([^\n•]+)/i);
+                                const matchParecerText = commentRaw.match(/\*\*Parecer:\*\*\s*(.+)$/is) || commentRaw.match(/Parecer Final:\s*(.+)$/is) || commentRaw.match(/\*\*Parecer Final da Etapa:\*\*\s*(.+)$/is);
 
-                              const alinhamentoVal = matchAlinhamento ? matchAlinhamento[1].trim() : "Alinhado";
-                              const transferenciaVal = matchTransferencia ? matchTransferencia[1].trim() : "Médio";
-                              const viabilidadeVal = matchViabilidade ? matchViabilidade[1].trim() : "Sim";
-                              const parecerJustificativa = matchParecerText ? matchParecerText[1].trim() : (commentRaw ? commentRaw : "Sem parecer detalhado do coordenador do NIT.");
+                                const alinhamentoVal = matchAlinhamento ? matchAlinhamento[1].trim() : "Alinhado";
+                                const transferenciaVal = matchTransferencia ? matchTransferencia[1].trim() : "Médio";
+                                const viabilidadeVal = matchViabilidade ? matchViabilidade[1].trim() : "Sim";
+                                const parecerJustificativa = matchParecerText ? matchParecerText[1].trim() : (commentRaw ? commentRaw : "Sem parecer detalhado do coordenador do NIT.");
 
-                              return (
-                                <div className="bg-white border border-slate-200/60 p-4 rounded-xl space-y-3 shadow-2xs">
-                                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                                    <ShieldCheck size={10} className="text-[#03440c]" /> PARECER COORDENADOR NIT
-                                  </p>
-                                  
-                                  <div className="space-y-2 text-xs text-slate-705 font-semibold">
-                                    <div className="flex justify-between items-center text-[10px] px-1">
-                                      <span className="text-[8px] text-slate-400 uppercase">Alinhamento</span>
-                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
-                                        alinhamentoVal.includes("Não") ? "bg-rose-50 border-rose-220 text-rose-850" : alinhamentoVal.includes("Parcial") ? "bg-amber-50 border-amber-220 text-amber-850" : "bg-emerald-50 border-emerald-220 text-emerald-850"
-                                      }`}>{alinhamentoVal}</span>
-                                    </div>
+                                return (
+                                  <div className="bg-white border border-slate-200/60 p-3.5 rounded-xl space-y-2.5 shadow-2xs">
+                                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                                      <ShieldCheck size={10} className="text-[#075618]" /> PARECER COORDENADOR NIT
+                                    </p>
                                     
-                                    <div className="flex justify-between items-center text-[10px] px-1">
-                                      <span className="text-[8px] text-slate-400 uppercase">Transferência</span>
-                                      <span className="text-slate-905 font-extrabold uppercase">{transferenciaVal}</span>
-                                    </div>
+                                    <div className="space-y-2 text-xs text-slate-705 font-semibold">
+                                      <div className="flex justify-between items-center text-[10px] px-1">
+                                        <span className="text-[8px] text-slate-400 uppercase">Alinhamento</span>
+                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                          alinhamentoVal.includes("Não") ? "bg-rose-50 border-rose-220 text-rose-850" : alinhamentoVal.includes("Parcial") ? "bg-amber-50 border-amber-220 text-amber-850" : "bg-emerald-50 border-emerald-220 text-emerald-850"
+                                        }`}>{alinhamentoVal}</span>
+                                      </div>
+                                      
+                                      <div className="flex justify-between items-center text-[10px] px-1">
+                                        <span className="text-[8px] text-slate-400 uppercase">Transferência</span>
+                                        <span className="text-slate-905 font-extrabold uppercase">{transferenciaVal}</span>
+                                      </div>
 
-                                    <div className="flex justify-between items-center text-[10px] px-1">
-                                      <span className="text-[8px] text-slate-400 uppercase">Reg. Software</span>
-                                      <span className={`px-2 py-0.5 rounded text-[8px] font-black border ${
-                                        viabilidadeVal === "Sim" ? "bg-emerald-50 text-emerald-805 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
-                                      }`}>{viabilidadeVal}</span>
-                                    </div>
+                                      <div className="flex justify-between items-center text-[10px] px-1">
+                                        <span className="text-[8px] text-slate-400 uppercase">Reg. Software</span>
+                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black border ${
+                                          viabilidadeVal === "Sim" ? "bg-emerald-50 text-emerald-805 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"
+                                        }`}>{viabilidadeVal}</span>
+                                      </div>
 
-                                    {/* Parecer textual reduzido */}
-                                    <div className="pt-2 border-t border-slate-100">
-                                      <span className="text-[8px] text-slate-400 uppercase block mb-1">Parecer Coordenador</span>
-                                      <p className="text-[10px] text-slate-650 font-medium leading-relaxed italic bg-indigo-50/5 p-2 rounded-lg border border-indigo-100/10 truncate">
-                                        {parecerJustificativa}
-                                      </p>
+                                      {/* Parecer textual reduzido */}
+                                      <div className="pt-2 border-t border-slate-100">
+                                        <span className="text-[8px] text-slate-400 uppercase block mb-1">Parecer Coordenador</span>
+                                        <p className="text-[10px] text-slate-650 font-medium leading-relaxed italic bg-indigo-50/5 p-2 rounded-lg border border-indigo-100/10 truncate">
+                                          {parecerJustificativa}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
 
-                        {/* FORMULÁRIO GESTÃO DE RISCO DO GERENTE NIT */}
-                        <div className="space-y-6">
-                          {/* BLOCO 1 - IDENTIFICAÇÃO DOS RISCOS */}
-                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
-                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
-                              <span className="text-[10px] bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">1</span>
-                              <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Bloco 1 — Identificação dos riscos</h5>
+                        {/* FORMULÁRIO GESTÃO DE RISCO DO GERENTE NIT - DESIGN COMPACTO E LIMPO */}
+                        <div className="space-y-4">
+                          {/* BLOCO 1 - IDENTIFICAÇÃO DOS RISCOS (Compacto) */}
+                          <div className="bg-white border border-[#BFD8C5]/45 rounded-2xl p-4 space-y-3.5 shadow-2xs">
+                            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
+                              <span className="text-[9px] bg-[#075618] text-white size-4.5 rounded-full flex items-center justify-center font-black">1</span>
+                              <h5 className="text-[9px] font-black text-[#075618] uppercase tracking-widest">Identificação dos riscos</h5>
                             </div>
 
                             {/* Campo 1.1 */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">1. Foram identificados riscos relevantes no uso da IA?</label>
-                              <div className="flex gap-2">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">1. Foram identificados riscos relevantes no uso da IA?</label>
+                              <div className="flex gap-1.5">
                                 {["Sim", "Não", "Não identificado"].map((opt) => (
                                   <button
                                     key={opt}
                                     type="button"
                                     onClick={() => setG1RiscosRelevantes(opt as any)}
-                                    className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    className={`flex-1 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                       g1RiscosRelevantes === opt
-                                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
-                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                        ? "bg-emerald-50 border-[#03440c] text-[#03440c] shadow-2xs ring-1 ring-[#03440c]/10"
+                                        : "bg-white border-slate-205 text-slate-500 hover:bg-slate-50"
                                     }`}
                                   >
                                     {opt}
@@ -1658,9 +1852,9 @@ export default function ApprovalPage({
                             </div>
 
                             {/* Campo 1.2 */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-550 uppercase tracking-wider block">2. Tipo de risco identificado (Multi-escolha)</label>
-                              <div className="grid grid-cols-2 gap-2 text-[9px] font-semibold">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">2. Tipo de risco identificado (Multi-escolha)</label>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 text-[9px] font-semibold">
                                 {[
                                   "Dados e sigilo",
                                   "Segurança da informação",
@@ -1684,17 +1878,17 @@ export default function ApprovalPage({
                                           setG1TiposRisk([...g1TiposRisk, opt]);
                                         }
                                       }}
-                                      className={`py-2.5 px-3.5 rounded-xl border text-[10px] font-bold uppercase transition-all duration-200 text-left flex items-center justify-between cursor-pointer ${
+                                      className={`py-1.5 px-2.5 rounded-lg border text-[9px] font-bold uppercase transition-all duration-200 text-left flex items-center justify-between cursor-pointer ${
                                         isSelected
-                                          ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-1 ring-indigo-500/10"
-                                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                          ? "bg-emerald-50/70 border-[#03440c]/70 text-[#03440c] shadow-2xs ring-1 ring-[#03440c]/5"
+                                          : "bg-white border-slate-200 text-slate-605 hover:bg-slate-50"
                                       }`}
                                     >
-                                      <span>{opt}</span>
+                                      <span className="truncate">{opt}</span>
                                       {isSelected ? (
-                                        <span className="size-4 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-[9px]">✓</span>
+                                        <span className="size-3.5 rounded-full bg-[#03440c] text-white flex items-center justify-center font-black text-[8px] shrink-0">✓</span>
                                       ) : (
-                                        <span className="size-4 rounded-full border border-slate-250 flex items-center justify-center text-[10px] text-slate-300"></span>
+                                        <span className="size-3.5 rounded-full border border-slate-250 flex items-center justify-center text-[8px] text-slate-300 shrink-0"></span>
                                       )}
                                     </button>
                                   );
@@ -1702,38 +1896,40 @@ export default function ApprovalPage({
                               </div>
                             </div>
 
-                            {/* Campo 1.3 */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">3. Descrição dos riscos identificados</label>
-                              <textarea
-                                value={g1Descricao}
-                                onChange={(e) => setG1Descricao(e.target.value)}
-                                placeholder="Descreva tecnicamente os riscos mapeados nesta IA, como viés na tomada de decisões, problemas na segurança dos dados ou vazamentos..."
-                                className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/10 outline-none transition-all resize-none shadow-sm"
-                              />
-                            </div>
+                            {/* Campo 1.3 - Condicional */}
+                            {(g1RiscosRelevantes === "Sim" || g1TiposRisk.length > 0) && (
+                              <div className="space-y-1.5 pt-0.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">3. Descrição dos riscos identificados</label>
+                                <textarea
+                                  value={g1Descricao}
+                                  onChange={(e) => setG1Descricao(e.target.value)}
+                                  placeholder="Descreva tecnicamente os riscos mapeados nesta IA, como viés na tomada de decisões, problemas na segurança dos dados ou vazamentos..."
+                                  className="w-full h-18 bg-slate-50/30 border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
+                                />
+                              </div>
+                            )}
                           </div>
 
-                          {/* BLOCO 2 - CONTROLES E MITIGAÇÃO */}
-                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
-                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
-                              <span className="text-[10px] bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">2</span>
-                              <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Bloco 2 — Controles e mitigação</h5>
+                          {/* BLOCO 2 - CONTROLES E MITIGAÇÃO (Compacto) */}
+                          <div className="bg-white border border-[#BFD8C5]/45 rounded-2xl p-4 space-y-3.5 shadow-2xs">
+                            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
+                              <span className="text-[9px] bg-[#075618] text-white size-4.5 rounded-full flex items-center justify-center font-black">2</span>
+                              <h5 className="text-[9px] font-black text-[#075618] uppercase tracking-widest">Controles e mitigação</h5>
                             </div>
 
                             {/* Campo 2.1 */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">1. Existem controles previstos ou implementados para reduzir os riscos?</label>
-                              <div className="flex gap-2">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">1. Existem controles previstos ou implementados para reduzir os riscos?</label>
+                              <div className="flex gap-1.5 flex-wrap md:flex-nowrap">
                                 {["Sim", "Não", "Parcialmente", "Não se aplica"].map((opt) => (
                                   <button
                                     key={opt}
                                     type="button"
                                     onClick={() => setG2ControlesExistentes(opt as any)}
-                                    className={`flex-1 py-3 rounded-xl text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    className={`flex-1 py-1.5 px-2 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                       g2ControlesExistentes === opt
-                                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-xs ring-2 ring-emerald-500/10"
-                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                        ? "bg-emerald-50 border-[#03440c] text-[#03440c] shadow-2xs ring-1 ring-[#03440c]/10"
+                                        : "bg-white border-slate-205 text-slate-500 hover:bg-slate-50"
                                     }`}
                                   >
                                     {opt}
@@ -1743,9 +1939,9 @@ export default function ApprovalPage({
                             </div>
 
                             {/* Campo 2.2 */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-550 uppercase tracking-wider block">2. Quais controles existem? (Multi-escolha)</label>
-                              <div className="grid grid-cols-2 gap-2 text-[9px] font-semibold">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">2. Quais controles existem? (Multi-escolha)</label>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 text-[9px] font-semibold">
                                 {[
                                   "Revisão humana obrigatória",
                                   "Restrição de acesso",
@@ -1771,17 +1967,17 @@ export default function ApprovalPage({
                                           setG2ControlesTipos([...g2ControlesTipos, opt]);
                                         }
                                       }}
-                                      className={`py-2 px-3 rounded-xl border text-[9px] font-bold uppercase transition-all duration-200 text-left flex items-center justify-between cursor-pointer ${
+                                      className={`py-1.5 px-2.5 rounded-lg border text-[9px] font-bold uppercase transition-all duration-200 text-left flex items-center justify-between cursor-pointer ${
                                         isSelected
-                                          ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-1 ring-indigo-500/10"
+                                          ? "bg-emerald-50/70 border-[#03440c]/70 text-[#03440c] shadow-2xs ring-1 ring-[#03440c]/5"
                                           : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                                       }`}
                                     >
-                                      <span>{opt}</span>
+                                      <span className="truncate">{opt}</span>
                                       {isSelected ? (
-                                        <span className="size-4 rounded-full bg-indigo-500 text-white flex items-center justify-center font-black text-[9px]">✓</span>
+                                        <span className="size-3.5 rounded-full bg-[#03440c] text-white flex items-center justify-center font-black text-[8px] shrink-0">✓</span>
                                       ) : (
-                                        <span className="size-4 rounded-full border border-slate-250 flex items-center justify-center text-[10px] text-slate-350"></span>
+                                        <span className="size-3.5 rounded-full border border-slate-250 flex items-center justify-center text-[8px] text-slate-300 shrink-0"></span>
                                       )}
                                     </button>
                                   );
@@ -1789,46 +1985,46 @@ export default function ApprovalPage({
                               </div>
                             </div>
 
-                            {/* Campo 2.3 */}
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">
-                                  3. Controles adicionais necessários
-                                </label>
-                                {(g2ControlesExistentes === "Não" || g2ControlesExistentes === "Parcialmente") && (
-                                  <span className="text-[8px] bg-rose-50 border border-rose-200 text-rose-800 font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-lg">
+                            {/* Campo 2.3 - Condicional */}
+                            {(g2ControlesExistentes === "Não" || g2ControlesExistentes === "Parcialmente") && (
+                              <div className="space-y-1.5 pt-0.5">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">
+                                    3. Controles adicionais necessários
+                                  </label>
+                                  <span className="text-[8px] bg-rose-50 border border-rose-250 text-rose-800 font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-lg">
                                     Obrigatório ⚠️
                                   </span>
-                                )}
+                                </div>
+                                <textarea
+                                  value={g2ControlesAdicionais}
+                                  onChange={(e) => setG2ControlesAdicionais(e.target.value)}
+                                  placeholder="Liste e descreva quais medidas preventivas adicionais são sugeridas ou necessárias para mitigar os riscos mapeados..."
+                                  className="w-full h-18 bg-slate-50/30 border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
+                                  required={g2ControlesExistentes === "Não" || g2ControlesExistentes === "Parcialmente"}
+                                />
                               </div>
-                              <textarea
-                                value={g2ControlesAdicionais}
-                                onChange={(e) => setG2ControlesAdicionais(e.target.value)}
-                                placeholder="Liste e descreva quais medidas preventivas adicionais são sugeridas ou necessárias para mitigar os riscos mapeados..."
-                                className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
-                                required={g2ControlesExistentes === "Não" || g2ControlesExistentes === "Parcialmente"}
-                              />
-                            </div>
+                            )}
                           </div>
 
-                          {/* BLOCO 3 - RISCO RESIDUAL E RESPONSABILIDADE */}
-                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-2xs">
-                            <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
-                              <span className="text-[10px] bg-[#03440c] text-white size-5 rounded-full flex items-center justify-center font-black">3</span>
-                              <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Bloco 3 — Risco residual e responsabilidade</h5>
+                          {/* BLOCO 3 - RISCO RESIDUAL E RESPONSABILIDADE (Compacto) */}
+                          <div className="bg-white border border-[#BFD8C5]/45 rounded-2xl p-4 space-y-3.5 shadow-2xs">
+                            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
+                              <span className="text-[9px] bg-[#075618] text-white size-4.5 rounded-full flex items-center justify-center font-black">3</span>
+                              <h5 className="text-[9px] font-black text-[#075618] uppercase tracking-widest">Risco residual e responsabilidade</h5>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4">
-                              {/* Risco Residual com Pill Colors */}
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">1. Risco residual após os controles</label>
-                                <div className="flex flex-wrap gap-1.5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                              {/* Risco Residual */}
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">1. Risco residual após os controles</label>
+                                <div className="flex flex-wrap gap-1">
                                   {[
-                                    { val: "Baixo", col: "active:bg-emerald-600 bg-emerald-50 border-emerald-250 text-emerald-800", selCol: "bg-emerald-600 border-emerald-600 text-white shadow-xs" },
-                                    { val: "Médio", col: "active:bg-amber-500 bg-amber-50 border-amber-250 text-amber-850", selCol: "bg-amber-500 border-amber-500 text-white shadow-xs" },
-                                    { val: "Alto", col: "active:bg-orange-600 bg-orange-50 border-orange-250 text-orange-850", selCol: "bg-orange-505 border-orange-505 text-white shadow-xs" },
-                                    { val: "Crítico", col: "active:bg-rose-700 bg-rose-50 border-rose-250 text-rose-850", selCol: "bg-rose-600 border-rose-600 text-white shadow-xs" },
-                                    { val: "Não avaliado", col: "active:bg-slate-500 bg-slate-50 border-slate-250 text-slate-550 inline-block", selCol: "bg-slate-500 border-slate-500 text-white shadow-xs" }
+                                    { val: "Baixo", col: "bg-emerald-50 border-emerald-250 text-emerald-800", selCol: "bg-[#075618] border-[#075618] text-white shadow-2xs" },
+                                    { val: "Médio", col: "bg-amber-50 border-amber-250 text-amber-850", selCol: "bg-amber-500 border-amber-500 text-white shadow-2xs" },
+                                    { val: "Alto", col: "bg-orange-50 border-orange-250 text-orange-850", selCol: "bg-orange-600 border-orange-600 text-white shadow-2xs" },
+                                    { val: "Crítico", col: "bg-rose-50 border-rose-250 text-rose-850", selCol: "bg-rose-600 border-rose-600 text-white shadow-2xs" },
+                                    { val: "Não avaliado", col: "bg-slate-50 border-slate-250 text-slate-500", selCol: "bg-slate-505 border-slate-505 text-white shadow-2xs" }
                                   ].map((opt) => {
                                     const isSelected = g3RiscoResidual === opt.val;
                                     return (
@@ -1836,8 +2032,8 @@ export default function ApprovalPage({
                                         key={opt.val}
                                         type="button"
                                         onClick={() => setG3RiscoResidual(opt.val as any)}
-                                        className={`px-3.5 py-2.5 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
-                                          isSelected ? opt.selCol : `${opt.col} hover:opacity-90 hover:bg-white`
+                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                          isSelected ? opt.selCol : `${opt.col} hover:bg-slate-50`
                                         }`}
                                       >
                                         {opt.val}
@@ -1848,12 +2044,12 @@ export default function ApprovalPage({
                               </div>
 
                               {/* Responsável pelo Acompanhamento (Dropdown) */}
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">2. Responsável pelo acompanhamento do risco</label>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">2. Responsável pelo acompanhamento do risco</label>
                                 <select
                                   value={g3Responsavel}
                                   onChange={(e) => setG3Responsavel(e.target.value)}
-                                  className="w-full py-3.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-200 text-slate-750 bg-white hover:border-[#03440c] focus:border-[#03440c] outline-none transition-all shadow-sm cursor-pointer"
+                                  className="w-full py-1.5 px-3 rounded-lg text-xs font-black uppercase tracking-wider border border-slate-205 text-slate-700 bg-white hover:border-[#03440c] focus:border-[#03440c] outline-none transition-all shadow-2xs cursor-pointer"
                                 >
                                   {[
                                     "NIT",
@@ -1865,7 +2061,7 @@ export default function ApprovalPage({
                                     "Gestor da área",
                                     "Outro"
                                   ].map((opt) => (
-                                    <option key={opt} value={opt} className="font-extrabold uppercase text-[10px] text-slate-700 p-2 leading-loose">
+                                    <option key={opt} value={opt} className="font-extrabold uppercase text-[10px] text-slate-700">
                                       {opt}
                                     </option>
                                   ))}
@@ -1874,13 +2070,13 @@ export default function ApprovalPage({
                             </div>
 
                             {/* Campo 3.3 */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-505 uppercase tracking-wider block">3. Observações de riscos e controles</label>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">3. Observações de riscos e controles</label>
                               <textarea
                                 value={g3Observacoes}
                                 onChange={(e) => setG3Observacoes(e.target.value)}
                                 placeholder="Insira quaisquer notas, observações jurídicas, de patentes ou recomendações especiais sobre os riscos e formas de mitigação planejados..."
-                                className="w-full h-24 bg-white border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-4 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
+                                className="w-full h-18 bg-slate-50/30 border border-slate-200 hover:border-slate-350 text-slate-900 placeholder-slate-400 rounded-xl p-3 text-xs font-semibold focus:border-[#03440c] focus:ring-1 focus:ring-[#03440c]/10 outline-none transition-all resize-none shadow-sm"
                               />
                             </div>
                           </div>
@@ -1890,7 +2086,7 @@ export default function ApprovalPage({
 
 
                     {currentStepNum === 3 && (
-                      <div className="space-y-5 pt-2">
+                      <div className="space-y-4 pt-1">
                         {/* Título da seção */}
                         <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 flex items-center gap-2.5">
                           <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-700">
@@ -1903,19 +2099,23 @@ export default function ApprovalPage({
                         </div>
 
                         {/* Bloco de Campos de TI */}
-                        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-5 shadow-2xs">
-                          {/* Campo Infra */}
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">1. Compatibilidade de Rede, Recursos e APIs</label>
-                            <div className="flex gap-2">
+                        <div className="bg-white border border-slate-200/85 rounded-2xl p-4 space-y-1 shadow-2xs">
+                          
+                          {/* 1. Compatibilidade */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 border-b border-slate-100 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">1. Compatibilidade de Rede, Recursos e APIs</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Capacidade de hospedar ou conectar à rede corporativa</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
                               {["Compatível / Cloud nativa", "Requer novas VMs", "Incompatível"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
                                   onClick={() => setTiInfra(opt)}
-                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                     tiInfra === opt
-                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
                                       : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                   }`}
                                 >
@@ -1925,18 +2125,21 @@ export default function ApprovalPage({
                             </div>
                           </div>
 
-                          {/* Campo Segurança */}
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">2. Garantias de Segurança de Dados e LGPD</label>
-                            <div className="flex gap-2">
+                          {/* 2. Segurança */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 border-b border-slate-100 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">2. Garantias de Segurança de Dados e LGPD</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Adequabilidade às leis de segurança de dados do país</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
                               {["Conforme", "Alerta", "Crítico"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
                                   onClick={() => setTiSeguranca(opt)}
-                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                     tiSeguranca === opt
-                                      ? "bg-indigo-50 border-indigo-400 text-indigo-800 shadow-xs ring-2 ring-indigo-550/15"
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
                                       : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                                   }`}
                                 >
@@ -1946,16 +2149,19 @@ export default function ApprovalPage({
                             </div>
                           </div>
 
-                          {/* Campo Integração */}
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">3. Integração com Sistemas de TI Cedro</label>
-                            <div className="flex gap-2">
-                              {["Não (Autônoma)", "Sim (Requer API)", "Sim (Requer Customização)"].map(opt => (
+                          {/* 3. Integração */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 border-b border-slate-100 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">3. Integração com Sistemas de TI Cedro</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Interação com ecossistema interno Cedro</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {["Não / Plataforma autônoma", "Sim / Requer API", "Sim / Requer customização"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
                                   onClick={() => setTiIntegracao(opt)}
-                                  className={`flex-1 py-3 rounded-xl text-[10px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
                                     tiIntegracao === opt
                                       ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
                                       : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
@@ -1966,6 +2172,103 @@ export default function ApprovalPage({
                               ))}
                             </div>
                           </div>
+
+                          {/* 4. Ambiente de uso da ferramenta */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 border-b border-slate-100 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">4. Ambiente de uso da ferramenta</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Local físico ou virtual de execução da IA</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {["Cloud externa", "Ambiente interno", "Não identificado"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiAmbiente(opt)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiAmbiente === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 5. Controle de acesso */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 border-b border-slate-100 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">5. Controle de acesso</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Segurança de login e permissões de usuários</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {["Adequado", "Requer ajuste", "Não informado"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiControleAcesso(opt)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiControleAcesso === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 6. Logs e rastreabilidade */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 border-b border-slate-100 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">6. Logs e rastreabilidade</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Registro de ações para auditoria técnica de acessos</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {["Possui logs", "Não possui logs", "Não informado"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiLogs(opt)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiLogs === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 7. Necessita ação técnica da TI? */}
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between py-2 gap-2">
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider block">7. Necessita ação técnica da TI?</label>
+                              <span className="text-[9px] text-slate-400 font-medium block leading-tight">Esforço técnico operacional do time Cedro</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {["Não", "Sim, baixa complexidade", "Sim, alta complexidade"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  onClick={() => setTiAcao(opt)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border transition-all duration-200 cursor-pointer ${
+                                    tiAcao === opt
+                                      ? "bg-indigo-50 border-indigo-400 text-indigo-805 shadow-xs ring-2 ring-indigo-550/15"
+                                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
                         </div>
                       </div>
                     )}

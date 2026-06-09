@@ -1308,8 +1308,9 @@ export default function App() {
       <LabBackground />
       {/* Mobile Header */}
       <div className="md:hidden bg-gradient-to-r from-[#004D24] to-[#003F1D] p-4 flex justify-between items-center border-b-2 border-[#F58220] sticky top-0 z-50 text-white">
-        <div className="flex items-center gap-2">
-          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA – Laboratório Cedro" className="h-8 w-auto brightness-0 invert" />
+        <div className="flex items-center gap-2.5">
+          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Laboratório Cedro" className="h-8 w-auto brightness-0 invert" />
+          <span className="font-sans font-extrabold text-[13px] uppercase tracking-wider text-white">Laboratório Cedro</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white">
@@ -1334,9 +1335,9 @@ export default function App() {
         <div className={`hidden md:block transition-all duration-300 border-b border-white/10 bg-black/15 overflow-hidden relative ${
           isSidebarCollapsed 
             ? "h-20 p-3" 
-            : "h-32 px-6 py-6"
+            : "h-28 px-6 py-5"
         }`}>
-          <div className="absolute inset-0 bg-[#00d136]/8 blur-2xl rounded-full opacity-100 transition-opacity duration-300"></div>
+          <div className="absolute inset-0 bg-[#00d136]/5 blur-2xl rounded-full opacity-100 transition-opacity duration-300"></div>
           
           <div className="relative w-full h-full flex items-center justify-center">
             {/* Logo Completa (Visible when NOT collapsed) */}
@@ -1344,9 +1345,9 @@ export default function App() {
               isSidebarCollapsed ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
             }`}>
               <img
-                src="/logo-cedro-ia.png"
-                alt="Cedro IA - Laboratório Cedro"
-                className="w-full max-w-[195px] h-auto object-contain brightness-0 invert drop-shadow-[0_4px_12px_rgba(0,209,54,0.15)]"
+                src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png"
+                alt="Laboratório Cedro"
+                className="h-16 w-auto object-contain brightness-0 invert drop-shadow-[0_2px_8px_rgba(0,209,54,0.15)]"
                 draggable={false}
               />
             </div>
@@ -1357,7 +1358,7 @@ export default function App() {
             }`}>
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
-                alt="Símbolo Cedro IA" 
+                alt="Laboratório Cedro" 
                 className="h-10 w-auto brightness-0 invert object-contain filter drop-shadow-[0_2px_8px_rgba(0,209,54,0.2)]" 
                 referrerPolicy="no-referrer"
               />
@@ -1429,7 +1430,7 @@ export default function App() {
             <div className="flex items-center justify-start">
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
-                alt="Cedro IA – Laboratório Cedro" 
+                alt="Laboratório Cedro" 
                 className="h-8 w-auto brightness-0 invert object-contain opacity-75 hover:opacity-100 transition-opacity duration-200"
                 referrerPolicy="no-referrer"
               />
@@ -1438,7 +1439,7 @@ export default function App() {
             <div className="flex flex-col items-center justify-center">
               <img 
                 src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206%20(1).png" 
-                alt="Símbolo Cedro IA" 
+                alt="Símbolo Laboratório Cedro" 
                 className="h-5 w-auto brightness-0 invert opacity-65"
               />
             </div>
