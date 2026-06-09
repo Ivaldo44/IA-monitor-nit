@@ -1339,7 +1339,7 @@ export default function App() {
         </main>
 
         {/* 3. NAVEGAÇÃO INFERIOR */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E3E8E1] rounded-t-3xl shadow-[0_-4px_16px_rgba(0,0,0,0.03)] pb-safe">
+       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E3E8E1] rounded-t-3xl shadow-[0_-4px_16px_rgba(0,0,0,0.03)]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex justify-around items-center h-16">
             
             {/* Aba Aprovação de IAs */}
@@ -1347,12 +1347,12 @@ export default function App() {
               onClick={() => setActiveTab("approval_queue")}
               className="flex flex-col items-center justify-center flex-1 h-full select-none transition-colors active:scale-95 cursor-pointer"
             >
-              <div className={`p-1 transition-colors ${activeTab !== "profile" ? "text-[#075618]" : "text-[#667085]"}`}>
+              <div className={`p-1 transition-colors ${activeTab === "approval_queue" ? "text-[#075618]" : "text-[#667085]"}`}>
                 <ClipboardList size={20} strokeWidth={activeTab !== "profile" ? 2.5 : 2} />
               </div>
-              <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
-                activeTab !== "profile" ? "text-[#075618]" : "text-[#667085]"
-              }`}>
+              <spanclassName={`text-[10px] font-black uppercase tracking-wider transition-colors ${
+                  activeTab === "approval_queue" ? "text-[#075618]" : "text-[#667085]"
+                  }`}>
                 Aprovação de IAs
               </span>
             </button>
@@ -1988,7 +1988,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Toast Notification Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-[360px] pointer-events-none px-4 sm:px-0">
+      <div className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-50 flex flex-col gap-3 w-[calc(100vw-2rem)] sm:w-[360px] pointer-events-none">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
