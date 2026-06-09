@@ -108,7 +108,7 @@ function playNotificationSound(type: "chat" | "success" | "info" | "warning") {
 }
 
 export default function App() {
-  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, refreshProfile, signOut } = useAuth();
   const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
   const isCurrentUserModerator = profile?.role?.toLowerCase().trim() === "moderator";
   const isCurrentUserPrivileged = isCurrentUserAdmin || isCurrentUserModerator;
@@ -1304,20 +1304,92 @@ export default function App() {
   }
 
   return (
-      <div className={`min-h-screen flex flex-col md:flex-row font-sans selection:bg-brand-green selection:text-black transition-colors duration-300 bg-[var(--bg-main)] ${isDarkMode ? "dark" : ""}`}>
+    <div className={`min-h-screen font-sans selection:bg-brand-green selection:text-black transition-colors duration-300 bg-[var(--bg-main)] ${isDarkMode ? "dark" : ""}`}>
       <LabBackground />
-      {/* Mobile Header */}
-      <div className="md:hidden bg-gradient-to-r from-[#004D24] to-[#003F1D] p-4 flex justify-between items-center border-b-2 border-[#F58220] sticky top-0 z-50 text-white">
-        <div className="flex items-center gap-2.5">
-          <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Laboratório Cedro" className="h-8 w-auto brightness-0 invert" />
-          <span className="font-sans font-extrabold text-[13px] uppercase tracking-wider text-white">Laboratório Cedro</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white">
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
+
+      {/* VERSÃO MOBILE DO CEDRO IA MONITOR */}
+      <div className="block lg:hidden min-h-screen flex flex-col bg-[#F6F8F5] text-[#1F2933]">
+        {/* 1. TOPO FIXO / STICKY */}
+        <header className="sticky top-0 z-50 bg-white border-b border-[#E3E8E1] h-16 flex items-center justify-center px-4 shadow-3xs">
+          <img 
+            src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
+            alt="Laboratório Cedro" 
+            className="h-8 w-auto object-contain brightness-0 text-[#003F1D]" 
+            referrerPolicy="no-referrer"
+          />
+        </header>
+
+        {/* 2. CONTEÚDO */}
+        <main className="flex-1 overflow-y-auto pb-24 pt-5 px-4">
+          {activeTab === "profile" ? (
+            <UserProfileView />
+          ) : (
+            <ApprovalPage 
+              records={records}
+              profiles={profiles}
+              workflows={workflows}
+              approvalConfig={approvalConfig}
+              currentUserId={user?.id}
+              onUpdateStatus={handleUpdateStatus}
+              onSaveApprovalConfig={handleSaveApprovalConfig}
+              onViewRecord={handleView}
+              isAdmin={isCurrentUserAdmin}
+            />
+          )}
+        </main>
+
+        {/* 3. NAVEGAÇÃO INFERIOR */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E3E8E1] rounded-t-3xl shadow-[0_-4px_16px_rgba(0,0,0,0.03)] pb-safe">
+          <div className="flex justify-around items-center h-16">
+            
+            {/* Aba Aprovação de IAs */}
+            <button
+              onClick={() => setActiveTab("approval_queue")}
+              className="flex flex-col items-center justify-center flex-1 h-full select-none transition-colors active:scale-95 cursor-pointer"
+            >
+              <div className={`p-1 transition-colors ${activeTab !== "profile" ? "text-[#075618]" : "text-[#667085]"}`}>
+                <ClipboardList size={20} strokeWidth={activeTab !== "profile" ? 2.5 : 2} />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
+                activeTab !== "profile" ? "text-[#075618]" : "text-[#667085]"
+              }`}>
+                Aprovação de IAs
+              </span>
+            </button>
+
+            {/* Aba Meu Perfil */}
+            <button
+              onClick={() => setActiveTab("profile")}
+              className="flex flex-col items-center justify-center flex-1 h-full select-none transition-colors active:scale-95 cursor-pointer"
+            >
+              <div className={`p-1 transition-colors ${activeTab === "profile" ? "text-[#075618]" : "text-[#667085]"}`}>
+                <UserCircle size={20} strokeWidth={activeTab === "profile" ? 2.5 : 2} />
+              </div>
+              <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
+                activeTab === "profile" ? "text-[#075618]" : "text-[#667085]"
+              }`}>
+                Meu Perfil
+              </span>
+            </button>
+
+          </div>
+        </nav>
       </div>
+
+      {/* VERSÃO DESKTOP COMPLETA DO CEDRO IA MONITOR */}
+      <div className="hidden lg:flex min-h-screen flex-row w-full relative">
+        {/* Mobile Header */}
+        <div className="md:hidden bg-gradient-to-r from-[#004D24] to-[#003F1D] p-4 flex justify-between items-center border-b-2 border-[#F58220] sticky top-0 z-50 text-white">
+          <div className="flex items-center gap-2.5">
+            <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Laboratório Cedro" className="h-8 w-auto brightness-0 invert" />
+            <span className="font-sans font-extrabold text-[13px] uppercase tracking-wider text-white">Laboratório Cedro</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white">
+              {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
+        </div>
 
       {/* Sidebar Navigation - AI Laboratory Control Panel Style */}
       <aside 
@@ -1590,64 +1662,76 @@ export default function App() {
                 <UserProfileView />
               )}
               {activeTab === "alerts" && (
-                <div className="space-y-6 bg-slate-50/50 p-6 sm:p-8 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] text-slate-800 animate-fade-in max-w-6xl mx-auto">
+                <div className="w-full max-w-none py-6 px-4 md:px-8 select-none bg-[#F6F8F5]/60 rounded-[2.5rem] border border-[#E3E8E1] space-y-6 text-[#1F2933] animate-fade-in">
+                  
+                  {/* BREADCRUMB */}
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#667085] mb-2 bg-white/95 p-2 px-4 rounded-full border border-[#E3E8E1] w-fit shadow-xs">
+                    <span onClick={() => setActiveTab("dashboard")} className="hover:text-[#075618] transition-colors cursor-pointer flex items-center gap-1">Início</span>
+                    <ChevronRight size={12} className="text-[#667085]/60" />
+                    <span className="text-[#1F2933] font-bold">Alertas</span>
+                  </div>
+
                   {/* Cabeçalho */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#E3E8E1] pb-6">
                     <div>
-                      <h3 className="text-xl font-black uppercase text-[#075618] tracking-tight">Alertas</h3>
+                      <h3 className="text-2xl font-black text-[#003F1D] tracking-tight uppercase">Central de Alertas</h3>
+                      <p className="text-xs text-[#667085] font-semibold mt-1">Gerenciamento e monitoramento em tempo real dos fluxos de conformidade de IA</p>
                     </div>
-                    <span className="text-[10px] font-bold text-[#075618] px-3 py-1 bg-[#075618]/5 border border-[#075618]/10 rounded-full uppercase tracking-widest font-mono">Status: Monitorando</span>
+                    <span className="text-[10px] font-black text-[#075618] px-3.5 py-1.5 bg-[#EAF4EC] border border-[#BFD8C5] rounded-full uppercase tracking-wider font-sans shadow-3xs flex items-center gap-1.5 select-none">
+                      <span className="size-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Status: Ativo e Monitorando
+                    </span>
                   </div>
 
                   {/* Cards Pequenos no Topo */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Card 1: Alertas ativos */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
-                      <div className="p-2.5 bg-slate-50 text-slate-700 rounded-xl">
-                        <Bell size={20} />
+                    <div className="bg-white p-5 rounded-2xl border border-[#E3E8E1] shadow-3xs flex items-center gap-4 transition-all hover:scale-[1.01]">
+                      <div className="p-3 bg-[#EAF4EC]/70 text-[#075618] rounded-xl border border-[#BFD8C5]/40 select-none">
+                        <Bell size={18} />
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alertas ativos</p>
-                        <p className="text-lg font-black text-slate-800">
+                        <p className="text-[10px] font-bold text-[#667085] uppercase tracking-wider">Alertas ativos</p>
+                        <p className="text-xl font-black text-[#1F2933] mt-0.5">
                           {systemAlerts.filter(a => a.status !== "Resolvido").length}
                         </p>
                       </div>
                     </div>
 
                     {/* Card 2: Críticos */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
-                      <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
-                        <AlertCircle size={20} />
+                    <div className="bg-white p-5 rounded-2xl border border-[#E3E8E1] shadow-3xs flex items-center gap-4 transition-all hover:scale-[1.01]">
+                      <div className="p-3 bg-[#FEF3F2] text-[#B42318] rounded-xl border border-[#FECDCA]/60 select-none">
+                        <AlertCircle size={18} />
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Críticos</p>
-                        <p className="text-lg font-black text-rose-600">
+                        <p className="text-[10px] font-bold text-[#667085] uppercase tracking-wider">Críticos</p>
+                        <p className="text-xl font-black text-[#B42318] mt-0.5">
                           {systemAlerts.filter(a => a.status !== "Resolvido" && a.level === "CRÍTICO").length}
                         </p>
                       </div>
                     </div>
 
                     {/* Card 3: Pendentes */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
-                      <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
-                        <Info size={20} />
+                    <div className="bg-white p-5 rounded-2xl border border-[#E3E8E1] shadow-3xs flex items-center gap-4 transition-all hover:scale-[1.01]">
+                      <div className="p-3 bg-[#FFF9EB] text-[#F59E0B] rounded-xl border border-[#FEF08A]/60 select-none">
+                        <Info size={18} />
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Atenção / Pendentes</p>
-                        <p className="text-lg font-black text-amber-600">
+                        <p className="text-[10px] font-bold text-[#667085] uppercase tracking-wider">Atenção / Pendentes</p>
+                        <p className="text-xl font-black text-[#F59E0B] mt-0.5">
                           {systemAlerts.filter(a => a.status !== "Resolvido" && a.level === "ATENÇÃO").length}
                         </p>
                       </div>
                     </div>
 
                     {/* Card 4: Resolvidos */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-3xs flex items-center gap-4">
-                      <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-                        <CheckCircle size={20} />
+                    <div className="bg-white p-5 rounded-2xl border border-[#E3E8E1] shadow-3xs flex items-center gap-4 transition-all hover:scale-[1.01]">
+                      <div className="p-3 bg-[#EAF4EC]/70 text-emerald-700 rounded-xl border border-[#BFD8C5]/40 select-none">
+                        <CheckCircle size={18} />
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resolvidos</p>
-                        <p className="text-lg font-black text-emerald-600">
+                        <p className="text-[10px] font-bold text-[#667085] uppercase tracking-wider">Resolvidos</p>
+                        <p className="text-xl font-black text-emerald-700 mt-0.5">
                           {systemAlerts.filter(a => a.status === "Resolvido").length}
                         </p>
                       </div>
@@ -1655,9 +1739,9 @@ export default function App() {
                   </div>
 
                   {/* Filtros */}
-                  <div className="flex flex-wrap gap-2 pt-2">
+                  <div className="flex flex-wrap gap-2 pt-2 pb-1 border-b border-[#E3E8E1]/60">
                     {[
-                      { id: "all", label: "Todos" },
+                      { id: "all", label: "Ativos" },
                       { id: "critical", label: "Críticos" },
                       { id: "warning", label: "Atenção" },
                       { id: "info", label: "Informativos" },
@@ -1666,10 +1750,10 @@ export default function App() {
                       <button
                         key={filt.id}
                         onClick={() => setAlertFilter(filt.id as any)}
-                        className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                        className={`text-[10px] font-extrabold uppercase tracking-widest px-4 py-2.5 rounded-xl transition-all cursor-pointer ${
                           alertFilter === filt.id
-                            ? "bg-[#075618] text-white shadow-xs"
-                            : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50"
+                            ? "bg-[#075618] text-white shadow-3xs hover:bg-[#003F1D]"
+                            : "bg-white text-[#667085] border border-[#E3E8E1] hover:bg-[#F6F8F5] hover:text-[#1F2933]"
                         }`}
                       >
                         {filt.label}
@@ -1691,13 +1775,13 @@ export default function App() {
 
                     if (filtered.length === 0) {
                       return (
-                        <div className="py-16 text-center space-y-4 bg-white rounded-2xl border border-slate-100">
-                          <div className="inline-flex p-4 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
+                        <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-[#E3E8E1] shadow-3xs">
+                          <div className="inline-flex p-4 bg-[#EAF4EC] text-[#075618] border border-[#BFD8C5] rounded-full">
                             <CheckCircle2 size={24} />
                           </div>
                           <div>
-                            <p className="text-[#111111] font-bold text-sm uppercase tracking-wider">Nenhum alerta ativo</p>
-                            <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                            <p className="text-[#1F2933] font-bold text-sm uppercase tracking-wider">Nenhum alerta ativo</p>
+                            <p className="text-xs text-[#667085] mt-1.5 max-w-md mx-auto">
                               Todos os processos de IA monitorados estão em conformidade no momento.
                             </p>
                           </div>
@@ -1711,21 +1795,21 @@ export default function App() {
                           // Definir estilos de acordo com severidade
                           const containerStyle = 
                             alert.status === "Resolvido" 
-                              ? "bg-slate-50/70 border-slate-200/80 text-slate-500 opacity-75"
+                              ? "bg-[#F6F8F5]/60 hover:bg-[#F6F8F5] border-[#E3E8E1] opacity-80"
                               : alert.level === "CRÍTICO"
-                                ? "bg-rose-50/40 border-rose-100/80 text-rose-950"
+                                ? "bg-white hover:bg-[#FEF3F2]/30 border-[#E3E8E1] border-l-4 border-l-[#B42318]"
                                 : alert.level === "ATENÇÃO"
-                                  ? "bg-amber-50/40 border-amber-100/80 text-amber-950"
-                                  : "bg-blue-50/40 border-blue-100/80 text-blue-950";
+                                  ? "bg-white hover:bg-[#FFF9EB]/30 border-[#E3E8E1] border-l-4 border-l-[#F59E0B]"
+                                  : "bg-white hover:bg-[#EAF4EC]/20 border-[#E3E8E1] border-l-4 border-l-[#075618]";
 
                           const badgeStyle = 
                             alert.status === "Resolvido"
-                              ? "bg-slate-200 text-slate-700"
+                              ? "bg-[#E3E8E1] text-[#667085]"
                               : alert.level === "CRÍTICO"
-                                ? "bg-rose-100 text-rose-800"
+                                ? "bg-[#FEF3F2] text-[#B42318] border border-[#FECDCA]"
                                 : alert.level === "ATENÇÃO"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : "bg-blue-100 text-blue-800";
+                                  ? "bg-[#FFF9EB] text-[#F59E0B] border border-[#FEF08A]"
+                                  : "bg-[#EAF4EC] text-[#075618] border border-[#BFD8C5]";
 
                           return (
                             <div 
@@ -1741,19 +1825,19 @@ export default function App() {
                                     • {alert.source}
                                   </span>
                                   {alert.status === "Lido" && alert.status !== "Resolvido" && (
-                                    <span className="text-[9px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">
+                                    <span className="text-[9px] font-medium bg-[#E3E8E1] text-[#667085] px-1.5 py-0.5 rounded uppercase font-bold tracking-wide">
                                       Lido
                                     </span>
                                   )}
                                 </div>
-                                <h4 className="font-extrabold text-sm tracking-tight text-slate-800 uppercase">{alert.title}</h4>
-                                <p className="text-xs leading-relaxed text-slate-600 font-medium">{alert.desc}</p>
+                                <h4 className="font-extrabold text-[#1F2933] text-sm tracking-tight uppercase">{alert.title}</h4>
+                                <p className="text-xs leading-relaxed text-[#667085] font-medium">{alert.desc}</p>
                                 <p className="text-[10px] text-slate-400 font-semibold">
                                   Gerado em: {new Date(alert.createdAt).toLocaleString("pt-BR")}
                                 </p>
                               </div>
 
-                              <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center">
+                              <div className="flex items-center gap-2.5 shrink-0 self-end md:self-center flex-wrap">
                                 {/* Botão Ação Principal (Ver IA ou Abrir perfil) */}
                                 {alert.actionType === "open-ia" && alert.relatedRecordId && (
                                   <button
@@ -1764,18 +1848,18 @@ export default function App() {
                                         setActiveTab("report");
                                       }
                                     }}
-                                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1.5"
+                                    className="px-3.5 py-2.5 bg-white hover:bg-[#F6F8F5] text-[#1F2933] border border-[#E3E8E1] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1.5"
                                   >
-                                    <Eye size={12} /> Abrir IA
+                                    <Eye size={12} className="text-[#667085]" /> Abrir IA
                                   </button>
                                 )}
 
                                 {alert.actionType === "open-profile" && (
                                   <button
                                     onClick={() => setActiveTab("profile")}
-                                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1.5"
+                                    className="px-3.5 py-2.5 bg-white hover:bg-[#F6F8F5] text-[#1F2933] border border-[#E3E8E1] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1.5"
                                   >
-                                    <UserCircle size={12} /> Perfil
+                                    <UserCircle size={12} className="text-[#667085]" /> Perfil
                                   </button>
                                 )}
 
@@ -1786,7 +1870,7 @@ export default function App() {
                                       saveAlertInteraction(alert.id, "Lido");
                                       triggerAlertsRefresh();
                                     }}
-                                    className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 border border-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer"
+                                    className="px-3.5 py-2.5 bg-[#EAF4EC] hover:bg-[#D5EAD9] text-[#075618] border border-[#BFD8C5] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
                                     title="Marcar como lido"
                                   >
                                     Lido
@@ -1800,7 +1884,7 @@ export default function App() {
                                       saveAlertInteraction(alert.id, "Resolvido");
                                       triggerAlertsRefresh();
                                     }}
-                                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wide transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1"
+                                    className="px-3.5 py-2.5 bg-[#075618] hover:bg-[#003F1D] text-white border border-[#075618] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-3xs flex items-center gap-1"
                                     title="Marcar como Resolvido"
                                   >
                                     <Check size={12} strokeWidth={3} /> Resolver
@@ -1896,6 +1980,7 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+    </div>
 
       {/* Delete Confirmation Modal */}
       <AnimatePresence>

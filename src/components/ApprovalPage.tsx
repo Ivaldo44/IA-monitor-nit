@@ -394,604 +394,799 @@ export default function ApprovalPage({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+      {/* MOBILE REUSABLE CLEAN LAYOUT */}
+      <div className="block lg:hidden space-y-5">
+        {/* Título e Subtítulo */}
+        <div className="pb-3 border-b border-slate-200">
+          <h1 className="text-lg font-black text-[#003F1D] tracking-tight uppercase">
             Aprovação de sistemas
           </h1>
+          <p className="text-xs text-[#667085] font-semibold mt-0.5">Analise e acompanhe solicitações de Inteligência Artificial</p>
         </div>
 
-        {/* Compact indicators */}
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-left min-w-[120px]">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-tight">Na minha vez</p>
-            <p className="text-lg font-bold text-slate-800">{stats.myTurnCount}</p>
-          </div>
-          <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-left min-w-[125px]">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-tight">Pendentes</p>
-            <p className="text-lg font-bold text-amber-650">{stats.totalPending}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs Menu Navigation */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-px">
-        <div className="flex gap-6">
-          <button
-            onClick={() => setActiveTab("queue")}
-            className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-all relative ${
-              activeTab === "queue"
-                ? "text-[#03440c] border-b-2 border-[#03440c] font-bold"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
+        {/* Aba Fila de Aprovação (simulada ou visual) */}
+        <div className="border-b border-slate-200 pb-px">
+          <button className="pb-2 text-xs font-black uppercase tracking-wider text-[#075618] border-b-2 border-[#075618]">
             Fila de aprovação
           </button>
-          
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab("config")}
-              className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-all relative ${
-                activeTab === "config"
-                  ? "text-[#03440c] border-b-2 border-[#03440c] font-bold"
-                  : "text-slate-500 hover:text-[#03440c]"
-              }`}
-            >
-              Configurar fluxo
-            </button>
-          )}
+        </div>
+
+        {/* Card Fila de Aprovação */}
+        <div className="bg-white border border-[#E3E8E1] rounded-3xl p-5 shadow-3xs space-y-4">
+          <div>
+            <h2 className="text-xs font-black text-[#003F1D] uppercase tracking-wider">Solicitações na Fila</h2>
+          </div>
+
+          {/* Filtros compactos - Minha vez, Pendentes, Todos */}
+          <div className="flex gap-1 p-1 bg-[#F6F8F5] rounded-2xl border border-[#E3E8E1]">
+            {[
+              { label: "Minha vez", value: "my_turn" },
+              { label: "Pendentes", value: "pending" },
+              { label: "Todos", value: "all" }
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  setQueueFilter(opt.value as any);
+                  setSelectedRecordId(null);
+                }}
+                className={`flex-1 py-2 px-1 rounded-xl text-[9px] font-black text-center uppercase tracking-wider transition-all select-none cursor-pointer ${
+                  queueFilter === opt.value
+                    ? "bg-white text-[#075618] border border-[#E3E8E1] shadow-3xs"
+                    : "text-[#667085] hover:text-[#1F2933]"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Campo de Busca */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#667085]" size={15} />
+            <input
+              type="text"
+              placeholder="Buscar ferramenta, ID, setor..."
+              value={approvalSearchInput}
+              onChange={(e) => setApprovalSearchInput(e.target.value)}
+              className="w-full pl-10 pr-3 py-3 bg-[#F6F8F5]/60 border border-[#E3E8E1] focus:border-[#075618] focus:bg-white text-xs font-semibold rounded-2xl outline-none placeholder:text-[#667085]/60 transition-all text-[#1F2933]"
+            />
+          </div>
+
+          {/* Lista de cards */}
+          <div className="space-y-3.5 pt-1">
+            {filteredRecords.length > 0 ? (
+              filteredRecords.map((record) => {
+                const wf = getRecordWf(record.id);
+                const currentStepNum = wf ? wf.currentStep : 1;
+                const activeStepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
+                const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+                const stepUserId = activeStepDef?.userId || wfStep?.assignedUserId;
+
+                const currentUserProfile = profiles.find(p => p.id === currentUserId);
+                const isUserAdmin = isAdmin;
+                const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
+                const isUserPrivileged = isUserAdmin || isUserModerator;
+
+                const isStepUnassigned = !stepUserId;
+                const isAssignedToMe = stepUserId === currentUserId;
+                const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
+                const isMyTurn = !isWfFinished && isAssignedToMe && record.statusAuditoria === StatusAuditoria.PENDENTE;
+
+                const dateStr = record.createdAt ? record.createdAt.slice(0, 10) : "";
+                const formattedDate = dateStr 
+                  ? dateStr.split("-").reverse().join("/") 
+                  : "Sem data";
+
+                return (
+                  <div 
+                    key={record.id}
+                    className="p-4 rounded-2xl border border-[#E3E8E1] bg-[#F6F8F5]/30 space-y-4.5 text-left"
+                  >
+                    {/* ID e Status */}
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono text-[9px] font-bold text-[#667085] bg-[#F6F8F5] border border-[#E3E8E1] px-2 py-0.5 rounded">
+                        {record.id}
+                      </span>
+                      <span className={`text-[8px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                        record.statusAuditoria === StatusAuditoria.APROVADO 
+                          ? "bg-[#EAF4EC] text-[#075618] border-[#BFD8C5]" 
+                          : record.statusAuditoria === StatusAuditoria.NEGADO 
+                            ? "bg-[#FEF3F2] text-[#B42318] border-[#FECDCA]" 
+                            : "bg-[#FFF9EB] text-[#F59E0B] border-[#FEF08A]"
+                      }`}>
+                        {record.statusAuditoria || "Pendente"}
+                      </span>
+                    </div>
+
+                    {/* Titulo */}
+                    <div>
+                      <h3 className="text-xs font-black text-[#1F2933] uppercase tracking-tight truncate">
+                        {record.nomeFerramenta}
+                      </h3>
+                      <p className="text-[10px] text-[#667085] font-semibold mt-0.5">
+                        {record.unidadeSetor} • {record.responsavelPreenchimento}
+                      </p>
+                    </div>
+
+                    {/* Metadados: Etapa do fluxo e Data */}
+                    <div className="pt-2.5 border-t border-[#E3E8E1]/60 text-[9px] font-bold text-[#667085] space-y-1">
+                      {wf && !isWfFinished && (
+                        <p className="text-[#075618]">
+                          Etapa Atual: <span className="font-extrabold uppercase">{currentStepNum}. {activeStepDef?.roleName || "Avaliação"}</span>
+                        </p>
+                      )}
+                      <p>
+                        Cadastrada em: <span className="font-semibold text-[#1F2933]">{formattedDate}</span>
+                      </p>
+                    </div>
+
+                    {/* Botões de Ação */}
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1.5">
+                      <button
+                        onClick={() => onViewRecord(record)}
+                        className="flex-1 py-2.5 px-4 bg-white hover:bg-[#EAF4EC]/40 text-[#075618] border border-[#E3E8E1] hover:border-[#BFD8C5] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all select-none flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                      >
+                        Ver detalhes
+                      </button>
+
+                      {isMyTurn && (
+                        <button
+                          onClick={() => {
+                            setAnalysisModal({ isOpen: true, record });
+                            setAuditComment("");
+                            setCoordAlinhamento("Alinhado");
+                            setCoordTransferencia("Médio");
+                            setCoordViabilidade("Sim");
+                            
+                            setCoordUsaDadosPessoais(record.usaDadosPessoais || "Não");
+                            setCoordUsaDadosSensiveis(record.usaDadosSensiveis || "Não");
+                            setCoordQuaisDados(record.quaisDados || "");
+                            setCoordDadosAnonimizados(record.dadosAnonimizados || "Não");
+                            setCoordEnvioFornecedorExterno(record.envioFornecedorExterno || "Não");
+                            setCoordDadosTreinamentoModelo(record.dadosTreinamentoModelo || "Não");
+                            setShowPainelExecutivo(false);
+                            
+                            setG1RiscosRelevantes("Não identificado");
+                            setG1TiposRisk([]);
+                            setG1Descricao("");
+                            setG2ControlesExistentes("Não se aplica");
+                            setG2ControlesTipos([]);
+                            setG2ControlesAdicionais("");
+                            setG3RiscoResidual("Não avaliado");
+                            setG3Responsavel("NIT");
+                            setG3Observacoes("");
+
+                            setTiInfra("Compatível / Cloud nativa");
+                            setTiSeguranca("Conforme");
+                            setTiIntegracao("Não / Plataforma autônoma");
+                            setTiAmbiente("Cloud externa");
+                            setTiControleAcesso("Adequado");
+                            setTiLogs("Possui logs");
+                            setTiAcao("Não");
+                            setPeriodoTesteConfirmado("Sim");
+                          }}
+                          className="flex-1 py-2.5 px-4 bg-[#075618] text-white hover:bg-[#003F1D] border border-[#075618] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all select-none flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                        >
+                          Registrar parecer
+                        </button>
+                      )}
+                    </div>
+
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-10 text-center border border-dashed border-[#E3E8E1] rounded-2xl">
+                <p className="text-xs text-[#667085] font-semibold">Nenhuma solicitação encontrada.</p>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab + queueFilter}
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.15 }}
-        >
-          {activeTab === "queue" && (() => {
-            const activeRecord = (() => {
-              if (filteredRecords.length === 0) return null;
-              const found = filteredRecords.find(r => r.id === selectedRecordId);
-              if (found) return found;
-              // Only do automatic fallback to first item on initial load/when search is not active
-              if (approvalSearchInput.trim() !== "") {
-                return null;
-              }
-              return filteredRecords[0];
-            })();
+      {/* DESKTOP COMPLETE VIEW */}
+      <div className="hidden lg:block space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Aprovação de sistemas
+            </h1>
+          </div>
 
-            return (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-                
-                {/* COLUNA ESQUERDA: Fila de Solicitações (col-span-5) */}
-                <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-4 flex flex-col space-y-4 shadow-sm">
-                  <div>
-                    <h2 className="text-xs font-bold text-slate-800 uppercase tracking-tight">Fila de aprovação</h2>
-                  </div>
+          {/* Compact indicators */}
+          <div className="hidden lg:flex items-center gap-3">
+            <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-left min-w-[120px]">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-tight">Na minha vez</p>
+              <p className="text-lg font-bold text-slate-800">{stats.myTurnCount}</p>
+            </div>
+            <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-left min-w-[125px]">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-tight">Pendentes</p>
+              <p className="text-lg font-bold text-amber-650">{stats.totalPending}</p>
+            </div>
+          </div>
+        </div>
 
-                  {/* Filtros compactos - Minha vez, Pendentes, Todos */}
-                  <div className="flex flex-wrap gap-1 p-1 bg-slate-50 rounded-xl border border-slate-200">
-                    {[
-                      { label: "Minha vez", value: "my_turn" },
-                      { label: "Pendentes", value: "pending" },
-                      { label: "Todos", value: "all" }
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => {
-                          setQueueFilter(opt.value as any);
-                          setSelectedRecordId(null);
+        {/* Tabs Menu Navigation */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-px">
+          <div className="flex gap-6">
+            <button
+              onClick={() => setActiveTab("queue")}
+              className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-all relative ${
+                activeTab === "queue"
+                  ? "text-[#03440c] border-b-2 border-[#03440c] font-bold"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              Fila de aprovação
+            </button>
+            
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab("config")}
+                className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-all relative ${
+                  activeTab === "config"
+                    ? "text-[#03440c] border-b-2 border-[#03440c] font-bold"
+                    : "text-slate-500 hover:text-[#03440c]"
+                }`}
+              >
+                Configurar fluxo
+              </button>
+            )}
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab + queueFilter}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.15 }}
+          >
+            {activeTab === "queue" && (() => {
+              const activeRecord = (() => {
+                if (filteredRecords.length === 0) return null;
+                const found = filteredRecords.find(r => r.id === selectedRecordId);
+                if (found) return found;
+                // Only do automatic fallback to first item on initial load/when search is not active
+                if (approvalSearchInput.trim() !== "") {
+                  return null;
+                }
+                return filteredRecords[0];
+              })();
+
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+                  
+                  {/* COLUNA ESQUERDA: Fila de Solicitações (col-span-5) */}
+                  <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-4 flex flex-col space-y-4 shadow-sm">
+                    <div>
+                      <h2 className="text-xs font-bold text-slate-800 uppercase tracking-tight">Fila de aprovação</h2>
+                    </div>
+
+                    {/* Filtros compactos - Minha vez, Pendentes, Todos */}
+                    <div className="flex flex-wrap gap-1 p-1 bg-slate-50 rounded-xl border border-slate-200">
+                      {[
+                        { label: "Minha vez", value: "my_turn" },
+                        { label: "Pendentes", value: "pending" },
+                        { label: "Todos", value: "all" }
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            setQueueFilter(opt.value as any);
+                            setSelectedRecordId(null);
+                          }}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold text-center uppercase tracking-wide transition-all ${
+                            queueFilter === opt.value
+                              ? "bg-white text-slate-800 shadow-xs border border-slate-200/50"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Barra de busca compacta */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                      <input
+                        type="text"
+                        placeholder="Buscar ferramenta, ID, setor..."
+                        value={approvalSearchInput}
+                        onChange={(e) => {
+                          setApprovalSearchInput(e.target.value);
                         }}
-                        className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold text-center uppercase tracking-wide transition-all ${
-                          queueFilter === opt.value
-                            ? "bg-white text-slate-800 shadow-xs border border-slate-200/50"
-                            : "text-slate-500 hover:text-slate-800"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
+                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-emerald-600 focus:bg-white transition-all shadow-inner"
+                      />
+                    </div>
 
-                  {/* Barra de busca compacta */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                    <input
-                      type="text"
-                      placeholder="Buscar ferramenta, ID, setor..."
-                      value={approvalSearchInput}
-                      onChange={(e) => {
-                        setApprovalSearchInput(e.target.value);
-                      }}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-emerald-600 focus:bg-white transition-all shadow-inner"
-                    />
-                  </div>
-
-                  {/* Lista de Registros */}
-                  <div className="space-y-2 overflow-y-auto max-h-[560px] pr-1">
-                    {filteredRecords.length > 0 ? (
-                      filteredRecords.map((record) => {
-                        const isSelected = activeRecord && record.id === activeRecord.id;
-                        const wf = getRecordWf(record.id);
-                        const currentStepNum = wf ? wf.currentStep : 1;
-                        
-                        const activeStepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
-                        const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
-                        const stepUserId = activeStepDef?.userId || wfStep?.assignedUserId;
-
-                        const currentUserProfile = profiles.find(p => p.id === currentUserId);
-                        const isUserAdmin = isAdmin;
-                        const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
-                        const isUserPrivileged = isUserAdmin || isUserModerator;
-
-                        const isStepUnassigned = !stepUserId;
-                        const isAssignedToMe = stepUserId === currentUserId;
-                        const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
-                        const isMyTurn = !isWfFinished && isAssignedToMe && record.statusAuditoria === StatusAuditoria.PENDENTE;
-
-                        return (
-                          <div
-                            key={record.id}
-                            onClick={() => setSelectedRecordId(record.id)}
-                            className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                              isSelected
-                                ? "bg-emerald-50/20 border-emerald-600 border-l-4 shadow-xs"
-                                : isMyTurn
-                                  ? "bg-amber-50/20 border-amber-300 hover:border-amber-400"
-                                  : "bg-white border-slate-200 hover:border-slate-350"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <span className="font-mono text-[9px] text-slate-400 font-semibold">{record.id}</span>
-                              <span className={`text-[8px] px-2 py-0.5 rounded font-bold tracking-wider uppercase ${
-                                record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                                record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-red-50 text-red-700 border border-red-100" :
-                                "bg-amber-50 text-amber-700 border border-amber-100"
-                              }`}>
-                                {record.statusAuditoria || "Pendente"}
-                              </span>
-                            </div>
-                            
-                            <h3 className="text-xs font-bold text-slate-800 line-clamp-1 uppercase">
-                              {record.nomeFerramenta}
-                            </h3>
-
-                            <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                              <span className="font-medium truncate max-w-[150px]">{record.unidadeSetor} • {record.responsavelPreenchimento}</span>
-                              <span className="font-mono text-[9px] shrink-0">{new Date(record.createdAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="py-12 text-center border border-dashed border-slate-200 rounded-xl">
-                        <p className="text-xs text-slate-450 font-medium">Nenhuma solicitação pendente</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* COLUNA DIREITA: Detalhes e Fluxo de Aprovação (col-span-7) */}
-                <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col space-y-5 shadow-sm min-h-[500px]">
-                  {activeRecord ? (() => {
-                    const record = activeRecord;
-                    const wf = getRecordWf(record.id);
-                    const currentStepNum = wf ? wf.currentStep : 1;
-                    const activeStepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
-                    
-                    const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
-                    const stepUserId = activeStepDef?.userId || wfStep?.assignedUserId;
-                    const displayedRoleName = activeStepDef?.roleName || wfStep?.roleName || "N/A";
-                    const displayedUserName = activeStepDef?.userName || wfStep?.assignedUserName;
-
-                    const currentUserProfile = profiles.find(p => p.id === currentUserId);
-                    const isUserAdmin = isAdmin;
-                    const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
-                    const isUserPrivileged = isUserAdmin || isUserModerator;
-
-                    const isStepUnassigned = !stepUserId;
-                    const isAssignedToMe = stepUserId === currentUserId;
-                    const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
-                    const isMyTurn = !isWfFinished && isAssignedToMe && record.statusAuditoria === StatusAuditoria.PENDENTE;
-
-                    const latestDecision = record.historico?.find(
-                      h => h.action && !h.action.includes("Criação") && !h.action.includes("Atualização")
-                    );
-
-                    return (
-                      <>
-                        {/* Pane Header */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                          <div>
-                            <span className="font-mono text-[9px] text-slate-400 font-semibold">{record.id}</span>
-                            <h2 className="text-base font-bold text-slate-900 tracking-tight uppercase mt-0.5">
-                              {record.nomeFerramenta}
-                            </h2>
-                            <p className="text-xs text-slate-400 mt-0.5">{record.unidadeSetor} • {record.responsavelPreenchimento}</p>
-                          </div>
+                    {/* Lista de Registros */}
+                    <div className="space-y-2 overflow-y-auto max-h-[560px] pr-1">
+                      {filteredRecords.length > 0 ? (
+                        filteredRecords.map((record) => {
+                          const isSelected = activeRecord && record.id === activeRecord.id;
+                          const wf = getRecordWf(record.id);
+                          const currentStepNum = wf ? wf.currentStep : 1;
                           
-                          <div className="flex items-center gap-2">
-                            {isMyTurn ? (
-                              <button
-                                onClick={() => {
-                                  setAnalysisModal({ isOpen: true, record });
-                                  setAuditComment("");
-                                  setCoordAlinhamento("Alinhado");
-                                  setCoordTransferencia("Médio");
-                                  setCoordViabilidade("Sim");
-                                  
-                                  setCoordUsaDadosPessoais(record.usaDadosPessoais || "Não");
-                                  setCoordUsaDadosSensiveis(record.usaDadosSensiveis || "Não");
-                                  setCoordQuaisDados(record.quaisDados || "");
-                                  setCoordDadosAnonimizados(record.dadosAnonimizados || "Não");
-                                  setCoordEnvioFornecedorExterno(record.envioFornecedorExterno || "Não");
-                                  setCoordDadosTreinamentoModelo(record.dadosTreinamentoModelo || "Não");
-                                  setShowPainelExecutivo(false);
-                                  
-                                  setG1RiscosRelevantes("Não identificado");
-                                  setG1TiposRisk([]);
-                                  setG1Descricao("");
-                                  setG2ControlesExistentes("Não se aplica");
-                                  setG2ControlesTipos([]);
-                                  setG2ControlesAdicionais("");
-                                  setG3RiscoResidual("Não avaliado");
-                                  setG3Responsavel("NIT");
-                                  setG3Observacoes("");
+                          const activeStepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
+                          const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+                          const stepUserId = activeStepDef?.userId || wfStep?.assignedUserId;
 
-                                  setTiInfra("Compatível / Cloud nativa");
-                                  setTiSeguranca("Conforme");
-                                  setTiIntegracao("Não / Plataforma autônoma");
-                                  setTiAmbiente("Cloud externa");
-                                  setTiControleAcesso("Adequado");
-                                  setTiLogs("Possui logs");
-                                  setTiAcao("Não");
-                                  setPeriodoTesteConfirmado("Sim");
-                                }}
-                                className="bg-[#03440c] hover:bg-[#03440c]/90 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <ClipboardCheck size={14} /> Registrar parecer
-                              </button>
-                            ) : (
-                              <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] text-slate-500 font-bold flex items-center gap-1.5 select-none">
-                                <Clock size={12} className="text-slate-400" />
-                                <span>
-                                  {record.statusAuditoria === StatusAuditoria.PENDENTE ? "Pendente" : "Finalizado"}
-                                </span>
-                              </div>
-                            )}
-                            
-                            <button
-                              onClick={() => onViewRecord(record)}
-                              className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-750 text-xs font-semibold px-3 py-2.5 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
-                            >
-                              Ver ficha
-                            </button>
-                          </div>
-                        </div>
+                          const currentUserProfile = profiles.find(p => p.id === currentUserId);
+                          const isUserAdmin = isAdmin;
+                          const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
+                          const isUserPrivileged = isUserAdmin || isUserModerator;
 
-                        {/* Metadata Summary Info Line */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                          <div>
-                            <p className="text-[9px] text-slate-450 uppercase font-bold">Setor</p>
-                            <p className="text-xs font-bold text-slate-700 truncate">{record.unidadeSetor}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] text-slate-450 uppercase font-bold">Solicitante</p>
-                            <p className="text-xs font-bold text-slate-700 truncate">{record.responsavelPreenchimento}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] text-slate-450 uppercase font-bold">Data Cadastro</p>
-                            <p className="text-xs font-medium text-slate-600">{new Date(record.createdAt).toLocaleDateString()}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] text-slate-450 uppercase font-bold">Criticidade sugerida</p>
-                            <p className="text-xs font-bold text-slate-600">{record.criticidade || "Mapeamento pendente"}</p>
-                          </div>
-                        </div>
-
-                        {/* Seção: Último Parecer */}
-                        {latestDecision && (() => {
-                          const parsedLatestDecision = parseApprovalComment(
-                            latestDecision.message || latestDecision.action
-                          );
+                          const isStepUnassigned = !stepUserId;
+                          const isAssignedToMe = stepUserId === currentUserId;
+                          const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
+                          const isMyTurn = !isWfFinished && isAssignedToMe && record.statusAuditoria === StatusAuditoria.PENDENTE;
 
                           return (
-                            <div className="mt-5 rounded-2xl border border-[#BFD8C5] bg-[#F4FAF5] p-5 shadow-sm">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-start gap-3">
-                                  <div className="w-9 h-9 rounded-xl bg-[#EAF4EC] border border-[#BFD8C5] flex items-center justify-center text-[#075618] shrink-0">
-                                    <MessageSquare size={17} />
-                                  </div>
-
-                                  <div>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#075618]">
-                                      Último parecer registrado
-                                    </p>
-
-                                    <p className="mt-1 text-xs text-[#667085] font-semibold">
-                                      Registro mais recente do fluxo de aprovação
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <span className="shrink-0 px-3 py-1 rounded-full bg-[#EAF4EC] border border-[#BFD8C5] text-[10px] font-black uppercase tracking-wider text-[#075618]">
-                                  Parecer
+                            <div
+                              key={record.id}
+                              onClick={() => setSelectedRecordId(record.id)}
+                              className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                                isSelected
+                                  ? "bg-emerald-50/20 border-emerald-600 border-l-4 shadow-xs"
+                                  : isMyTurn
+                                    ? "bg-amber-50/20 border-amber-300 hover:border-amber-400"
+                                    : "bg-white border-slate-200 hover:border-slate-350"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className="font-mono text-[9px] text-slate-400 font-semibold">{record.id}</span>
+                                <span className={`text-[8px] px-2 py-0.5 rounded font-bold tracking-wider uppercase ${
+                                  record.statusAuditoria === StatusAuditoria.APROVADO ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                                  record.statusAuditoria === StatusAuditoria.NEGADO ? "bg-red-50 text-red-700 border border-red-100" :
+                                  "bg-amber-50 text-amber-700 border border-amber-100"
+                                }`}>
+                                  {record.statusAuditoria || "Pendente"}
                                 </span>
                               </div>
+                              
+                              <h3 className="text-xs font-bold text-slate-800 line-clamp-1 uppercase">
+                                {record.nomeFerramenta}
+                              </h3>
 
-                              {parsedLatestDecision.criteria.length > 0 && (
-                                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                                  {parsedLatestDecision.criteria.map((item, index) => (
-                                    <div
-                                      key={`${item.label}-${index}`}
-                                      className="rounded-xl border border-[#E3E8E1] bg-white px-4 py-3"
-                                    >
-                                      <p className="text-[9px] font-black uppercase tracking-widest text-[#667085]">
-                                        {item.label}
-                                      </p>
-
-                                      <p className="mt-1 text-xs font-bold text-[#1F2933]">
-                                        {item.value}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div className="mt-4 rounded-xl border border-[#E3E8E1] bg-white px-4 py-3">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2">
-                                  Parecer
-                                </p>
-
-                                <p className="text-sm leading-relaxed text-[#1F2933] font-medium whitespace-pre-line">
-                                  {parsedLatestDecision.parecer}
-                                </p>
+                              <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                                <span className="font-medium truncate max-w-[150px]">{record.unidadeSetor} • {record.responsavelPreenchimento}</span>
+                                <span className="font-mono text-[9px] shrink-0">{new Date(record.createdAt).toLocaleDateString()}</span>
                               </div>
-
-                              {latestDecision.action && (
-                                <div className="mt-3 flex items-center gap-2 text-[11px] font-bold text-[#075618] uppercase tracking-wide">
-                                  <CheckCircle2 size={14} />
-                                  <span>{latestDecision.action}</span>
-                                </div>
-                              )}
                             </div>
                           );
-                        })()}
-
-                        {/* Seção: Fluxo de Governança (Horizontal Stepper) */}
-                        <div className="space-y-3 pt-1">
-                          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Fluxo de aprovação</h3>
-                          
-                          <div className="relative flex items-center justify-between w-full px-4">
-                            {/* Thin connection line behind */}
-                            <div className="absolute left-6 right-6 top-[11px] h-[1px] bg-slate-200 z-0" />
-                            
-                            {currentSteps.map((step) => {
-                              const wfStep = wf?.steps?.find(s => s.stepNumber === step.stepNumber);
-                              const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
-
-                              const isFailed = hasWfStepDecision
-                                ? (wfStep.status === "negado")
-                                : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
-
-                              const isPassed = !isFailed && (hasWfStepDecision
-                                ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
-                                : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
-
-                              const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
-
-                              return (
-                                <div key={step.stepNumber} className="relative z-10 flex flex-col items-center">
-                                  <div
-                                    title={`${step.stepNumber}. ${step.roleName}`}
-                                    className={`size-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all ${
-                                      isPassed
-                                        ? "bg-emerald-600 border-emerald-600 text-white"
-                                        : isFailed
-                                          ? "bg-red-600 border-red-600 text-white"
-                                          : isCurrent
-                                            ? "bg-amber-500 border-amber-500 text-white ring-2 ring-amber-100 ring-offset-1 animate-pulse"
-                                            : "bg-white border-slate-200 text-slate-400"
-                                    }`}
-                                  >
-                                    {step.stepNumber}
-                                  </div>
-                                  
-                                  <span className="text-[8px] font-bold text-slate-500 mt-1 max-w-[64px] truncate text-center uppercase tracking-tight block">
-                                    {step.roleName.split(" ")[0]} {step.roleName.split(" ")[1] || ""}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        })
+                      ) : (
+                        <div className="py-12 text-center border border-dashed border-slate-200 rounded-xl">
+                          <p className="text-xs text-slate-450 font-medium">Nenhuma solicitação pendente</p>
                         </div>
-
-                        {/* Seção: Histórico Completo de Responsáveis (Vertical compact list) */}
-                        <div className="space-y-3 pt-1">
-                          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Responsáveis pelo processo</h3>
-                          
-                          <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/10 overflow-hidden shadow-xs">
-                            {currentSteps.map((step) => {
-                              const wfStep = wf?.steps?.find(s => s.stepNumber === step.stepNumber);
-                              const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
-                              
-                              const isFailed = hasWfStepDecision
-                                ? (wfStep.status === "negado")
-                                : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
-
-                              const isPassed = !isFailed && (hasWfStepDecision
-                                ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
-                                : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
-
-                              const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
-
-                              const signerName = wfStep?.assignedUserName || step.userName || "Usuário livre";
-                              const decidedAt = wfStep?.decidedAt;
-                              const opinion = wfStep?.comment;
-
-                              return (
-                                <div key={step.stepNumber} className="p-3 flex items-start gap-4 justify-between bg-white hover:bg-slate-50/50 transition-colors">
-                                  <div className="space-y-1 min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] font-bold text-slate-400">Etapa {step.stepNumber}</span>
-                                      <span className="text-slate-300">|</span>
-                                      <span className="text-[11px] font-bold text-slate-800 truncate">{step.roleName}</span>
-                                    </div>
-                                    
-                                    <p className="text-[10px] text-slate-500">
-                                      Responsável: <span className="font-semibold text-slate-700">{signerName}</span>
-                                    </p>
-
-                                    {decidedAt && (
-                                      <p className="text-[9px] text-slate-450 font-mono">Assinado em {new Date(decidedAt).toLocaleDateString()}</p>
-                                    )}
-
-                                    {opinion && (
-                                      <p className="text-[10px] text-slate-500 italic mt-1 leading-snug font-medium pl-2 border-l border-slate-200 bg-slate-50/50 p-1 rounded">
-                                        "{opinion.replace(/###.+/g, "").replace(/•/g, "").replace(/\*/g, "").trim()}"
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  <div className="shrink-0 pt-0.5">
-                                    {isPassed ? (
-                                      <span className="px-2 py-0.5 text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold uppercase rounded">Aprovado</span>
-                                    ) : isFailed ? (
-                                      <span className="px-2 py-0.5 text-[8px] bg-red-50 text-red-700 border border-red-200 font-bold uppercase rounded">
-                                        {step.stepNumber === 5 ? "Parecer desfavorável" : "Indeferido"}
-                                      </span>
-                                    ) : isCurrent ? (
-                                      <span className="px-2 py-0.5 text-[8px] bg-amber-50 text-amber-700 border border-amber-200 font-bold uppercase rounded animate-pulse">Atual</span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 text-[8px] bg-slate-50 text-slate-400 border border-slate-150 font-bold uppercase rounded">Aguardando</span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })() : (
-                    <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400 space-y-2">
-                      <ShieldCheck size={40} className="text-slate-300 pointer-events-none" />
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-700 uppercase">Nenhum protocolo ativo</h3>
-                        <p className="text-[11px]">Selecione uma solicitação da fila à esquerda para analisar</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            );
-          })()}
-
-          {activeTab === "config" && isAdmin && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Definir Responsáveis pelas Etapas</h3>
-                </div>
-                {workflowSaved && (
-                  <span className="text-xs font-black text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-xl uppercase">✓ Configuração salva</span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {workflowConfig.map((step, idx) => (
-                  <div key={step.stepNumber} className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="size-10 rounded-xl flex items-center justify-center font-black text-sm border bg-[#03440c]/10 border-[#03440c]/20 text-[#03440c]">
-                        {step.stepNumber}
-                      </div>
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={step.roleName}
-                          onChange={(e) => {
-                            const updated = [...workflowConfig];
-                            updated[idx] = { ...updated[idx], roleName: e.target.value };
-                            setWorkflowConfig(updated);
-                            setWorkflowSaved(false);
-                          }}
-                          className="w-full bg-transparent font-black text-slate-900 text-sm border-b border-slate-200 focus:border-brand-green outline-none pb-1 transition-colors"
-                        />
-                        <p className="text-[9px] text-[var(--text-muted)] font-bold uppercase tracking-widest mt-1">Cargo / Papel da etapa</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black text-[var(--text-muted)] uppercase tracking-widest">Usuário Responsável (Admin/Moderador)</label>
-                      <select
-                        value={step.userId ?? ""}
-                        onChange={(e) => {
-                          const selectedProfile = privilegedProfiles.find(p => p.id === e.target.value);
-                          const updated = [...workflowConfig];
-                          updated[idx] = {
-                            ...updated[idx],
-                            userId: e.target.value || undefined,
-                            userName: selectedProfile?.full_name || undefined,
-                          };
-                          setWorkflowConfig(updated);
-                          setWorkflowSaved(false);
-                        }}
-                        className="w-full px-4 py-3 bg-black/5 border border-slate-200 rounded-xl text-sm text-slate-800 font-semibold outline-none focus:border-brand-green transition-all"
-                      >
-                        <option value="">— Selecione um administrador ou moderador —</option>
-                        {privilegedProfiles.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.full_name} ({p.role === "admin" ? "Admin" : "Moderador"}{p.cargo ? ` • ${p.cargo}` : ""})
-                          </option>
-                        ))}
-                      </select>
-                      {privilegedProfiles.length === 0 && (
-                        <p className="text-[9px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 font-bold mt-1">
-                          Nenhum administrador ou moderador cadastrado. Promova usuários na aba Administração IA.
-                        </p>
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
 
-              <div className="pt-4">
-                <button
-                  onClick={() => {
-                    if (onSaveApprovalConfig) {
-                      onSaveApprovalConfig({ steps: workflowConfig });
-                      setWorkflowSaved(true);
-                      setTimeout(() => setWorkflowSaved(false), 4000);
-                    }
-                  }}
-                  className={`w-full py-4 font-black uppercase text-xs tracking-widest rounded-2xl transition-all active:scale-[0.99] flex items-center justify-center gap-2 relative overflow-hidden ${
-                    workflowSaved
-                      ? "bg-brand-green text-white shadow-lg shadow-brand-green/30 scale-[1.01]"
-                      : "bg-[#03440c] text-white shadow-md hover:bg-[#03440c]/90"
-                  }`}
-                >
-                  {workflowSaved ? (
-                    <>
-                      <CheckCircle2 size={16} />
-                      Fluxo configurado com sucesso!
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      Salvar Configuração de Etapas
-                    </>
+                  {/* COLUNA DIREITA: Detalhes e Fluxo de Aprovação (col-span-7) */}
+                  <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col space-y-5 shadow-sm min-h-[500px]">
+                    {activeRecord ? (() => {
+                      const record = activeRecord;
+                      const wf = getRecordWf(record.id);
+                      const currentStepNum = wf ? wf.currentStep : 1;
+                      const activeStepDef = currentSteps.find(s => s.stepNumber === currentStepNum);
+                      
+                      const wfStep = wf?.steps?.find(s => s.stepNumber === currentStepNum);
+                      const stepUserId = activeStepDef?.userId || wfStep?.assignedUserId;
+                      const displayedRoleName = activeStepDef?.roleName || wfStep?.roleName || "N/A";
+                      const displayedUserName = activeStepDef?.userName || wfStep?.assignedUserName;
+
+                      const currentUserProfile = profiles.find(p => p.id === currentUserId);
+                      const isUserAdmin = isAdmin;
+                      const isUserModerator = currentUserProfile?.role?.toLowerCase().trim() === "moderator";
+                      const isUserPrivileged = isUserAdmin || isUserModerator;
+
+                      const isStepUnassigned = !stepUserId;
+                      const isAssignedToMe = stepUserId === currentUserId;
+                      const isWfFinished = wf && (wf.finalStatus === "aprovado" || wf.finalStatus === "negado");
+                      const isMyTurn = !isWfFinished && isAssignedToMe && record.statusAuditoria === StatusAuditoria.PENDENTE;
+
+                      const latestDecision = record.historico?.find(
+                        h => h.action && !h.action.includes("Criação") && !h.action.includes("Atualização")
+                      );
+
+                      return (
+                        <>
+                          {/* Pane Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <div>
+                              <span className="font-mono text-[9px] text-slate-400 font-semibold">{record.id}</span>
+                              <h2 className="text-base font-bold text-slate-900 tracking-tight uppercase mt-0.5">
+                                {record.nomeFerramenta}
+                              </h2>
+                              <p className="text-xs text-slate-400 mt-0.5">{record.unidadeSetor} • {record.responsavelPreenchimento}</p>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              {isMyTurn ? (
+                                <button
+                                  onClick={() => {
+                                    setAnalysisModal({ isOpen: true, record });
+                                    setAuditComment("");
+                                    setCoordAlinhamento("Alinhado");
+                                    setCoordTransferencia("Médio");
+                                    setCoordViabilidade("Sim");
+                                    
+                                    setCoordUsaDadosPessoais(record.usaDadosPessoais || "Não");
+                                    setCoordUsaDadosSensiveis(record.usaDadosSensiveis || "Não");
+                                    setCoordQuaisDados(record.quaisDados || "");
+                                    setCoordDadosAnonimizados(record.dadosAnonimizados || "Não");
+                                    setCoordEnvioFornecedorExterno(record.envioFornecedorExterno || "Não");
+                                    setCoordDadosTreinamentoModelo(record.dadosTreinamentoModelo || "Não");
+                                    setShowPainelExecutivo(false);
+                                    
+                                    setG1RiscosRelevantes("Não identificado");
+                                    setG1TiposRisk([]);
+                                    setG1Descricao("");
+                                    setG2ControlesExistentes("Não se aplica");
+                                    setG2ControlesTipos([]);
+                                    setG2ControlesAdicionais("");
+                                    setG3RiscoResidual("Não avaliado");
+                                    setG3Responsavel("NIT");
+                                    setG3Observacoes("");
+
+                                    setTiInfra("Compatível / Cloud nativa");
+                                    setTiSeguranca("Conforme");
+                                    setTiIntegracao("Não / Plataforma autônoma");
+                                    setTiAmbiente("Cloud externa");
+                                    setTiControleAcesso("Adequado");
+                                    setTiLogs("Possui logs");
+                                    setTiAcao("Não");
+                                    setPeriodoTesteConfirmado("Sim");
+                                  }}
+                                  className="bg-[#03440c] hover:bg-[#03440c]/90 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <ClipboardCheck size={14} /> Registrar parecer
+                                </button>
+                              ) : (
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] text-slate-500 font-bold flex items-center gap-1.5 select-none">
+                                  <Clock size={12} className="text-slate-400" />
+                                  <span>
+                                    {record.statusAuditoria === StatusAuditoria.PENDENTE ? "Pendente" : "Finalizado"}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              <button
+                                onClick={() => onViewRecord(record)}
+                                className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-750 text-xs font-semibold px-3 py-2.5 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                Ver ficha
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Metadata Summary Info Line */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <div>
+                              <p className="text-[9px] text-slate-450 uppercase font-bold">Setor</p>
+                              <p className="text-xs font-bold text-slate-700 truncate">{record.unidadeSetor}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-slate-450 uppercase font-bold">Solicitante</p>
+                              <p className="text-xs font-bold text-slate-700 truncate">{record.responsavelPreenchimento}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-slate-450 uppercase font-bold">Data Cadastro</p>
+                              <p className="text-xs font-medium text-slate-600">{new Date(record.createdAt).toLocaleDateString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-slate-450 uppercase font-bold">Criticidade sugerida</p>
+                              <p className="text-xs font-bold text-slate-600">{record.criticidade || "Mapeamento pendente"}</p>
+                            </div>
+                          </div>
+
+                          {/* Seção: Último Parecer */}
+                          {latestDecision && (() => {
+                            const parsedLatestDecision = parseApprovalComment(
+                              latestDecision.message || latestDecision.action
+                            );
+
+                            return (
+                              <div className="mt-5 rounded-2xl border border-[#BFD8C5] bg-[#F4FAF5] p-5 shadow-sm">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-[#EAF4EC] border border-[#BFD8C5] flex items-center justify-center text-[#075618] shrink-0">
+                                      <MessageSquare size={17} />
+                                    </div>
+
+                                    <div>
+                                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#075618]">
+                                        Último parecer registrado
+                                      </p>
+
+                                      <p className="mt-1 text-xs text-[#667085] font-semibold">
+                                        Registro mais recente do fluxo de aprovação
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <span className="shrink-0 px-3 py-1 rounded-full bg-[#EAF4EC] border border-[#BFD8C5] text-[10px] font-black uppercase tracking-wider text-[#075618]">
+                                    Parecer
+                                  </span>
+                                </div>
+
+                                {parsedLatestDecision.criteria.length > 0 && (
+                                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {parsedLatestDecision.criteria.map((item, index) => (
+                                      <div
+                                        key={`${item.label}-${index}`}
+                                        className="rounded-xl border border-[#E3E8E1] bg-white px-4 py-3"
+                                      >
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-[#667085]">
+                                          {item.label}
+                                        </p>
+
+                                        <p className="mt-1 text-xs font-bold text-[#1F2933]">
+                                          {item.value}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="mt-4 rounded-xl border border-[#E3E8E1] bg-white px-4 py-3">
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2">
+                                    Parecer
+                                  </p>
+
+                                  <p className="text-sm leading-relaxed text-[#1F2933] font-medium whitespace-pre-line">
+                                    {parsedLatestDecision.parecer}
+                                  </p>
+                                </div>
+
+                                {latestDecision.action && (
+                                  <div className="mt-3 flex items-center gap-2 text-[11px] font-bold text-[#075618] uppercase tracking-wide">
+                                    <CheckCircle2 size={14} />
+                                    <span>{latestDecision.action}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Seção: Fluxo de Governança (Horizontal Stepper) */}
+                          <div className="space-y-3 pt-1">
+                            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Fluxo de aprovação</h3>
+                            
+                            <div className="relative flex items-center justify-between w-full px-4">
+                              {/* Thin connection line behind */}
+                              <div className="absolute left-6 right-6 top-[11px] h-[1px] bg-slate-200 z-0" />
+                              
+                              {currentSteps.map((step) => {
+                                const wfStep = wf?.steps?.find(s => s.stepNumber === step.stepNumber);
+                                const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
+
+                                const isFailed = hasWfStepDecision
+                                  ? (wfStep.status === "negado")
+                                  : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
+
+                                const isPassed = !isFailed && (hasWfStepDecision
+                                  ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
+                                  : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
+
+                                const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
+
+                                return (
+                                  <div key={step.stepNumber} className="relative z-10 flex flex-col items-center">
+                                    <div
+                                      title={`${step.stepNumber}. ${step.roleName}`}
+                                      className={`size-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all ${
+                                        isPassed
+                                          ? "bg-emerald-600 border-emerald-600 text-white"
+                                          : isFailed
+                                            ? "bg-red-600 border-red-600 text-white"
+                                            : isCurrent
+                                              ? "bg-amber-500 border-amber-500 text-white ring-2 ring-amber-100 ring-offset-1 animate-pulse"
+                                              : "bg-white border-slate-200 text-slate-400"
+                                      }`}
+                                    >
+                                      {step.stepNumber}
+                                    </div>
+                                    
+                                    <span className="text-[8px] font-bold text-slate-500 mt-1 max-w-[64px] truncate text-center uppercase tracking-tight block">
+                                      {step.roleName.split(" ")[0]} {step.roleName.split(" ")[1] || ""}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Seção: Histórico Completo de Responsáveis (Vertical compact list) */}
+                          <div className="space-y-3 pt-1">
+                            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Responsáveis pelo processo</h3>
+                            
+                            <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/10 overflow-hidden shadow-xs">
+                              {currentSteps.map((step) => {
+                                const wfStep = wf?.steps?.find(s => s.stepNumber === step.stepNumber);
+                                const hasWfStepDecision = wfStep && wfStep.status !== "aguardando";
+                                
+                                const isFailed = hasWfStepDecision
+                                  ? (wfStep.status === "negado")
+                                  : (record.statusAuditoria === StatusAuditoria.NEGADO && step.stepNumber === currentStepNum);
+
+                                const isPassed = !isFailed && (hasWfStepDecision
+                                  ? (wfStep.status === "aprovado" || wfStep.status === "opiniao")
+                                  : (step.stepNumber < currentStepNum || record.statusAuditoria === StatusAuditoria.APROVADO));
+
+                                const isCurrent = step.stepNumber === currentStepNum && record.statusAuditoria === StatusAuditoria.PENDENTE;
+
+                                const signerName = wfStep?.assignedUserName || step.userName || "Usuário livre";
+                                const decidedAt = wfStep?.decidedAt;
+                                const opinion = wfStep?.comment;
+
+                                return (
+                                  <div key={step.stepNumber} className="p-3 flex items-start gap-4 justify-between bg-white hover:bg-slate-50/50 transition-colors">
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-slate-400">Etapa {step.stepNumber}</span>
+                                        <span className="text-slate-300">|</span>
+                                        <span className="text-[11px] font-bold text-slate-800 truncate">{step.roleName}</span>
+                                      </div>
+                                      
+                                      <p className="text-[10px] text-slate-500">
+                                        Responsável: <span className="font-semibold text-slate-700">{signerName}</span>
+                                      </p>
+
+                                      {decidedAt && (
+                                        <p className="text-[9px] text-slate-450 font-mono">Assinado em {new Date(decidedAt).toLocaleDateString()}</p>
+                                      )}
+
+                                      {opinion && (
+                                        <p className="text-[10px] text-slate-500 italic mt-1 leading-snug font-medium pl-2 border-l border-slate-200 bg-slate-50/50 p-1 rounded">
+                                          "{opinion.replace(/###.+/g, "").replace(/•/g, "").replace(/\*/g, "").trim()}"
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <div className="shrink-0 pt-0.5">
+                                      {isPassed ? (
+                                        <span className="px-2 py-0.5 text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold uppercase rounded">Aprovado</span>
+                                      ) : isFailed ? (
+                                        <span className="px-2 py-0.5 text-[8px] bg-red-50 text-red-700 border border-red-200 font-bold uppercase rounded">
+                                          {step.stepNumber === 5 ? "Parecer desfavorável" : "Indeferido"}
+                                        </span>
+                                      ) : isCurrent ? (
+                                        <span className="px-2 py-0.5 text-[8px] bg-amber-50 text-amber-700 border border-amber-200 font-bold uppercase rounded animate-pulse">Atual</span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 text-[8px] bg-slate-50 text-slate-400 border border-slate-150 font-bold uppercase rounded">Aguardando</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })() : (
+                      <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-slate-400 space-y-2">
+                        <ShieldCheck size={40} className="text-slate-300 pointer-events-none" />
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-700 uppercase">Nenhum protocolo ativo</h3>
+                          <p className="text-[11px]">Selecione uma solicitação da fila à esquerda para analisar</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              );
+            })()}
+
+            {activeTab === "config" && isAdmin && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Definir Responsáveis pelas Etapas</h3>
+                  </div>
+                  {workflowSaved && (
+                    <span className="text-xs font-black text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-xl uppercase">✓ Configuração salva</span>
                   )}
-                </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {workflowConfig.map((step, idx) => (
+                    <div key={step.stepNumber} className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-md transition-shadow">
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="size-10 rounded-xl flex items-center justify-center font-black text-sm border bg-[#03440c]/10 border-[#03440c]/20 text-[#03440c]">
+                          {step.stepNumber}
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            value={step.roleName}
+                            onChange={(e) => {
+                              const updated = [...workflowConfig];
+                              updated[idx] = { ...updated[idx], roleName: e.target.value };
+                              setWorkflowConfig(updated);
+                              setWorkflowSaved(false);
+                            }}
+                            className="w-full bg-transparent font-black text-slate-900 text-sm border-b border-slate-200 focus:border-brand-green outline-none pb-1 transition-colors"
+                          />
+                          <p className="text-[9px] text-[var(--text-muted)] font-bold uppercase tracking-widest mt-1">Cargo / Papel da etapa</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-[var(--text-muted)] uppercase tracking-widest">Usuário Responsável (Admin/Moderador)</label>
+                        <select
+                          value={step.userId ?? ""}
+                          onChange={(e) => {
+                            const selectedProfile = privilegedProfiles.find(p => p.id === e.target.value);
+                            const updated = [...workflowConfig];
+                            updated[idx] = {
+                              ...updated[idx],
+                              userId: e.target.value || undefined,
+                              userName: selectedProfile?.full_name || undefined,
+                            };
+                            setWorkflowConfig(updated);
+                            setWorkflowSaved(false);
+                          }}
+                          className="w-full px-4 py-3 bg-black/5 border border-slate-200 rounded-xl text-sm text-slate-800 font-semibold outline-none focus:border-brand-green transition-all"
+                        >
+                          <option value="">— Selecione um administrador ou moderador —</option>
+                          {privilegedProfiles.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.full_name} ({p.role === "admin" ? "Admin" : "Moderador"}{p.cargo ? ` • ${p.cargo}` : ""})
+                            </option>
+                          ))}
+                        </select>
+                        {privilegedProfiles.length === 0 && (
+                          <p className="text-[9px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 font-bold mt-1">
+                            Nenhum administrador ou moderador cadastrado. Promova usuários na aba Administração IA.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    onClick={() => {
+                      if (onSaveApprovalConfig) {
+                        onSaveApprovalConfig({ steps: workflowConfig });
+                        setWorkflowSaved(true);
+                        setTimeout(() => setWorkflowSaved(false), 4000);
+                      }
+                    }}
+                    className={`w-full py-4 font-black uppercase text-xs tracking-widest rounded-2xl transition-all active:scale-[0.99] flex items-center justify-center gap-2 relative overflow-hidden ${
+                      workflowSaved
+                        ? "bg-brand-green text-white shadow-lg shadow-brand-green/30 scale-[1.01]"
+                        : "bg-[#03440c] text-white shadow-md hover:bg-[#03440c]/90"
+                    }`}
+                  >
+                    {workflowSaved ? (
+                      <>
+                        <CheckCircle2 size={16} />
+                        Fluxo configurado com sucesso!
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        Salvar Configuração de Etapas
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       {/* Analysis & Decision Modal Overlay */}
       <AnimatePresence>

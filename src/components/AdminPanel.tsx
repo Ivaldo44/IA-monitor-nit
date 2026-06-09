@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  IARecord, 
+  IARecord,  
   StatusAuditoria, 
   StatusUso, 
   UserProfile, 
