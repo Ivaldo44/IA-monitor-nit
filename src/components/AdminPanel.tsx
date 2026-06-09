@@ -10,7 +10,7 @@ import {
   Filter, MoreHorizontal, ShieldCheck, ShieldAlert, ShieldX, 
   Database, ArrowUpRight, AlertTriangle, Activity,
   ChevronLeft, ChevronRight, Sliders, Calendar, ArrowRight,
-  User, Check, X, Shield, RefreshCw, FolderLock, Trash2, SlidersHorizontal
+  User, Check, X, Shield, RefreshCw, FolderLock, Trash2, SlidersHorizontal, Edit
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -30,6 +30,8 @@ interface AdminPanelProps {
   profiles: UserProfile[];
   onUpdateStatus: (recordId: string, status: StatusAuditoria, comment?: string) => void;
   onViewRecord: (record: IARecord) => void;
+  onEditRecord?: (record: IARecord) => void;
+  onDeleteRecord?: (id: string) => void;
   onUpdateUserRole?: (userId: string, newRole: "admin" | "moderator" | "user") => void;
   onDeleteUser?: (userId: string) => void;
   approvalConfig?: ApprovalConfig;
@@ -52,6 +54,8 @@ export default function AdminPanel({
   profiles, 
   onUpdateStatus, 
   onViewRecord, 
+  onEditRecord,
+  onDeleteRecord,
   onUpdateUserRole,
   onDeleteUser,
   approvalConfig,
@@ -79,6 +83,7 @@ export default function AdminPanel({
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLButtonElement | null>(null);
   const [registeredSectorsList, setRegisteredSectorsList] = useState<string[]>([]);
+  const [deleteRecordConfirmId, setDeleteRecordConfirmId] = useState<string | null>(null);
   
   // Setup user status reset and workflow visualization states
   const [viewFlowRecord, setViewFlowRecord] = useState<IARecord | null>(null);
@@ -662,14 +667,80 @@ export default function AdminPanel({
                           </div>
 
                           {/* ACTION BUTTONS GROUP */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                          <div className="flex items-center flex-wrap sm:justify-end gap-2 w-full sm:w-auto">
                             {/* Ver Ficha Technical view triggers detail modal */}
                             <button
                               onClick={() => onViewRecord(record)}
-                              className="px-4 py-2 text-xs font-semibold text-[#03440c] bg-[#03440c]/5 hover:bg-[#03440c] hover:text-white rounded-lg border border-[#03440c]/15 hover:border-transparent transition-all cursor-pointer flex items-center gap-1"
+                              className="px-3.5 py-2 text-xs font-semibold text-[#03440c] bg-[#03440c]/5 hover:bg-[#03440c] hover:text-white rounded-lg border border-[#03440c]/15 hover:border-transparent transition-all cursor-pointer flex items-center gap-1 shadow-3xs"
                             >
                               Ver ficha <ArrowRight size={13} />
                             </button>
+
+                            {/* Editar button */}
+                            <button
+                              onClick={() => onEditRecord?.(record)}
+                              className="px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50/50 hover:bg-blue-600 hover:text-white rounded-lg border border-blue-200 hover:border-transparent transition-all cursor-pointer flex items-center gap-1 shadow-3xs"
+                            >
+                              Editar
+                            </button>
+
+                            {/* Excluir button with confirmation */}
+                            <div className="relative">
+                              <AnimatePresence>
+                                {deleteRecordConfirmId === record.id && (
+                                  <motion.div 
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    className="absolute right-0 bottom-full mb-2 flex items-center gap-1.5 bg-white border border-rose-100 rounded-xl shadow-xl p-1.5 z-50 whitespace-nowrap text-slate-700"
+                                  >
+                                    <span className="text-[10px] font-bold text-slate-500 px-1">Excluir?</span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setDeleteRecordConfirmId(null);
+                                      }}
+                                      className="px-2 py-1 text-[9px] font-bold text-slate-500 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                                    >
+                                      Não
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onDeleteRecord?.(record.id);
+                                        setDeleteRecordConfirmId(null);
+                                      }}
+                                      className="px-2 py-1 text-[9px] font-bold bg-rose-600 text-white hover:bg-rose-700 rounded-md transition-colors cursor-pointer"
+                                    >
+                                      Sim
+                                    </button>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (deleteRecordConfirmId === record.id) {
+                                    setDeleteRecordConfirmId(null);
+                                  } else {
+                                    setDeleteRecordConfirmId(record.id);
+                                  }
+                                }}
+                                className={`px-3.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1 shadow-3xs ${
+                                  deleteRecordConfirmId === record.id
+                                    ? "bg-rose-600 border-rose-600 text-white"
+                                    : "text-rose-600 bg-rose-50/55 border-rose-205 hover:bg-rose-600 hover:text-white hover:border-transparent"
+                                }`}
+                                title="Excluir Registro"
+                              >
+                                Excluir
+                              </button>
+                            </div>
 
                             {/* Action toggle Context Menu */}
                             <div>
@@ -1619,6 +1690,7 @@ export default function AdminPanel({
               setMenuAnchor(null);
             }}
             onViewRecord={onViewRecord}
+            onEditRecord={onEditRecord}
             onViewFlow={(rec) => setViewFlowRecord(rec)}
             onResetStatusTrigger={(rec) => setResetStatusRecord(rec)}
             handleArchiveRecord={handleArchiveRecord}
@@ -1636,6 +1708,7 @@ interface AdminDropdownPortalProps {
   anchorEl: HTMLButtonElement;
   onClose: () => void;
   onViewRecord: (record: IARecord) => void;
+  onEditRecord?: (record: IARecord) => void;
   onViewFlow: (record: IARecord) => void;
   onResetStatusTrigger: (record: IARecord) => void;
   handleArchiveRecord: (record: IARecord) => void;
@@ -1647,6 +1720,7 @@ function AdminDropdownPortal({
   anchorEl,
   onClose,
   onViewRecord,
+  onEditRecord,
   onViewFlow,
   onResetStatusTrigger,
   handleArchiveRecord,
@@ -1749,7 +1823,7 @@ function AdminDropdownPortal({
         <SheetIcon size={14} className="text-slate-400" /> Visualizar detalhes
       </button>
       <button 
-        onClick={() => { onClose(); onViewRecord(record); }}
+        onClick={() => { onClose(); onEditRecord?.(record); }}
         className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-950 font-medium flex items-center gap-2.5 transition-colors cursor-pointer"
       >
         <Sliders size={14} className="text-slate-400" /> Editar registro

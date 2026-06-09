@@ -1568,6 +1568,8 @@ export default function App() {
                   profiles={profiles}
                   onUpdateStatus={handleUpdateStatus} 
                   onViewRecord={handleView} 
+                  onEditRecord={handleEdit}
+                  onDeleteRecord={handleDelete}
                   onUpdateUserRole={handleUpdateUserRole}
                   onDeleteUser={handleDeleteUser}
                   approvalConfig={approvalConfig}
