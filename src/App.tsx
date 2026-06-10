@@ -1573,7 +1573,7 @@ export default function App() {
                   )}
                 </div>
                 <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mt-0.5">
-                  {profile?.cargo || "Colaborador"}
+                  {profile?.cargo || ""}
                 </p>
               </div>
               

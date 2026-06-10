@@ -37,7 +37,7 @@ export const UserProfileView: React.FC = () => {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sectors, setSectors] = useState<string[]>([]);
-  const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string>("");
 
   // Password alteration modal state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -69,32 +69,17 @@ export const UserProfileView: React.FC = () => {
       if (source) {
         setFormData({
           full_name: source.full_name || "",
-          cargo: source.cargo || "",
+          cargo: source.cargo && source.cargo !== "Colaborador" ? source.cargo : "",
           setor: source.setor || "",
           contato: source.contato || "",
           avatar_url: source.avatar_url || ""
         });
+        setAvatarPreview(source.avatar_url || "");
       }
     };
 
     loadProfileData();
   }, [user?.id, profile?.setor]);
-
-  useEffect(() => {
-    if (profile?.avatar_url && localAvatarPreview) {
-      const cleanProfileAvatar = profile.avatar_url.split("?")[0];
-      const cleanLocalAvatar = localAvatarPreview.split("?")[0];
-      if (cleanProfileAvatar === cleanLocalAvatar) {
-        setLocalAvatarPreview(null);
-      }
-    }
-
-    return () => {
-      if (localAvatarPreview && localAvatarPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(localAvatarPreview);
-      }
-    };
-  }, [profile?.avatar_url, localAvatarPreview]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -104,69 +89,69 @@ export const UserProfileView: React.FC = () => {
         throw new Error("Usuário não encontrado para atualizar a foto.");
       }
 
-      if (!e.target.files || e.target.files.length === 0) {
-        throw new Error("Você deve selecionar uma imagem para fazer o upload.");
+      const file = e.target.files?.[0];
+
+      if (!file) {
+        return;
       }
 
-      const file = e.target.files[0];
+      const localPreviewUrl = URL.createObjectURL(file);
 
-      if (localAvatarPreview && localAvatarPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(localAvatarPreview);
-      }
-
-      const previewUrl = URL.createObjectURL(file);
-      setLocalAvatarPreview(previewUrl);
-      setFormData(prev => ({
-        ...prev,
-        avatar_url: previewUrl
-      }));
+      setAvatarPreview(localPreviewUrl);
 
       setUploading(true);
 
       const fileExt = file.name.split(".").pop();
-      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-      const filePath = `user-avatars/${fileName}`;
+      const filePath = `${user.id}/avatar-${Date.now()}.${fileExt}`;
 
-      // Upload file to storage budget 'avatars'
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        throw uploadError;
+      }
 
-      // Fetch public URL
-      const { data: { publicUrl } } = supabase.storage
+      const { data: publicUrlData } = supabase.storage
         .from("avatars")
         .getPublicUrl(filePath);
 
+      const publicUrl = publicUrlData.publicUrl;
       const finalAvatarUrl = `${publicUrl}?t=${Date.now()}`;
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          avatar_url: finalAvatarUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setAvatarPreview(finalAvatarUrl);
 
       setFormData(prev => ({
         ...prev,
         avatar_url: finalAvatarUrl
       }));
 
-      setLocalAvatarPreview(finalAvatarUrl);
-      
-      const { error: profileUpdateError } = await supabase
-        .from("profiles")
-        .update({ 
-          avatar_url: finalAvatarUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", user.id);
+      refreshProfile().catch((err) => {
+        console.error("Erro ao atualizar perfil após upload:", err);
+      });
 
-      if (profileUpdateError) {
-        throw profileUpdateError;
-      }
-
-      await refreshProfile();
-      
-      setMessage({ type: "success", text: "Foto de perfil atualizada com sucesso!" });
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Erro no upload da foto" });
+      setMessage({ type: "success", text: "Foto atualizada com sucesso." });
+    } catch (err) {
+      console.error("Erro ao atualizar foto:", err);
+      setMessage({ type: "error", text: "Não foi possível atualizar a foto." });
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -237,7 +222,7 @@ export const UserProfileView: React.FC = () => {
     ? new Date(user.created_at).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
     : "Março de 2026";
 
-  const avatarSrc = localAvatarPreview || formData.avatar_url || profile?.avatar_url || "";
+  const avatarSrc = avatarPreview || "";
 
   return (
     <div className="w-full max-w-none py-6 px-4 md:px-8 select-none bg-[#F6F8F5]/60 rounded-[2.5rem] border border-[#E3E8E1]">
@@ -270,7 +255,7 @@ export const UserProfileView: React.FC = () => {
                       />
 
                       {uploading && (
-                        <div className="absolute inset-0 rounded-full bg-white/40 flex items-center justify-center">
+                        <div className="absolute inset-0 rounded-full bg-white/45 backdrop-blur-[1px] flex items-center justify-center">
                           <Loader2 className="animate-spin text-[#075618] w-7 h-7" />
                         </div>
                       )}
@@ -284,7 +269,7 @@ export const UserProfileView: React.FC = () => {
               </div>
               <label 
                 htmlFor="avatar-upload-hero"
-                className="absolute bottom-0 right-0 p-2.5 bg-[#075618] hover:bg-[#003F1D] border-2 border-white text-white rounded-full shadow-md active:scale-95 transition-all cursor-pointer flex items-center justify-center"
+                className={`absolute bottom-0 right-0 p-2.5 bg-[#075618] border-2 border-white text-white rounded-full shadow-md transition-all flex items-center justify-center ${uploading ? "opacity-60 pointer-events-none cursor-not-allowed" : "hover:bg-[#003F1D] active:scale-95 cursor-pointer"}`}
                 title="Modificar imagem"
               >
                 <Camera size={13} />
@@ -297,6 +282,17 @@ export const UserProfileView: React.FC = () => {
                   disabled={uploading}
                 />
               </label>
+
+              {uploading && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center">
+                  <p className="text-xs font-bold text-amber-800">
+                    Enviando foto...
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium text-amber-700">
+                    Aguarde alguns segundos até a imagem ser salva no perfil.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* User Meta Information Group */}
@@ -321,7 +317,7 @@ export const UserProfileView: React.FC = () => {
               <div className="h-px bg-[#E3E8E1] max-w-[280px] mx-auto md:mx-0 py-0"></div>
               
               <p className="text-xs text-[#667085] font-medium max-w-lg leading-relaxed">
-                Setor: <span className="font-bold text-[#1F2933]">{formData.setor && formData.setor.trim() !== "" ? formData.setor : "Não informado"}</span> • Integrante credenciado para operações e auditoria no sistema inteligente do Laboratório Cedro.
+                Setor: <span className="font-bold text-[#1F2933]">{formData.setor && formData.setor.trim() !== "" ? formData.setor : "Não informado"}</span>
               </p>
             </div>
           </div>
@@ -457,7 +453,7 @@ export const UserProfileView: React.FC = () => {
                       value={formData.cargo}
                       onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
                       className="w-full px-5 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-bold shadow-3xs"
-                      placeholder="Ex: Farmacêutico Coordenador"
+                      placeholder=""
                     />
                   </div>
 

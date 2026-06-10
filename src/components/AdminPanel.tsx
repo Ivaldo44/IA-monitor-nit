@@ -1119,7 +1119,7 @@ export default function AdminPanel({
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {paginatedUsers.map(({ userItem, userProfile, userName, userIAs, hasPending, userId }) => {
-                            const cargo = userProfile?.cargo || "Colaborador Técnico";
+                            const cargo = userProfile?.cargo || "";
                             const setor = userProfile?.setor || userIAs[0]?.unidadeSetor || "Não Associado";
                             const role = userProfile?.role || "user";
                             const status = userProfile?.status || "Autorizado";
@@ -1318,7 +1318,7 @@ export default function AdminPanel({
                         <h2 className="text-lg font-bold text-slate-900 leading-snug truncate uppercase">
                           {selectedUserInfo.name}
                         </h2>
-                        <p className="text-xs text-slate-400 font-semibold">{selectedUserInfo.profile?.cargo || "Colaborador Técnico"}</p>
+                        <p className="text-xs text-slate-400 font-semibold">{selectedUserInfo.profile?.cargo || ""}</p>
                         
                         <div className="flex justify-center mt-3">
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-[#03440c] border border-emerald-250 text-[10px] font-bold rounded-full uppercase">
