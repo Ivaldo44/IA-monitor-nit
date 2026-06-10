@@ -1339,7 +1339,7 @@ export default function App() {
         </main>
 
         {/* 3. NAVEGAÇÃO INFERIOR */}
-       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E3E8E1] rounded-t-3xl shadow-[0_-4px_16px_rgba(0,0,0,0.03)]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E3E8E1] rounded-t-3xl shadow-[0_-4px_16px_rgba(0,0,0,0.03)]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <div className="flex justify-around items-center h-16">
             
             {/* Aba Aprovação de IAs */}
@@ -1348,11 +1348,11 @@ export default function App() {
               className="flex flex-col items-center justify-center flex-1 h-full select-none transition-colors active:scale-95 cursor-pointer"
             >
               <div className={`p-1 transition-colors ${activeTab === "approval_queue" ? "text-[#075618]" : "text-[#667085]"}`}>
-                <ClipboardList size={20} strokeWidth={activeTab !== "profile" ? 2.5 : 2} />
+                <ClipboardList size={20} strokeWidth={activeTab === "approval_queue" ? 2.5 : 2} />
               </div>
-              <spanclassName={`text-[10px] font-black uppercase tracking-wider transition-colors ${
-                  activeTab === "approval_queue" ? "text-[#075618]" : "text-[#667085]"
-                  }`}>
+              <span className={`text-[10px] font-black uppercase tracking-wider transition-colors ${
+                activeTab === "approval_queue" ? "text-[#075618]" : "text-[#667085]"
+              }`}>
                 Aprovação de IAs
               </span>
             </button>

@@ -1327,8 +1327,8 @@ export default function ApprovalPage({
 
                 {/* PRINCIPAL CORPO EM DUAS COLUNAS */}
                 <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-                  {/* COLUNA ESQUERDA: Formulário do Solicitante (Visualização) [40%] */}
-                  <div className="lg:w-[40%] border-r border-slate-200 flex flex-col h-full bg-slate-50/50 overflow-y-auto custom-scrollbar">
+                  {currentStepNum !== 6 && (
+                    <div className="lg:w-[40%] border-r border-slate-200 flex flex-col h-full bg-slate-50/50 overflow-y-auto custom-scrollbar">
                     <div className="p-6 md:p-8 space-y-4">
                       {/* Folder 1: Solicitante */}
                       <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-200 ${
@@ -1549,9 +1549,10 @@ export default function ApprovalPage({
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* COLUNA DIREITA: Form de Preenchimento de Aprovação do Decisor [60%] */}
-                  <div className="lg:w-[60%] flex flex-col h-full bg-white p-6 md:p-8 justify-between overflow-y-auto custom-scrollbar border-l border-slate-150 space-y-6">
+                  <div className={`${currentStepNum === 6 ? "w-full" : "lg:w-[60%]"} flex flex-col h-full bg-white p-6 md:p-8 justify-between overflow-y-auto custom-scrollbar border-l border-slate-150 space-y-6`}>
                     <div>
                       {/* Header do Formulário */}
                       <div className="flex items-center gap-3.5 border-b border-slate-100 pb-5">
@@ -1567,6 +1568,7 @@ export default function ApprovalPage({
                       </div>
 
                       {/* Card: Resumo Rápido da Solicitação */}
+                      {currentStepNum !== 6 && (
                       <div className="bg-slate-50 border border-slate-200/50 rounded-2xl p-5 space-y-4 shadow-xs mt-4">
                         <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                           <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest block">Briefing para Tomada de Decisão</span>
@@ -1597,6 +1599,7 @@ export default function ApprovalPage({
                           </div>
                         </div>
                       </div>
+                      )}
 
                       {/* Histórico Recente de pareceres de etapas concluídas */}
                       {(() => {
@@ -1611,7 +1614,7 @@ export default function ApprovalPage({
                                 </p>
                               </div>
                             ) : (
-                              <div className="space-y-4 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                              <div className={`space-y-4 ${currentStepNum === 6 ? "max-h-[600px]" : "max-h-80"} overflow-y-auto custom-scrollbar pr-1`}>
                                 {prevSteps.map((s) => {
                                   const parsed = parseApprovalComment(s.comment);
 
@@ -1630,9 +1633,11 @@ export default function ApprovalPage({
                                             {s.roleName}
                                           </h4>
 
-                                          <p className="mt-1 text-xs font-semibold text-[#667085]">
-                                            Responsável: {s.assignedUserName || "Assinatura livre"}
-                                          </p>
+                                          {currentStepNum !== 6 && (
+                                            <p className="mt-1 text-xs font-semibold text-[#667085]">
+                                              Responsável: {s.assignedUserName || "Assinatura livre"}
+                                            </p>
+                                          )}
                                         </div>
 
                                         <span
@@ -1644,35 +1649,6 @@ export default function ApprovalPage({
                                         >
                                           {s.status === "negado" ? "Indeferido" : "Aprovado"}
                                         </span>
-                                      </div>
-
-                                      {parsed.criteria.length > 0 && (
-                                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                          {parsed.criteria.map((item, index) => (
-                                            <div
-                                              key={`${s.stepNumber}-${item.label}-${index}`}
-                                              className="rounded-xl border border-[#E3E8E1] bg-[#F6F8F5] px-3 py-2"
-                                            >
-                                              <p className="text-[9px] font-black uppercase tracking-widest text-[#667085]">
-                                                {item.label}
-                                              </p>
-
-                                              <p className="mt-1 text-[11px] font-bold text-[#1F2933]">
-                                                {item.value}
-                                              </p>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-
-                                      <div className="mt-3 rounded-xl border border-[#BFD8C5] bg-[#F4FAF5] px-4 py-3">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-1.5">
-                                          Parecer registrado
-                                        </p>
-
-                                        <p className="text-xs leading-relaxed text-[#1F2933] font-medium whitespace-pre-line">
-                                          {parsed.parecer}
-                                        </p>
                                       </div>
                                     </div>
                                   );
@@ -2528,8 +2504,8 @@ export default function ApprovalPage({
                       </div>
                     ) : (
                       <>
-                        {/* Etapas 5 (Análise Financeira) e 6 (Presidência) têm modo de visualização nua */}
-                        {(currentStepNum === 5 || currentStepNum === 6) && (
+                        {/* Etapas 5 (Análise Financeira) têm modo de visualização nua */}
+                        {currentStepNum === 5 && (
                           <div className="bg-gradient-to-br from-amber-500/10 via-amber-200/5 to-slate-50 border border-amber-250 p-5 rounded-2xl space-y-3 shadow-2xs">
                             <div className="flex items-center gap-2.5 text-amber-900 border-b border-dashed border-amber-200 pb-2">
                               <ShieldAlert size={16} />
