@@ -1607,13 +1607,7 @@ export default function ApprovalPage({
                         return (
                           <div className="bg-slate-50/40 border border-slate-200/60 rounded-2xl p-5 space-y-3.5 mt-4">
                             <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Histórico de Pareceres Anteriores</h5>
-                            {prevSteps.length === 0 ? (
-                              <div className="rounded-2xl border border-[#E3E8E1] bg-white p-4 text-center">
-                                <p className="text-xs font-semibold text-[#667085]">
-                                  Não há pareceres anteriores registrados.
-                                </p>
-                              </div>
-                            ) : (
+                            {prevSteps.length === 0 ? null : (
                               <div className={`space-y-4 ${currentStepNum === 6 ? "max-h-[600px]" : "max-h-80"} overflow-y-auto custom-scrollbar pr-1`}>
                                 {prevSteps.map((s) => {
                                   const parsed = parseApprovalComment(s.comment);

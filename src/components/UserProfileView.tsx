@@ -16,7 +16,6 @@ import {
   ChevronRight, 
   Calendar, 
   Lock, 
-  Key, 
   Info, 
   AppWindow, 
   Sparkles,
@@ -38,6 +37,7 @@ export const UserProfileView: React.FC = () => {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sectors, setSectors] = useState<string[]>([]);
+  const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
 
   // Password alteration modal state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -55,29 +55,76 @@ export const UserProfileView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (profile) {
-      setFormData({
-        full_name: profile.full_name || "",
-        cargo: profile.cargo || "",
-        setor: profile.setor || "",
-        contato: profile.contato || "",
-        avatar_url: profile.avatar_url || ""
-      });
+    if (!user) return;
+
+    const loadProfileData = async () => {
+      // Busca direto do Supabase para garantir dados frescos
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      const source = data || profile;
+      if (source) {
+        setFormData({
+          full_name: source.full_name || "",
+          cargo: source.cargo || "",
+          setor: source.setor || "",
+          contato: source.contato || "",
+          avatar_url: source.avatar_url || ""
+        });
+      }
+    };
+
+    loadProfileData();
+  }, [user?.id, profile?.setor]);
+
+  useEffect(() => {
+    if (profile?.avatar_url && localAvatarPreview) {
+      const cleanProfileAvatar = profile.avatar_url.split("?")[0];
+      const cleanLocalAvatar = localAvatarPreview.split("?")[0];
+      if (cleanProfileAvatar === cleanLocalAvatar) {
+        setLocalAvatarPreview(null);
+      }
     }
-  }, [profile]);
+
+    return () => {
+      if (localAvatarPreview && localAvatarPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
+    };
+  }, [profile?.avatar_url, localAvatarPreview]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      setUploading(true);
       setMessage(null);
+
+      if (!user) {
+        throw new Error("Usuário não encontrado para atualizar a foto.");
+      }
 
       if (!e.target.files || e.target.files.length === 0) {
         throw new Error("Você deve selecionar uma imagem para fazer o upload.");
       }
 
       const file = e.target.files[0];
+
+      if (localAvatarPreview && localAvatarPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      setLocalAvatarPreview(previewUrl);
+      setFormData(prev => ({
+        ...prev,
+        avatar_url: previewUrl
+      }));
+
+      setUploading(true);
+
       const fileExt = file.name.split(".").pop();
-      const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
+      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
       const filePath = `user-avatars/${fileName}`;
 
       // Upload file to storage budget 'avatars'
@@ -92,8 +139,30 @@ export const UserProfileView: React.FC = () => {
         .from("avatars")
         .getPublicUrl(filePath);
 
-      setFormData(prev => ({ ...prev, avatar_url: publicUrl }));
-      setMessage({ type: "success", text: "Foto carregada! Não esqueça de salvar as alterações para concluir." });
+      const finalAvatarUrl = `${publicUrl}?t=${Date.now()}`;
+
+      setFormData(prev => ({
+        ...prev,
+        avatar_url: finalAvatarUrl
+      }));
+
+      setLocalAvatarPreview(finalAvatarUrl);
+      
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({ 
+          avatar_url: finalAvatarUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", user.id);
+
+      if (profileUpdateError) {
+        throw profileUpdateError;
+      }
+
+      await refreshProfile();
+      
+      setMessage({ type: "success", text: "Foto de perfil atualizada com sucesso!" });
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Erro no upload da foto" });
     } finally {
@@ -168,6 +237,8 @@ export const UserProfileView: React.FC = () => {
     ? new Date(user.created_at).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
     : "Março de 2026";
 
+  const avatarSrc = localAvatarPreview || formData.avatar_url || profile?.avatar_url || "";
+
   return (
     <div className="w-full max-w-none py-6 px-4 md:px-8 select-none bg-[#F6F8F5]/60 rounded-[2.5rem] border border-[#E3E8E1]">
       {/* BREADCRUMB */}
@@ -189,15 +260,23 @@ export const UserProfileView: React.FC = () => {
             <div className="relative shrink-0">
               <div className="size-28 md:size-32 rounded-full p-1 bg-[#EAF4EC] border-2 border-[#075618] shadow-sm relative">
                 <div className="w-full h-full rounded-full bg-white overflow-hidden flex items-center justify-center p-0.5">
-                  {uploading ? (
+                  {avatarSrc ? (
+                    <div className="relative w-full h-full">
+                      <img 
+                        src={avatarSrc} 
+                        alt="Avatar Usuário" 
+                        className="w-full h-full object-cover rounded-full" 
+                        referrerPolicy="no-referrer"
+                      />
+
+                      {uploading && (
+                        <div className="absolute inset-0 rounded-full bg-white/40 flex items-center justify-center">
+                          <Loader2 className="animate-spin text-[#075618] w-7 h-7" />
+                        </div>
+                      )}
+                    </div>
+                  ) : uploading ? (
                     <Loader2 className="animate-spin text-[#075618] w-8 h-8" />
-                  ) : formData.avatar_url ? (
-                    <img 
-                      src={formData.avatar_url} 
-                      alt="Avatar Usuário" 
-                      className="w-full h-full object-cover rounded-full" 
-                      referrerPolicy="no-referrer"
-                    />
                   ) : (
                     <User size={48} className="text-slate-300" />
                   )}
@@ -242,7 +321,7 @@ export const UserProfileView: React.FC = () => {
               <div className="h-px bg-[#E3E8E1] max-w-[280px] mx-auto md:mx-0 py-0"></div>
               
               <p className="text-xs text-[#667085] font-medium max-w-lg leading-relaxed">
-                Setor: <span className="font-bold text-[#1F2933]">{formData.setor || "Geral"}</span> • Integrante credenciado para operações e auditoria no sistema inteligente do Laboratório Cedro.
+                Setor: <span className="font-bold text-[#1F2933]">{formData.setor && formData.setor.trim() !== "" ? formData.setor : "Não informado"}</span> • Integrante credenciado para operações e auditoria no sistema inteligente do Laboratório Cedro.
               </p>
             </div>
           </div>
@@ -331,38 +410,6 @@ export const UserProfileView: React.FC = () => {
                     </p>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-
-            {/* CARD 2: SEGURANÇA DA CONTA */}
-            <motion.div 
-              initial={{ opacity: 0, x: -15 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.15 }}
-              className="bg-white border border-[#E3E8E1] rounded-3xl p-6 md:p-7 shadow-sm"
-            >
-              <div className="flex items-center gap-3 mb-4.5 pb-4 border-b border-[#E3E8E1]">
-                <div className="p-2.5 bg-[#EAF4EC] text-[#075618] rounded-xl border border-[#BFD8C5]">
-                  <Key size={17} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-[#1F2933] uppercase tracking-tight">Segurança da Conta</h4>
-                  <p className="text-[10px] text-[#667085] font-semibold uppercase tracking-wider">Ambiente altamente restrito</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <p className="text-xs text-[#667085] leading-relaxed font-semibold">
-                  Mantenha suas credenciais protegidas contra terceiros. Altere sua senha corporativa em caso de suspeitas ou auditorias periódicas.
-                </p>
-                
-                <button
-                  type="button"
-                  onClick={() => setIsPasswordModalOpen(true)}
-                  className="w-full py-3 bg-[#F6F8F5] hover:bg-[#EAF4EC] border border-[#E3E8E1] hover:border-[#075618]/30 text-[#075618] text-xs font-extrabold uppercase tracking-widest rounded-2xl transition-all duration-300 cursor-pointer text-center select-none shadow-3xs"
-                >
-                  Alterar Senha do Perfil
-                </button>
               </div>
             </motion.div>
 
