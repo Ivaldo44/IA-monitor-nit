@@ -37,8 +37,7 @@ import {
   KPICard, 
   TableCard, 
   ActionCard, 
-  AlertCard, 
-  StatusBadge, 
+  StatusBadge,  
   RiskBadge 
 } from "./DashboardComponents";
 
@@ -224,40 +223,6 @@ export default function Dashboard({
     ].filter(item => item.value >= 0);
   }, [stats]);
 
-  // 6. DYNAMIC COMPLIANCE BLOCK UNDER DONUT CHART
-  const complianceStatus = useMemo(() => {
-    const total = stats.total;
-    
-    if (stats.negadas > 0 && stats.negadas / total > 0.3) {
-      return {
-        title: "Indicador de Conformidade Crítico",
-        desc: "Uma parcela relevante das ferramentas ativas falhou nos parâmetros de auditoria do NIT.",
-        style: "bg-red-50 text-red-800 border-red-100",
-        indicatorStyle: "bg-red-500"
-      };
-    }
-
-    if (stats.emAvaliacao > 0) {
-      const pluralText = stats.emAvaliacao === 1 
-        ? "Existe 1 solicitação aguardando análise no fluxo de aprovação."
-        : `Existem ${stats.emAvaliacao} solicitações aguardando análise no fluxo de aprovação.`;
-      
-      return {
-        title: "Pendências de avaliação",
-        desc: pluralText,
-        style: "bg-amber-50 text-amber-800 border-amber-100",
-        indicatorStyle: "bg-amber-500"
-      };
-    }
-
-    return {
-      title: "Governança em Conformidade",
-      desc: "Todas as inteligências avaliadas estão formalizadas no inventário do Laboratório.",
-      style: "bg-emerald-50 text-emerald-800 border-emerald-100",
-      indicatorStyle: "bg-emerald-550"
-    };
-  }, [stats]);
-
   // 7. FILTER PENDÊNCIAS PRIORITÁRIAS
   const priorityPedings = useMemo(() => {
     // Show maximum 5 priority items
@@ -324,69 +289,6 @@ export default function Dashboard({
     return arr.slice(0, 3);
   }, [workflows, records, onNavigate]);
 
-  // 9. GENERATION OF RECENT ALERTS (ALERTAS RECENTES CARD)
-  const recentAlerts = useMemo(() => {
-    const list: any[] = [];
-
-    // Alert 1: IAs classified as High Risk
-    const highRiskIAs = records.filter(r => r.criticidade?.includes("ALTA"));
-    highRiskIAs.forEach((r, idx) => {
-      list.push({
-        id: `alt-hr-${idx}`,
-        title: "Risco Alto Certificado",
-        description: `IA "${r.nomeFerramenta}" cadastrada com criticidade alta pelo setor de TI.`,
-        time: idx === 0 ? "10m atrás" : "2h atrás",
-        level: "high"
-      });
-    });
-
-    // Alert 2: Denied IAs
-    const deniedIAs = records.filter(r => r.statusUso === StatusUso.NAO_APROVADO || r.statusUso === StatusUso.SUSPENSO);
-    deniedIAs.forEach((r, idx) => {
-      list.push({
-        id: `alt-dn-${idx}`,
-        title: "Uso Restrito/Bloqueado",
-        description: `A ferramenta "${r.nomeFerramenta}" teve a aprovação indeferida e deve ser monitorada.`,
-        time: "1d atrás",
-        level: "high"
-      });
-    });
-
-    // Alert 3: Sensitive personal data utilization
-    const sensitiveDataIAs = records.filter(r => r.usaDadosSensiveis === "Sim");
-    sensitiveDataIAs.forEach((r, idx) => {
-      if (idx < 2) {
-        list.push({
-          id: `alt-sd-${idx}`,
-          title: "Uso de Dados Sensíveis",
-          description: `IA "${r.nomeFerramenta}" processa dados sensíveis. Auditoria LGPD recomendada.`,
-          time: "3h atrás",
-          level: "medium"
-        });
-      }
-    });
-
-    // Default base alerts if no data is registered, to preserve a beautiful dashboard
-    if (list.length === 0) {
-      list.push({
-        id: "alt-def-1",
-        title: "Auditoria Periódica",
-        description: "Recomenda-se realizar a auditoria trimestral das permissões de acesso ao banco.",
-        time: "Hoje",
-        level: "low"
-      });
-      list.push({
-        id: "alt-def-2",
-        title: "Parâmetros do Servidor",
-        description: "Todos os servidores de IA e integração estão operando em condições estáveis.",
-        time: "Ativo",
-        level: "low"
-      });
-    }
-
-    return list.slice(0, 4);
-  }, [records]);
-
   return (
     <div className="space-y-8 pb-10 bg-[#FAF9F6] p-1 md:p-4 rounded-[2rem] text-slate-800">
       
@@ -437,7 +339,6 @@ export default function Dashboard({
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Visão geral da governança</h3>
-              <p className="text-[11px] text-slate-400 font-medium">Panorama evolutivo das ferramentas cadastradas ao longo do tempo</p>
             </div>
             <select
               value={period}
@@ -497,8 +398,7 @@ export default function Dashboard({
         {/* DONUT STATUS CARD (4 COLUMNS DESKTOP) */}
         <div className="col-span-12 xl:col-span-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
           <div>
-            <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide mb-1">Distribuição por status</h3>
-            <p className="text-[11px] text-slate-400 font-medium mb-4">Divisão proporcional das ferramentas e canais em auditoria</p>
+            <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide mb-4">Distribuição por status</h3>
 
             <div className="h-44 w-full relative mb-1">
               <ResponsiveContainer width="100%" height="100%">
@@ -551,15 +451,6 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* COMPLIANCE BLOCK UNDER DONUT DETAIL */}
-          <div className={`p-4 rounded-xl border flex items-start gap-3 mt-4 ${complianceStatus.style}`}>
-            <div className={`size-2.5 rounded-full mt-1 shrink-0 ${complianceStatus.indicatorStyle} animate-pulse`}></div>
-            <div className="min-w-0">
-              <h4 className="text-xs font-extrabold uppercase tracking-wide">{complianceStatus.title}</h4>
-              <p className="text-[10.5px] font-medium leading-relaxed leading-snug mt-1 opacity-90">{complianceStatus.desc}</p>
-            </div>
-          </div>
-
         </div>
 
       </div>
@@ -571,7 +462,6 @@ export default function Dashboard({
         <div className="col-span-12 xl:col-span-8">
           <TableCard 
             title="Pendências prioritárias" 
-            subtitle="Sistemas que necessitam de avaliação do comitê"
             records={priorityPedings} 
             onNavigate={onNavigate} 
             onViewRecord={(rec) => {
@@ -580,19 +470,15 @@ export default function Dashboard({
           />
         </div>
 
-        {/* PRÓXIMAS AÇÕES & ALERTAS LADO-A-LADO (4 COLUMNS DESKTOP) */}
+        {/* PRÓXIMAS AÇÕES (4 COLUMNS DESKTOP) */}
         <div className="col-span-12 xl:col-span-4 flex flex-col gap-6">
-          <ActionCard 
-            title="Próximas ações" 
-            actions={nextActions} 
-            onNavigate={onNavigate} 
-          />
-          
-          <AlertCard 
-            title="Alertas recentes" 
-            alerts={recentAlerts} 
-            onNavigate={onNavigate} 
-          />
+          {isAdmin && (
+            <ActionCard 
+              title="Próximas ações" 
+              actions={nextActions} 
+              onNavigate={onNavigate} 
+            />
+          )}
         </div>
 
       </div>

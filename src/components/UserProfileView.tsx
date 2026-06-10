@@ -226,13 +226,6 @@ export const UserProfileView: React.FC = () => {
 
   return (
     <div className="w-full max-w-none py-6 px-4 md:px-8 select-none bg-[#F6F8F5]/60 rounded-[2.5rem] border border-[#E3E8E1]">
-      {/* BREADCRUMB */}
-      <div className="flex items-center gap-2 text-xs font-semibold text-[#667085] mb-6 bg-white/95 p-2 px-4 rounded-full border border-[#E3E8E1] w-fit shadow-xs">
-        <span className="hover:text-[#075618] transition-colors cursor-pointer flex items-center gap-1">Início</span>
-        <ChevronRight size={12} className="text-[#667085]/60" />
-        <span className="text-[#1F2933] font-bold">Meu Perfil</span>
-      </div>
-
       <div className="space-y-8">
         {/* CARD HERO DO PERFIL */}
         <motion.div 
@@ -353,7 +346,6 @@ export const UserProfileView: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-sm font-black text-[#1F2933] uppercase tracking-tight">Resumo do Perfil</h4>
-                  <p className="text-[10px] text-[#667085] font-semibold uppercase tracking-wider">Histórico e segurança cadastral</p>
                 </div>
               </div>
 
@@ -421,7 +413,6 @@ export const UserProfileView: React.FC = () => {
             >
               <div className="mb-6 pb-5 border-b border-[#E3E8E1] select-none">
                 <h3 className="text-lg font-black text-[#1F2933] uppercase tracking-tight">Informações Pessoais</h3>
-                <p className="text-xs text-[#667085] font-semibold uppercase tracking-wider mt-0.5">Atualize seus dados pessoais e de contato</p>
               </div>
 
               <form onSubmit={handleUpdate} className="space-y-6">
@@ -491,20 +482,6 @@ export const UserProfileView: React.FC = () => {
                         />
                       )}
                     </div>
-                  </div>
-
-                  {/* Contato Ramal field */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-[#667085] uppercase tracking-widest ml-1 select-none flex items-center gap-1">
-                      <Phone size={12} className="text-[#075618]" /> Contato / Ramal
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.contato}
-                      onChange={(e) => setFormData({ ...formData, contato: e.target.value })}
-                      className="w-full px-5 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-bold shadow-3xs"
-                      placeholder="Ex: (21) 99999-9999"
-                    />
                   </div>
 
                   {/* E-mail (Disabled, informational only) */}

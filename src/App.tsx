@@ -1664,18 +1664,10 @@ export default function App() {
               {activeTab === "alerts" && (
                 <div className="w-full max-w-none py-6 px-4 md:px-8 select-none bg-[#F6F8F5]/60 rounded-[2.5rem] border border-[#E3E8E1] space-y-6 text-[#1F2933] animate-fade-in">
                   
-                  {/* BREADCRUMB */}
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[#667085] mb-2 bg-white/95 p-2 px-4 rounded-full border border-[#E3E8E1] w-fit shadow-xs">
-                    <span onClick={() => setActiveTab("dashboard")} className="hover:text-[#075618] transition-colors cursor-pointer flex items-center gap-1">Início</span>
-                    <ChevronRight size={12} className="text-[#667085]/60" />
-                    <span className="text-[#1F2933] font-bold">Alertas</span>
-                  </div>
-
                   {/* Cabeçalho */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#E3E8E1] pb-6">
                     <div>
                       <h3 className="text-2xl font-black text-[#003F1D] tracking-tight uppercase">Central de Alertas</h3>
-                      <p className="text-xs text-[#667085] font-semibold mt-1">Gerenciamento e monitoramento em tempo real dos fluxos de conformidade de IA</p>
                     </div>
                     <span className="text-[10px] font-black text-[#075618] px-3.5 py-1.5 bg-[#EAF4EC] border border-[#BFD8C5] rounded-full uppercase tracking-wider font-sans shadow-3xs flex items-center gap-1.5 select-none">
                       <span className="size-2 rounded-full bg-emerald-500 animate-pulse"></span>

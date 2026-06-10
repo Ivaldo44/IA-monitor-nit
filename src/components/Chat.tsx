@@ -844,7 +844,6 @@ export const Chat: React.FC = () => {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Chat</h2>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Comunique-se com sua equipe</p>
               </div>
               <button 
                 onClick={() => setIsNewChatOpen(true)}
@@ -1335,9 +1334,6 @@ export const Chat: React.FC = () => {
                 <MessageSquare size={24} />
               </div>
               <h3 className="text-base font-bold text-slate-800 uppercase tracking-tight">Selecione uma conversa</h3>
-              <p className="text-xs text-slate-400 max-w-xs mt-1 leading-relaxed">
-                Escolha um profissional de audito ou governança na lista ao lado para iniciar conversas, compartilhar pareces de IA e anexos de auditoria de forma criptografada.
-              </p>
             </div>
           )}
         </div>

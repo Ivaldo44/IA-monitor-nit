@@ -269,7 +269,6 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
           unidadeSetor: (profile.setor && profile.setor !== "Não definido" && profile.setor !== "Não informado") ? profile.setor : (prev.unidadeSetor || ""),
           responsavelPreenchimento: profile.full_name || prev.responsavelPreenchimento || "",
           cargo: (profile.cargo && profile.cargo !== "Colaborador" && profile.cargo !== "Não definido" && profile.cargo !== "Não informado") ? profile.cargo : (prev.cargo || ""),
-          contato: (profile.contato && profile.contato !== "Não definido" && profile.contato !== "Não informado") ? profile.contato : (prev.contato || ""),
           dataRegistro: prev.dataRegistro || new Date().toISOString().split('T')[0]
         }));
         setIsInitialized(true);
@@ -288,11 +287,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     profile.cargo.trim() === "" || 
     profile.cargo === "Colaborador" || 
     profile.cargo === "Não definido" || 
-    profile.cargo === "Não informado" ||
-    !profile.contato || 
-    profile.contato.trim() === "" || 
-    profile.contato === "Não definido" || 
-    profile.contato === "Não informado";
+    profile.cargo === "Não informado";
 
   const isStep1Incomplete = !formData.unidadeSetor || 
     formData.unidadeSetor.trim() === "" || 
@@ -305,10 +300,6 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     formData.cargo.trim() === "Colaborador" || 
     formData.cargo.trim() === "Não definido" || 
     formData.cargo.trim() === "Não informado" || 
-    !formData.contato || 
-    formData.contato.trim() === "" || 
-    formData.contato.trim() === "Não definido" || 
-    formData.contato.trim() === "Não informado" || 
     !formData.dataRegistro || 
     formData.dataRegistro.trim() === "";
 
@@ -411,7 +402,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
     
     // Rule 5: Não permitir salvar a solicitação se a Etapa 1 estiver incompleta
     if (isStep1Incomplete || isProfileIncompleteForStep1) {
-      alert("Complete seu perfil para continuar. Informe cargo/função e contato antes de abrir uma solicitação de IA.");
+      alert("Complete seu perfil para continuar. Informe seu cargo/função antes de abrir uma solicitação de IA.");
       setActiveSection(0);
       return;
     }
@@ -526,7 +517,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                   <div className="col-span-1 md:col-span-2 p-5 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 rounded-2xl flex items-start gap-3">
                     <AlertTriangle className="shrink-0 mt-0.5" size={18} />
                     <span className="text-xs font-bold uppercase tracking-wide leading-relaxed">
-                      Complete seu perfil para continuar. Informe cargo/função e contato antes de abrir uma solicitação de IA.
+                      Complete seu perfil para continuar. Informe seu cargo/função antes de abrir uma solicitação de IA.
                     </span>
                   </div>
                 )}
@@ -561,15 +552,6 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     value={formData.cargo || ""}
                     onChange={(e) => updateField("cargo", e.target.value)}
                     placeholder="Seu cargo atual"
-                    required
-                  />
-                </InputGroup>
-                <InputGroup label="Contato" required>
-                  <input 
-                    className={getInputClass(formData.contato)}
-                    value={formData.contato || ""}
-                    onChange={(e) => updateField("contato", e.target.value)}
-                    placeholder="Ex: (21) 9999-9999"
                     required
                   />
                 </InputGroup>
@@ -717,7 +699,7 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                  type="button" 
                  onClick={() => {
                    if (activeSection === 0 && (isStep1Incomplete || isProfileIncompleteForStep1)) {
-                     alert("Complete seu perfil para continuar. Informe cargo/função e contato antes de abrir uma solicitação de IA.");
+                     alert("Complete seu perfil para continuar. Informe seu cargo/função antes de abrir uma solicitação de IA.");
                      return;
                    }
                    if (activeSection === 1 && isStep2Incomplete) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, User, ArrowRight, Loader2, Building } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, Loader2, Building, Briefcase, Phone } from "lucide-react";
 import { getSectors } from "../storage";
 import LabBackground from "./LabBackground";
 
@@ -15,6 +15,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [setor, setSetor] = useState("");
+  const [cargo, setCargo] = useState("");
+  const [contato, setContato] = useState("");
   const [sectors, setSectors] = useState<string[]>([]);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -42,6 +44,16 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       } else {
         if (!setor) {
           setMessage({ type: "error", text: "Por favor, selecione seu setor." });
+          setLoading(false);
+          return;
+        }
+        if (!cargo.trim()) {
+          setMessage({ type: "error", text: "Por favor, informe seu cargo / função." });
+          setLoading(false);
+          return;
+        }
+        if (!contato.trim()) {
+          setMessage({ type: "error", text: "Por favor, informe seu contato / ramal." });
           setLoading(false);
           return;
         }
@@ -75,6 +87,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
             .update({
               full_name: fullName,
               setor: setor,
+              cargo: cargo.trim(),
+              contato: contato.trim(),
               updated_at: new Date().toISOString()
             })
             .eq("id", userId);
@@ -90,6 +104,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
               id: userId,
               full_name: fullName,
               setor: setor,
+              cargo: cargo.trim(),
+              contato: contato.trim(),
               role: "user",
               status: "Autorizado",
               updated_at: new Date().toISOString()
@@ -192,6 +208,28 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="relative">
+                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-[#075618]" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Cargo / Função"
+                      required
+                      value={cargo}
+                      onChange={(e) => setCargo(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-2 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-semibold shadow-sm"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#075618]" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Contato / Ramal"
+                      required
+                      value={contato}
+                      onChange={(e) => setContato(e.target.value)}
+                      className="w-full pl-12 pr-4 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-2 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-semibold shadow-sm"
+                    />
                   </div>
                 </motion.div>
               )}
