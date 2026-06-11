@@ -174,6 +174,40 @@ export const Chat: React.FC = () => {
   // Controle local de favoritos
   const [favorites, setFavorites] = useState<string[]>([]);
 
+  // Controle local de mensagens lidas (não-lidas reativos)
+  const [lastSeenMessageMap, setLastSeenMessageMap] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem(`cedro_chat_seen_${user?.id || 'anon'}`);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Salvar no localStorage sempre que o mapa de visualizações mudar
+  useEffect(() => {
+    if (user?.id) {
+      try {
+        localStorage.setItem(`cedro_chat_seen_${user.id}`, JSON.stringify(lastSeenMessageMap));
+      } catch (err) {
+        console.error("Falha ao salvar visto no localStorage", err);
+      }
+    }
+  }, [lastSeenMessageMap, user?.id]);
+
+  // Atualizar a última mensagem vista para a conversa ativa
+  useEffect(() => {
+    if (selectedConvId && lastMessagesMap[selectedConvId]) {
+      const currentLastMsgId = lastMessagesMap[selectedConvId].id;
+      if (lastSeenMessageMap[selectedConvId] !== currentLastMsgId) {
+        setLastSeenMessageMap(prev => ({
+          ...prev,
+          [selectedConvId]: currentLastMsgId
+        }));
+      }
+    }
+  }, [selectedConvId, lastMessagesMap, lastSeenMessageMap]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -482,6 +516,13 @@ export const Chat: React.FC = () => {
         ? formatMessageTime(lastMsgObj.created_at) 
         : "";
 
+      // Verifica se a última mensagem foi enviada por outra pessoa e ainda não foi visualizada
+      const isUnread = lastMsgObj && 
+                       lastMsgObj.sender_id !== user?.id && 
+                       selectedConvId !== u.id && 
+                       lastSeenMessageMap[u.id] !== lastMsgObj.id;
+      const unreadCount = isUnread ? 1 : 0;
+
       return {
         id: u.id,
         name: u.full_name || "Sem Nome",
@@ -489,11 +530,11 @@ export const Chat: React.FC = () => {
         lastMessage: lastMsgText || "",
         time: lastMsgTime || "",
         favorite: favorites.includes(u.id),
-        unreadCount: 0,
+        unreadCount,
         profile: u
       };
     });
-  }, [users, lastMessagesMap, favorites]);
+  }, [users, lastMessagesMap, favorites, selectedConvId, lastSeenMessageMap, user?.id]);
 
   // Filtragem e busca de conversas na aba de conversas
   const filteredConversations = useMemo(() => {
@@ -832,22 +873,22 @@ export const Chat: React.FC = () => {
   const activeConvObj = computedConversations.find(c => c.id === selectedConvId);
 
   return (
-    <div className="w-full max-w-full h-[calc(100vh-140px)] flex flex-col pt-1">
+    <div className="h-[calc(100vh-135px)] w-full bg-[#F6F8F5] p-3 md:p-4 select-none">
       {/* Container Principal Claro, Corporativo e Sofisticado do Cedro */}
-      <div className="flex-1 bg-white border border-slate-200/80 rounded-2xl overflow-hidden flex h-full shadow-xs">
+      <div className="h-full grid grid-cols-1 lg:grid-cols-[390px_1fr] rounded-3xl border border-[#E3E8E1] bg-white shadow-sm overflow-hidden">
         
         {/* COLUNA ESQUERDA - Sidebar de conversas */}
-        <div className={`w-full lg:w-96 flex flex-col bg-white border-r border-slate-200 shrink-0 ${selectedConvId ? "hidden lg:flex" : "flex"}`}>
+        <div className={`w-full flex flex-col bg-white border-r border-[#E3E8E1] shrink-0 ${selectedConvId ? "hidden lg:flex" : "flex"}`}>
           
           {/* Header Superior da Sidebar */}
-          <div className="p-5 border-b border-slate-100 flex flex-col gap-3.5 bg-slate-50/50">
+          <div className="p-5 border-b border-[#E3E8E1] flex flex-col gap-3.5 bg-[#F6F8F5]">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Chat</h2>
+                <h2 className="text-xl font-black text-[#003F1D] tracking-tight uppercase">Chat</h2>
               </div>
               <button 
                 onClick={() => setIsNewChatOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#075618] hover:bg-[#053e11] text-white text-[10px] font-black uppercase rounded-lg shadow-3xs transition cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#075618] hover:bg-[#003F1D] text-white text-[10px] font-black uppercase rounded-xl shadow-xs transition cursor-pointer active:scale-95"
               >
                 <Plus size={12} strokeWidth={3} /> Nova conversa
               </button>
@@ -856,13 +897,13 @@ export const Chat: React.FC = () => {
             {/* Caixa de Busca */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#667085]" />
                 <input 
                   type="text"
                   placeholder="Buscar conversas..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#075618]/60 focus:ring-1 focus:ring-[#075618]/20 transition font-medium"
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#E3E8E1] rounded-xl text-xs text-[#1F2933] placeholder-[#667085] focus:outline-none focus:border-[#075618] focus:ring-1 focus:ring-[#075618] transition font-semibold"
                 />
               </div>
             </div>
@@ -876,10 +917,10 @@ export const Chat: React.FC = () => {
                 <button
                   key={chip.id}
                   onClick={() => setListFilter(chip.id as any)}
-                  className={`text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border cursor-pointer transition ${
+                  className={`text-[9px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border cursor-pointer transition ${
                     listFilter === chip.id 
-                      ? "bg-emerald-50 text-[#075618] border-emerald-200 shadow-3xs"
-                      : "bg-white text-slate-500 border-slate-200/60 hover:bg-slate-100/50"
+                      ? "bg-[#EAF4EC] text-[#075618] border-[#BFD8C5] shadow-xs"
+                      : "bg-white text-[#667085] border-[#E3E8E1] hover:bg-[#F6F8F5]"
                   }`}
                 >
                   {chip.label}
@@ -889,10 +930,10 @@ export const Chat: React.FC = () => {
           </div>
 
           {/* Listagem de conversas */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto divide-y divide-[#E3E8E1] custom-scrollbar">
             {users.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
-                <div className="size-12 bg-slate-50 text-slate-400 rounded-xl border border-slate-250 flex items-center justify-center">
+                <div className="size-12 bg-[#F6F8F5] text-[#667085] rounded-xl border border-[#E3E8E1] flex items-center justify-center">
                   <User size={20} />
                 </div>
                 <div>
@@ -904,28 +945,27 @@ export const Chat: React.FC = () => {
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="py-12 p-5 text-center space-y-2">
-                <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Nenhuma conversa encontrada</p>
+                <p className="text-[#667085] font-bold text-[10px] uppercase tracking-wider">Nenhuma conversa encontrada</p>
                 <p className="text-xs text-slate-400/80">Verifique os filtros ou busque por outro profissional.</p>
               </div>
             ) : (
               filteredConversations.map(conv => {
                 const isActive = selectedConvId === conv.id;
                 const isConvFavorite = !!conv.favorite;
+                const hasUnread = conv.unreadCount > 0;
 
                 return (
                   <div 
                     key={conv.id}
                     onClick={() => setSelectedConvId(conv.id)}
-                    className={`p-4 flex items-start gap-3 transition-all cursor-pointer relative group ${
-                      isActive 
-                        ? "bg-slate-50/70 text-slate-800" 
-                        : "bg-white hover:bg-slate-50/40 text-slate-700"
+                    className={`p-4 flex items-start gap-3 transition-all cursor-pointer relative group border-b border-[#E3E8E1] ${
+                      hasUnread
+                        ? "bg-[#EAF4EC] border-l-4 border-l-[#075618]"
+                        : isActive
+                        ? "bg-[#F6F8F5] border-l-4 border-l-[#075618]"
+                        : "bg-white hover:bg-[#F6F8F5] border-l-4 border-l-transparent"
                     }`}
                   >
-                    {isActive && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-[#075618] rounded-r" />
-                    )}
-
                     {/* Avatar da Conversa */}
                     <div className="relative shrink-0 mt-0.5">
                       <ChatAvatar 
@@ -939,19 +979,43 @@ export const Chat: React.FC = () => {
                     {/* Conteúdo Textual */}
                     <div className="flex-1 min-w-0 pr-1">
                       <div className="flex justify-between items-baseline mb-0.5 gap-2">
-                        <h4 className="text-xs font-bold text-slate-800 truncate uppercase tracking-tight">
+                        <h4 className={`text-xs font-bold truncate uppercase tracking-tight ${hasUnread ? "text-[#003F1D] font-black" : "text-[#1F2933]"}`}>
                           {conv.name}
                         </h4>
-                        <span className="text-[9px] text-slate-400 font-semibold shrink-0">
+                        <span className={`text-[9px] font-bold shrink-0 ${hasUnread ? "text-[#075618]" : "text-[#667085]"}`}>
                           {conv.time}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1 truncate block opacity-75">
+                      <p className="text-[10px] text-[#667085] font-bold uppercase tracking-wider mb-1 truncate block opacity-75">
                         {conv.subtitle}
                       </p>
-                      <p className="text-xs text-slate-500 truncate font-medium">
-                        {conv.lastMessage}
-                      </p>
+
+                      {/* Display da prévia com indicador de quem enviou */}
+                      {(() => {
+                        const lastMsgObj = lastMessagesMap[conv.id];
+                        const lastMessagePrefix = lastMsgObj
+                          ? (lastMsgObj.sender_id === user?.id ? "Você" : (conv.name.split(" ")[0] || "Colega"))
+                          : "";
+                        return (
+                          <div className="flex justify-between items-center gap-2 mt-1">
+                            <p className="text-xs text-[#667085] truncate flex-1 font-medium">
+                              {lastMsgObj ? (
+                                <>
+                                  <span className="font-bold text-[#1F2933]">{lastMessagePrefix}: </span>
+                                  {lastMsgObj.content || "Enviou um anexo"}
+                                </>
+                              ) : (
+                                <span className="italic text-slate-400">Nenhuma mensagem ainda.</span>
+                              )}
+                            </p>
+                            {conv.unreadCount > 0 && (
+                              <span className="min-w-5 h-5 px-1.5 rounded-full bg-[#075618] text-white text-[10px] font-black flex items-center justify-center shrink-0 shadow-xs animate-pulse">
+                                {conv.unreadCount}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Opções e favoritar */}
@@ -973,25 +1037,25 @@ export const Chat: React.FC = () => {
           </div>
 
           {/* Rodapé da Sidebar */}
-          <div className="p-4 bg-slate-50 border-t border-slate-105 flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+          <div className="p-4 bg-[#F6F8F5] border-t border-[#E3E8E1] flex justify-between items-center text-[10px] text-[#667085] font-bold uppercase tracking-wider">
             <span>Laboratório Cedro</span>
             <span>{filteredConversations.length} Contatos</span>
           </div>
         </div>
 
         {/* ÁREA DIREITA - Conversa ativa com os usuários reais */}
-        <div className={`flex-1 flex flex-col bg-slate-50/55 relative ${!selectedConvId ? "hidden lg:flex" : "flex"}`}>
+        <div className={`flex-1 flex flex-col bg-[#F6F8F5] relative ${!selectedConvId ? "hidden lg:flex" : "flex"}`}>
           
           {activeConvObj && selectedRecipient ? (
             <>
               {/* HEADER DA CONVERSA ATIVA */}
-              <div className="p-4 border-b border-slate-200/80 flex justify-between items-center bg-white shadow-3xs p-4">
+              <div className="p-4 border-b border-[#E3E8E1] flex justify-between items-center bg-white shadow-xs">
                 <div className="flex items-center gap-3">
                   
                   {/* Botão voltar para lista no layout mobile */}
                   <button 
                     onClick={() => setSelectedConvId("")}
-                    className="lg:hidden p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 transition shrink-0 active:scale-95 mr-1"
+                    className="lg:hidden p-1.5 bg-[#F6F8F5] hover:bg-[#EAF4EC] rounded-xl text-[#075618] border border-[#E3E8E1] transition shrink-0 active:scale-95 mr-1"
                     title="Voltar para lista"
                   >
                     <ChevronLeft size={16} strokeWidth={2.5} />
@@ -1005,13 +1069,13 @@ export const Chat: React.FC = () => {
                   />
 
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight flex items-center gap-1.5 leading-snug">
+                    <h3 className="text-sm font-black text-[#003F1D] uppercase tracking-tight flex items-center gap-1.5 leading-snug">
                       {selectedRecipient.full_name}
                       {selectedRecipient.role === "admin" && (
-                        <span className="px-1.5 py-0.2 bg-amber-500/10 border border-amber-500/25 rounded text-[7px] font-black text-amber-700 tracking-wider">ADM</span>
+                        <span className="px-1.5 py-0.5 bg-[#EAF4EC] border border-[#BFD8C5] rounded text-[7px] font-black text-[#075618] tracking-wider">ADM</span>
                       )}
                     </h3>
-                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block mt-0.5">
+                    <p className="text-[10px] text-[#667085] font-bold uppercase tracking-wider block mt-0.5">
                       {selectedRecipient.setor || "Sem setor específico"} • {selectedRecipient.cargo || "Membro Cedro"}
                     </p>
                   </div>
@@ -1024,10 +1088,10 @@ export const Chat: React.FC = () => {
                       if (prev) setChatSearchQuery("");
                       return !prev;
                     })}
-                    className={`p-2 rounded-lg transition active:scale-95 shrink-0 ${
+                    className={`p-2 rounded-xl transition active:scale-95 shrink-0 ${
                       chatSearchOpen 
-                        ? "bg-[#075618]/10 text-[#075618] border border-[#075618]/20" 
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-transparent"
+                        ? "bg-[#EAF4EC] text-[#075618] border border-[#BFD8C5]" 
+                        : "bg-[#F6F8F5] text-[#667085] hover:bg-[#EAF4EC] border border-[#E3E8E1]"
                     }`}
                     title="Pesquisar na conversa"
                   >
@@ -1036,7 +1100,7 @@ export const Chat: React.FC = () => {
 
                   <button 
                     onClick={() => setViewingProfile(selectedRecipient)}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg active:scale-95 shrink-0 transition border border-transparent"
+                    className="p-2 bg-[#F6F8F5] hover:bg-[#EAF4EC] text-[#667085] hover:text-[#075618] rounded-xl active:scale-95 shrink-0 transition border border-[#E3E8E1]"
                     title="Ver detalhes de perfil"
                   >
                     <Info size={14} strokeWidth={2.5} />
@@ -1051,20 +1115,20 @@ export const Chat: React.FC = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="bg-white border-b border-slate-250 p-3 flex items-center gap-2 overflow-hidden shadow-3xs"
+                    className="bg-white border-b border-[#E3E8E1] p-3 flex items-center gap-2 overflow-hidden shadow-xs"
                   >
-                    <Search size={13} className="text-slate-400 shrink-0 ml-1" />
+                    <Search size={13} className="text-[#667085] shrink-0 ml-1" />
                     <input 
                       type="text"
                       placeholder="Filtrar por palavras-chave na conversa..."
                       value={chatSearchQuery}
                       onChange={(e) => setChatSearchQuery(e.target.value)}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-xs py-1 px-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#075618]/50"
+                      className="flex-1 bg-[#F6F8F5] border border-[#E3E8E1] rounded-lg text-xs py-1 px-2.5 text-[#1F2933] placeholder-[#667085] focus:outline-none focus:border-[#075618]"
                     />
                     {chatSearchQuery && (
                       <button 
                         onClick={() => setChatSearchQuery("")}
-                        className="p-1 hover:bg-slate-100 text-slate-400 rounded-md shrink-0 template-btn"
+                        className="p-1 hover:bg-[#F6F8F5] text-[#667085] rounded-md shrink-0 transition"
                       >
                         <X size={12} />
                       </button>
@@ -1076,11 +1140,11 @@ export const Chat: React.FC = () => {
               {/* CORPO DE MENSAGENS */}
               <div 
                 ref={scrollRef} 
-                className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 custom-scrollbar bg-slate-50/50"
+                className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 custom-scrollbar bg-[#F6F8F5]"
               >
                 {activeMessagesToShow.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                    <div className="size-12 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center mb-3.5 border border-slate-200 shadow-4xs">
+                    <div className="size-12 rounded-full bg-[#EAF4EC] text-[#075618] flex items-center justify-center mb-3.5 border border-[#BFD8C5] shadow-xs">
                       <MessageSquare size={18} />
                     </div>
                     <h3 className="text-sm font-bold text-slate-700 uppercase tracking-tight">Nenhuma mensagem ainda</h3>
@@ -1101,11 +1165,11 @@ export const Chat: React.FC = () => {
                       if (!lastMessageDateStr || !isSameDay(lastMessageDateStr, msgDateStr)) {
                         elements.push(
                           <div key={`date-${msg.id}`} className="flex items-center justify-center my-6 gap-3 select-none">
-                            <div className="h-px bg-slate-200 flex-1"></div>
-                            <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider px-2.5 bg-slate-50/5" style={{ background: "#f8fafc" }}>
+                            <div className="h-px bg-[#E3E8E1] flex-1"></div>
+                            <span className="text-[10px] font-bold uppercase text-[#667085] tracking-wider px-3 py-1 bg-[#EAF4EC] border border-[#BFD8C5] rounded-full">
                               {getFriendlyDateLabel(msgDateStr)}
                             </span>
-                            <div className="h-px bg-slate-200 flex-1"></div>
+                            <div className="h-px bg-[#E3E8E1] flex-1"></div>
                           </div>
                         );
                         lastMessageDateStr = msgDateStr;
@@ -1138,45 +1202,41 @@ export const Chat: React.FC = () => {
                           </div>
                           
                           {/* Conteúdo do balão */}
-                          <div className={`space-y-1 ${idOwn ? "items-end text-right" : "items-start text-left"}`}>
+                          <div className={`space-y-1 flex flex-col ${idOwn ? "items-end text-right" : "items-start text-left"}`}>
                             {showAvatar && (
                               <div className={`flex items-baseline gap-1.5 select-none ${idOwn ? "flex-row-reverse" : "flex-row"}`}>
-                                <span className="text-[10px] font-bold text-slate-705 uppercase tracking-tight">
+                                <span className="text-[10px] font-bold text-[#003F1D] uppercase tracking-tight">
                                   {msg.sender_profile?.full_name || "Membro Cedro"}
                                 </span>
                                 {msg.status === "sending" ? (
-                                  <span className="text-[8px] font-black text-amber-600 uppercase animate-pulse select-none">
+                                  <span className="text-[8px] font-black text-rose-500 uppercase animate-pulse select-none">
                                     Enviando...
                                   </span>
                                 ) : msg.status === "error" ? (
                                   <span className="text-[8px] font-black text-rose-500 uppercase select-none">
                                     Falha ao enviar
                                   </span>
-                                ) : (
-                                  <span className="text-[8px] font-semibold text-slate-400 uppercase">
-                                    {formatMessageTime(msg.created_at)}
-                                  </span>
-                                )}
+                                ) : null}
                               </div>
                             )}
-                            <div className={`p-3 px-4 rounded-xl text-xs font-semibold leading-relaxed shadow-4xs border whitespace-pre-wrap ${
+                            <div className={`p-3.5 px-4 rounded-xl text-xs font-semibold leading-relaxed shadow-xs border whitespace-pre-wrap ${
                               idOwn 
-                                ? "bg-[#e2f5e7] text-slate-800 border-emerald-100 rounded-tr-none text-left" 
-                                : "bg-white text-slate-800 border-slate-200/80 rounded-tl-none text-left"
+                                ? "bg-[#075618] text-white border-none rounded-tr-none text-left" 
+                                : "bg-white text-[#1F2933] border-[#E3E8E1] rounded-tl-none text-left"
                             }`}>
                               {highlightTerm(msg.content, chatSearchQuery)}
 
                               {/* Exibição de Anexos */}
                               {(msg.attachment_url || msg.attachment_name) && (
-                                <div className="mt-2.5 pt-2 border-t border-slate-200/40 flex items-center gap-2">
-                                  <div className="p-1.5 bg-slate-100 rounded-md text-slate-500">
+                                <div className={`mt-2.5 pt-2 border-t flex items-center gap-2 ${idOwn ? "border-white/20" : "border-[#E3E8E1]"}`}>
+                                  <div className={`p-1.5 rounded-lg ${idOwn ? "bg-white/10 text-white" : "bg-[#F6F8F5] text-[#075618]"}`}>
                                     <FileText size={16} />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] font-bold text-slate-700 truncate">{msg.attachment_name || "Documento"}</p>
-                                    <p className="text-[9px] text-slate-400">
+                                    <p className={`text-[11px] font-bold truncate ${idOwn ? "text-white" : "text-[#1F2933]"}`}>{msg.attachment_name || "Documento"}</p>
+                                    <p className={`text-[9px] ${idOwn ? "text-white/70" : "text-[#667085]"}`}>
                                       {msg.attachment_size ? `${Math.round(msg.attachment_size / 1024)} KB` : "Arquivo"}
-                                      {msg.status === "sending" && <span className="ml-1 text-amber-500 animate-pulse">(Anexando...)</span>}
+                                      {msg.status === "sending" && <span className="ml-1 text-rose-200 animate-pulse">(Anexando...)</span>}
                                     </p>
                                   </div>
                                   {msg.attachment_url ? (
@@ -1184,7 +1244,7 @@ export const Chat: React.FC = () => {
                                       href={msg.attachment_url} 
                                       target="_blank" 
                                       rel="noreferrer referrer"
-                                      className="p-1 text-[#075618] hover:bg-slate-50 rounded-lg transition"
+                                      className={`p-1.5 rounded-lg transition ${idOwn ? "text-white hover:bg-white/15" : "text-[#075618] hover:bg-[#EAF4EC]"}`}
                                       title="Baixar anexo"
                                     >
                                       <Download size={14} />
@@ -1196,8 +1256,15 @@ export const Chat: React.FC = () => {
                               )}
                             </div>
 
+                            {/* Horário abaixo da mensagem (conforme especificação) */}
+                            {msg.status !== "sending" && msg.status !== "error" && (
+                              <div className="text-[9.5px] text-[#667085] font-semibold select-none mt-0.5 px-1">
+                                {formatMessageTime(msg.created_at)}
+                              </div>
+                            )}
+
                             {(!showAvatar && (msg.status === "sending" || msg.status === "error")) && (
-                              <div className={`text-[8px] font-bold uppercase select-none ${idOwn ? "text-right text-slate-400" : "text-left text-slate-400"}`}>
+                              <div className={`text-[8px] font-bold uppercase select-none ${idOwn ? "text-right text-[#667085]" : "text-left text-[#667085]"}`}>
                                 {msg.status === "sending" && <span className="text-amber-600 animate-pulse">Enviando...</span>}
                                 {msg.status === "error" && <span className="text-rose-500">Falha ao enviar</span>}
                               </div>
@@ -1214,18 +1281,18 @@ export const Chat: React.FC = () => {
 
               {/* BARRA DE PRÉVIA DE ANEXO SELECIONADO */}
               {selectedFile && (
-                <div className="p-2.5 px-6 bg-slate-100 border-t border-slate-200 flex items-center justify-between gap-3 text-xs select-none">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Paperclip size={14} className="text-slate-500 shrink-0" />
-                    <span className="font-bold text-slate-700 truncate max-w-[200px]">{selectedFile.name}</span>
-                    <span className="text-[10px] text-slate-450 shrink-0">({Math.round(selectedFile.size / 1024)} KB)</span>
+                <div className="p-2.5 px-6 bg-[#EAF4EC] border-t border-[#BFD8C5] flex items-center justify-between gap-3 text-xs select-none">
+                  <div className="flex items-center gap-2 min-w-0 text-[#075618]">
+                    <Paperclip size={14} className="shrink-0" />
+                    <span className="font-extrabold truncate max-w-[200px]">{selectedFile.name}</span>
+                    <span className="text-[10px] font-semibold opacity-85 shrink-0">({Math.round(selectedFile.size / 1024)} KB)</span>
                   </div>
                   <button 
                     onClick={handleRemoveFile}
-                    className="p-1 bg-white hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-full transition cursor-pointer"
+                    className="p-1.5 bg-white hover:bg-[#F6F8F5] text-[#075618] rounded-full transition shadow-xs cursor-pointer"
                     title="Remover anexo"
                   >
-                    <X size={12} />
+                    <X size={12} strokeWidth={2.5} />
                   </button>
                 </div>
               )}
@@ -1238,7 +1305,7 @@ export const Chat: React.FC = () => {
               )}
 
               {/* CAMPO DE COMPOSIÇÃO FIXO (RODAPÉ) */}
-              <div className="p-4 bg-white border-t border-slate-200/80 shadow-3xs relative">
+              <div className="p-4 bg-white border-t border-[#E3E8E1] shadow-xs relative">
                 
                 {/* Painel do Seletor de Emojis */}
                 <AnimatePresence>
@@ -1252,14 +1319,14 @@ export const Chat: React.FC = () => {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
-                        className="absolute bottom-16 left-4 z-50 bg-white p-3 rounded-2xl border border-slate-200 shadow-lg flex gap-1.5 items-center max-w-sm"
+                        className="absolute bottom-16 left-4 z-50 bg-white p-3 rounded-2xl border border-[#E3E8E1] shadow-md flex gap-1.5 items-center max-w-sm"
                       >
                         {SUGGESTED_EMOJIS.map(emoji => (
                           <button
                             key={emoji}
                             type="button"
                             onClick={() => handleEmojiClick(emoji)}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-lg transition active:scale-95 cursor-pointer"
+                            className="p-1.5 hover:bg-[#F6F8F5] rounded-xl text-lg transition active:scale-95 cursor-pointer"
                           >
                             {emoji}
                           </button>
@@ -1280,22 +1347,22 @@ export const Chat: React.FC = () => {
                   />
 
                   {/* Anexar arquivo e emojis */}
-                  <div className="flex items-center gap-1 text-slate-400 select-none shrink-0">
+                  <div className="flex items-center gap-1 text-[#667085] select-none shrink-0">
                     <button 
                       type="button"
                       onClick={handleFileClick}
-                      className="p-1.5 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition cursor-pointer"
+                      className="p-2 hover:bg-[#F6F8F5] hover:text-[#075618] rounded-xl transition cursor-pointer"
                       title="Anexar parecer de IA ou arquivos"
                     >
-                      <Paperclip size={15} />
+                      <Paperclip size={16} />
                     </button>
                     <button 
                       type="button"
                       onClick={() => setIsEmojiOpen(prev => !prev)}
-                      className={`p-1.5 hover:bg-slate-100 hover:text-slate-600 rounded-lg transition cursor-pointer ${isEmojiOpen ? "text-[#075618] bg-slate-100" : ""}`}
+                      className={`p-2 hover:bg-[#F6F8F5] hover:text-[#075618] rounded-xl transition cursor-pointer ${isEmojiOpen ? "text-[#075618] bg-[#EAF4EC]" : ""}`}
                       title="Inserir emoji"
                     >
-                      <Smile size={15} />
+                      <Smile size={16} />
                     </button>
                   </div>
 
@@ -1305,35 +1372,42 @@ export const Chat: React.FC = () => {
                     placeholder="Digite sua mensagem corporativa..."
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl outline-none py-2 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:border-[#075618]/50 focus:bg-white transition"
+                    className="flex-1 bg-[#F6F8F5] border border-[#E3E8E1] rounded-xl outline-none py-2.5 px-4 text-xs text-[#1F2933] placeholder-[#667085] focus:border-[#075618] focus:bg-white focus:ring-1 focus:ring-[#075618] transition font-semibold"
                     disabled={uploading}
                   />
                   
                   <button 
                     type="submit"
                     disabled={(!newMessage.trim() && !selectedFile) || uploading}
-                    className="size-8.5 flex items-center justify-center bg-[#075618] hover:bg-[#053e11] disabled:opacity-40 disabled:hover:bg-[#075618] text-white rounded-lg transition shrink-0 cursor-pointer shadow-3xs active:scale-95"
+                    className="size-10 flex items-center justify-center bg-[#075618] hover:bg-[#003F1D] disabled:opacity-40 disabled:hover:bg-[#075618] text-white rounded-xl transition shrink-0 cursor-pointer shadow-sm active:scale-95"
                     title="Enviar"
                   >
-                    <Send size={13} fill="currentColor" />
+                    <Send size={15} fill="currentColor" />
                   </button>
                 </form>
 
-                <div className="mt-2.5 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-wider px-1 select-none">
+                <div className="mt-2.5 flex items-center justify-between text-[9px] text-[#667085] font-bold uppercase tracking-wider px-1 select-none">
                   <span className="flex items-center gap-1">
-                    <span className="size-1 bg-[#075618] rounded-full inline-block animate-pulse" /> Mensagem segura e confidencial
+                    <span className="size-1.5 bg-[#075618] rounded-full inline-block animate-pulse" /> Mensagem segura e confidencial
                   </span>
                   <span>Canal interno</span>
                 </div>
               </div>
             </>
           ) : (
-            /* ESTADO VAGIO PADRAO DA CONVERSA */
-            <div className="flex-1 h-full flex flex-col items-center justify-center text-center p-8 bg-slate-50/20">
-              <div className="size-14 bg-emerald-50 text-[#075618] border border-emerald-100 rounded-2xl flex items-center justify-center mb-4 shadow-3xs">
-                <MessageSquare size={24} />
+            /* ESTADO VAGIO PADRAO DA CONVERSA - Bento style elegant */
+            <div className="flex-1 h-full flex items-center justify-center bg-gradient-to-br from-[#F6F8F5] to-white p-6 select-none">
+              <div className="text-center max-w-sm">
+                <div className="mx-auto w-16 h-16 rounded-3xl bg-[#EAF4EC] border border-[#BFD8C5] flex items-center justify-center text-[#075618] shadow-sm animate-pulse">
+                  <MessageSquare size={28} />
+                </div>
+                <h3 className="mt-5 text-lg font-black text-[#003F1D] uppercase tracking-tight">
+                  Selecione uma conversa
+                </h3>
+                <p className="mt-2 text-sm font-medium text-[#667085]">
+                  Escolha um contato ao lado para iniciar ou continuar uma conversa.
+                </p>
               </div>
-              <h3 className="text-base font-bold text-slate-800 uppercase tracking-tight">Selecione uma conversa</h3>
             </div>
           )}
         </div>
@@ -1356,26 +1430,26 @@ export const Chat: React.FC = () => {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-slate-200 flex flex-col h-[400px]"
+              className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-[#E3E8E1] flex flex-col h-[400px]"
               onClick={e => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-slate-150 flex justify-between items-center bg-slate-50 select-none">
+              <div className="p-4 border-b border-[#E3E8E1] flex justify-between items-center bg-[#F6F8F5] select-none">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Iniciar Conversa</h3>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">Selecione um profissional do Cedro Labs</p>
+                  <h3 className="text-sm font-bold text-[#003F1D] uppercase tracking-tight">Iniciar Conversa</h3>
+                  <p className="text-[9px] text-[#667085] font-bold uppercase tracking-wider block mt-0.5">Selecione um profissional do Cedro Labs</p>
                 </div>
                 <button 
                   onClick={() => {
                     setIsNewChatOpen(false);
                     setNewChatSearch("");
                   }}
-                  className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 transition cursor-pointer"
+                  className="p-1 hover:bg-[#EAF4EC] text-[#075618] rounded-lg transition cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              <div className="p-3 border-b border-slate-100">
+              <div className="p-3 border-b border-[#E3E8E1]">
                 <div className="relative">
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input 
@@ -1383,12 +1457,12 @@ export const Chat: React.FC = () => {
                     placeholder="Buscar profissional por nome, setor ou cargo..."
                     value={newChatSearch}
                     onChange={(e) => setNewChatSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-[#075618]/50"
+                    className="w-full pl-8 pr-3 py-1.5 bg-[#F6F8F5] border border-[#E3E8E1] rounded-lg text-xs text-slate-800 focus:outline-none focus:border-[#075618]"
                   />
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto divide-y divide-[#E3E8E1] custom-scrollbar">
                 {modalUsersRoster.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 select-none">
                     <p className="text-xs uppercase font-black tracking-wider">Profissional não cadastrado</p>
@@ -1402,7 +1476,7 @@ export const Chat: React.FC = () => {
                         setIsNewChatOpen(false);
                         setNewChatSearch("");
                       }}
-                      className="p-3.5 hover:bg-slate-50 flex items-center gap-3 cursor-pointer transition select-none"
+                      className="p-3.5 hover:bg-[#F6F8F5] flex items-center gap-3 cursor-pointer transition select-none"
                     >
                       <ChatAvatar 
                         avatarUrl={rosterUser.avatar_url} 
@@ -1413,7 +1487,7 @@ export const Chat: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <h4 className="text-xs font-bold text-slate-800 uppercase tracking-tight">{rosterUser.full_name}</h4>
                         <p className="text-[9px] text-[#075618] font-bold uppercase tracking-wider truncate mb-0.5">{rosterUser.cargo}</p>
-                        <p className="text-[9px] text-slate-400 font-medium truncate uppercase">{rosterUser.setor || "NIT / Cedro"}</p>
+                        <p className="text-[9px] text-[#667085] font-medium truncate uppercase">{rosterUser.setor || "NIT / Cedro"}</p>
                       </div>
                     </div>
                   ))

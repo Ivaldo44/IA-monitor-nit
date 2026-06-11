@@ -112,7 +112,10 @@ export default function App() {
   const isCurrentUserAdmin = profile?.role?.toLowerCase().trim() === "admin";
   const isCurrentUserModerator = profile?.role?.toLowerCase().trim() === "moderator";
   const isCurrentUserPrivileged = isCurrentUserAdmin || isCurrentUserModerator;
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr" | "approval_queue" | "alerts">("profile"); // sempre inicia no perfil após login
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "new" | "report" | "profile" | "chat" | "sectors" | "admin" | "sectors_mgr" | "approval_queue" | "alerts">(() => {
+    const saved = localStorage.getItem("active_tab");
+    return (saved as any) || "profile";
+  }); // inicia no perfil ou aba salva
   const [records, setRecords] = useState<IARecord[]>([]);
   const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>([]);
   const [approvalConfig, setApprovalConfig] = useState<ApprovalConfig>({
@@ -128,6 +131,36 @@ export default function App() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<"online" | "offline" | "checking">("checking");
   const [selectedRecord, setSelectedRecord] = useState<IARecord | null>(null);
+
+  // Efeitos para persistência de estado (evita perder foco em reconstruções do código / live reload)
+  useEffect(() => {
+    localStorage.setItem("active_tab", activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedRecord) {
+      localStorage.setItem("selected_record_id", selectedRecord.id);
+    } else {
+      localStorage.removeItem("selected_record_id");
+    }
+  }, [selectedRecord]);
+
+  useEffect(() => {
+    if (records.length > 0 && !selectedRecord) {
+      const savedId = localStorage.getItem("selected_record_id");
+      if (savedId) {
+        const found = records.find(r => r.id === savedId);
+        if (found) {
+          setSelectedRecord(found);
+        }
+      }
+    } else if (selectedRecord && records.length > 0) {
+      const found = records.find(r => r.id === selectedRecord.id);
+      if (found && JSON.stringify(found) !== JSON.stringify(selectedRecord)) {
+        setSelectedRecord(found);
+      }
+    }
+  }, [records, selectedRecord]);
   const [originTab, setOriginTab] = useState<string | null>("inventory");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -1599,7 +1632,7 @@ export default function App() {
               }`}
             >
               {activeTab === "dashboard" && (
-                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} isAdmin={isCurrentUserAdmin} workflows={workflows} approvalConfig={approvalConfig} currentUserId={user?.id} />
+                <Dashboard records={records} onNavigate={(tab) => setActiveTab(tab)} onView={handleView} isAdmin={isCurrentUserAdmin} workflows={workflows} approvalConfig={approvalConfig} currentUserId={user?.id} />
               )}
               {activeTab === "inventory" && (
                 <Inventory 
@@ -1913,6 +1946,8 @@ export default function App() {
                     }} 
                     onEdit={handleEdit}
                     isAdmin={isCurrentUserAdmin}
+                    workflows={workflows}
+                    approvalConfig={approvalConfig}
                   />
                 ) : (
                   <div className="space-y-8 pb-20">

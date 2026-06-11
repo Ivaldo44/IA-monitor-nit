@@ -44,6 +44,7 @@ import {
 interface DashboardProps {
   records: IARecord[];
   onNavigate: (tab: string) => void;
+  onView?: (record: IARecord) => void;
   isAdmin?: boolean;
   workflows?: any[];
   approvalConfig?: any;
@@ -53,6 +54,7 @@ interface DashboardProps {
 export default function Dashboard({ 
   records, 
   onNavigate, 
+  onView,
   isAdmin, 
   workflows = [], 
   approvalConfig, 
@@ -512,13 +514,10 @@ export default function Dashboard({
 
   // Helper inside click-to-view mechanism
   function onViewRecord(record: IARecord) {
-    onNavigate("report");
-    // Trigger callback from app wrapper to select the correct record
-    const el = document.getElementById("Applet-Body"); // fallback click
-    if (el) el.click();
-    
-    // We navigate to 'report'. The parent handles setting selectedRecord correctly inside active tabs since.
-    // However, we call onNavigate and parent will handle state syncing. We'll ensure select trigger can pass beautifully.
-    // The App.tsx handles onEdit / onView cleanly from states.
+    if (onView) {
+      onView(record);
+    } else {
+      onNavigate("report");
+    }
   }
 }

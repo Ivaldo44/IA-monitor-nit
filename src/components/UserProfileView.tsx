@@ -28,16 +28,16 @@ export const UserProfileView: React.FC = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    full_name: "",
-    cargo: "",
-    setor: "",
-    contato: "",
-    avatar_url: ""
+    full_name: profile?.full_name || "",
+    cargo: profile?.cargo && profile?.cargo !== "Colaborador" ? profile?.cargo : "",
+    setor: profile?.setor || "",
+    contato: profile?.contato || "",
+    avatar_url: profile?.avatar_url || ""
   });
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sectors, setSectors] = useState<string[]>([]);
-  const [avatarPreview, setAvatarPreview] = useState<string>("");
+  const [avatarPreview, setAvatarPreview] = useState<string>(profile?.avatar_url || "");
 
   // Password alteration modal state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -54,6 +54,26 @@ export const UserProfileView: React.FC = () => {
     fetchSectors();
   }, []);
 
+  // Sincroniza os dados locais com o perfil global da sessão de maneira reativa e otimista
+  useEffect(() => {
+    if (profile) {
+      setFormData(prev => {
+        const keepsBlob = prev.avatar_url?.startsWith("blob:") || uploading;
+        return {
+          full_name: prev.full_name || profile.full_name || "",
+          cargo: prev.cargo || (profile.cargo && profile.cargo !== "Colaborador" ? profile.cargo : "") || "",
+          setor: prev.setor || profile.setor || "",
+          contato: prev.contato || profile.contato || "",
+          avatar_url: keepsBlob ? prev.avatar_url : (profile.avatar_url || "")
+        };
+      });
+      setAvatarPreview(prev => {
+        const keepsBlob = prev?.startsWith("blob:") || uploading;
+        return keepsBlob ? prev : (profile.avatar_url || "");
+      });
+    }
+  }, [profile, uploading]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -67,14 +87,20 @@ export const UserProfileView: React.FC = () => {
 
       const source = data || profile;
       if (source) {
-        setFormData({
-          full_name: source.full_name || "",
-          cargo: source.cargo && source.cargo !== "Colaborador" ? source.cargo : "",
-          setor: source.setor || "",
-          contato: source.contato || "",
-          avatar_url: source.avatar_url || ""
+        setFormData(prev => {
+          const keepsBlob = prev.avatar_url?.startsWith("blob:") || uploading;
+          return {
+            full_name: prev.full_name || source.full_name || "",
+            cargo: prev.cargo || (source.cargo && source.cargo !== "Colaborador" ? source.cargo : "") || "",
+            setor: prev.setor || source.setor || "",
+            contato: prev.contato || source.contato || "",
+            avatar_url: keepsBlob ? prev.avatar_url : (source.avatar_url || "")
+          };
         });
-        setAvatarPreview(source.avatar_url || "");
+        setAvatarPreview(prev => {
+          const keepsBlob = prev?.startsWith("blob:") || uploading;
+          return keepsBlob ? prev : (source.avatar_url || "");
+        });
       }
     };
 
@@ -98,6 +124,15 @@ export const UserProfileView: React.FC = () => {
       const localPreviewUrl = URL.createObjectURL(file);
 
       setAvatarPreview(localPreviewUrl);
+      setFormData(prev => ({
+        ...prev,
+        avatar_url: localPreviewUrl
+      }));
+
+      // Atualiza o contexto global do perfil de forma instantânea/otimista
+      refreshProfile({ avatar_url: localPreviewUrl }, true).catch((err) => {
+        console.error("Erro ao atualizar o avatar de forma otimista:", err);
+      });
 
       setUploading(true);
 
@@ -141,7 +176,7 @@ export const UserProfileView: React.FC = () => {
         avatar_url: finalAvatarUrl
       }));
 
-      refreshProfile().catch((err) => {
+      refreshProfile({ avatar_url: finalAvatarUrl }).catch((err) => {
         console.error("Erro ao atualizar perfil após upload:", err);
       });
 
@@ -173,7 +208,7 @@ export const UserProfileView: React.FC = () => {
 
       if (error) throw error;
       
-      await refreshProfile();
+      await refreshProfile(formData);
       setMessage({ type: "success", text: "Perfil atualizado com sucesso!" });
       setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
@@ -438,14 +473,50 @@ export const UserProfileView: React.FC = () => {
                     <label className="text-[10px] font-bold text-[#667085] uppercase tracking-widest ml-1 select-none flex items-center gap-1">
                       <Briefcase size={12} className="text-[#075618]" /> Cargo / Função
                     </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.cargo}
-                      onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                      className="w-full px-5 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-bold shadow-3xs"
-                      placeholder=""
-                    />
+                    <div className="relative">
+                      <select
+                        required
+                        value={formData.cargo}
+                        onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
+                        className="w-full pl-5 pr-12 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm appearance-none cursor-pointer text-[#1F2933] font-bold shadow-3xs"
+                      >
+                        <option value="">Selecione seu cargo / função...</option>
+                        {(() => {
+                          const currentSector = formData.setor;
+                          try {
+                            const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
+                            if (rawDetails) {
+                              const details = JSON.parse(rawDetails);
+                              if (details[currentSector] && Array.isArray(details[currentSector].cargos)) {
+                                return details[currentSector].cargos;
+                              }
+                            }
+                          } catch (e) {
+                            console.error("Error getting cargos in profile view:", e);
+                          }
+                          const PRESET_CARGOS: Record<string, string[]> = {
+                            "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
+                            "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
+                            "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
+                            "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
+                            "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
+                            "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
+                            "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
+                            "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
+                            "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
+                            "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
+                          };
+                          return PRESET_CARGOS[currentSector] || ["Colaborador"];
+                        })().map((c: string) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#667085]">
+                        <svg className="size-4 fill-current opacity-70" viewBox="0 0 20 20">
+                          <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Setor de atuação field */}
@@ -505,7 +576,11 @@ export const UserProfileView: React.FC = () => {
                     <input
                       type="url"
                       value={formData.avatar_url}
-                      onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData({ ...formData, avatar_url: val });
+                        setAvatarPreview(val);
+                      }}
                       className="w-full px-5 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-bold shadow-3xs"
                       placeholder="https://exemplo.com/foto.jpg"
                     />

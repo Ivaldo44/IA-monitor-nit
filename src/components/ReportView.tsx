@@ -31,19 +31,152 @@ import {
   Bookmark,
   ExternalLink
 } from "lucide-react";
-import { IARecord, StatusUso, ClassificacaoRisco, StatusAuditoria } from "../types";
+import { IARecord, StatusUso, ClassificacaoRisco, StatusAuditoria, ApprovalWorkflow, ApprovalConfig } from "../types";
 
 interface ReportViewProps {
   record: IARecord;
   onBack: () => void;
   onEdit?: (record: IARecord) => void;
   isAdmin?: boolean;
+  workflows?: ApprovalWorkflow[];
+  approvalConfig?: ApprovalConfig;
 }
 
-type TabType = "visao-geral" | "finalidade-uso" | "dados-utilizados" | "riscos-controles" | "lgpd-conformidade" | "historico" | "relatorio";
+type TabType = "visao-geral" | "finalidade-uso" | "dados-utilizados" | "riscos-controles" | "historico" | "relatorio";
 
-export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportViewProps) {
+export default function ReportView({ record, onBack, onEdit, isAdmin, workflows, approvalConfig }: ReportViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>("visao-geral");
+  const [expandedEvents, setExpandedEvents] = useState<Record<number, boolean>>({});
+
+  // Dynamic approval workflow helpers
+  const workflow = workflows?.find(w => w.iaRecordId === record.id);
+  const isWfFinished = !!(workflow && (workflow.finalStatus === "aprovado" || workflow.finalStatus === "negado"));
+  const currentStepNum = workflow ? workflow.currentStep : 1;
+
+  const getWorkflowSteps = () => {
+    if (approvalConfig?.steps && approvalConfig.steps.length > 0) {
+      return approvalConfig.steps;
+    }
+    return [
+      { stepNumber: 1, roleName: "Coordenador NIT", isOpinionOnly: false, userId: "", userName: "" },
+      { stepNumber: 2, roleName: "Gerente NIT", isOpinionOnly: false, userId: "", userName: "" },
+      { stepNumber: 3, roleName: "Gerente TI", isOpinionOnly: false, userId: "", userName: "" },
+      { stepNumber: 4, roleName: "Período de Teste", isOpinionOnly: false, userId: "", userName: "" },
+      { stepNumber: 5, roleName: "Análise Financeira", isOpinionOnly: true, userId: "", userName: "" },
+      { stepNumber: 6, roleName: "Presidência", isOpinionOnly: false, userId: "", userName: "" },
+    ];
+  };
+
+  const getActiveStepDef = () => {
+    return getWorkflowSteps().find(s => s.stepNumber === currentStepNum);
+  };
+
+  const getEtapaAtualText = () => {
+    if (!workflow) {
+      if (record.statusUso === StatusUso.APROVADO) return "Homologado";
+      if (record.statusUso === StatusUso.EM_AVALIACAO) return "Triagem Inicial NIT";
+      return "Cadastro Concluído";
+    }
+    if (isWfFinished) {
+      return workflow.finalStatus === "aprovado" ? "Homologado (Concluído)" : "Declinado / Não Aprovado";
+    }
+    const def = getActiveStepDef();
+    return def ? `${currentStepNum}. ${def.roleName}` : `Etapa ${currentStepNum}`;
+  };
+
+  const getResponsavelAtualText = () => {
+    if (!workflow) return record.quemValida || "Comitê de Governança do Laboratório";
+    if (isWfFinished) {
+      return "Processo Finalizado";
+    }
+    const wfStep = workflow.steps?.find(s => s.stepNumber === currentStepNum);
+    const def = getActiveStepDef();
+    return wfStep?.assignedUserName || def?.userName || record.quemValida || "Aguardando definição";
+  };
+
+  const getSituacaoFluxoText = () => {
+    if (!workflow) {
+      if (record.statusUso === StatusUso.EM_AVALIACAO) return "Aguardando parecer da etapa atual";
+      return "Cadastro concluído e ativo";
+    }
+    if (isWfFinished) {
+      return workflow.finalStatus === "aprovado" 
+        ? "Homologada em produção com auditorias regulares" 
+        : "Proposta rejeitada no fluxo regulatório";
+    }
+    const def = getActiveStepDef();
+    return `Aguardando deliberação de ${def?.roleName || "Comitê"}`;
+  };
+
+  const getDynamicNextStepText = () => {
+    if (!workflow) {
+      return getNextStepDescription(record.statusUso);
+    }
+    if (isWfFinished) {
+      return workflow.finalStatus === "aprovado" 
+        ? "Processo 100% concluído. Monitoramento das atividades laboratoriais em andamento." 
+        : "Processo indeferido pelo comitê. Revisar proposta regulatória.";
+    }
+    const def = getActiveStepDef();
+    return def 
+      ? `Próxima ação de aprovação com: "${def.roleName}". Responsável: ${def.userName || "Comitê de Avaliadores"}.` 
+      : getNextStepDescription(record.statusUso);
+  };
+
+  const toggleEvent = (idx: number) => {
+    setExpandedEvents(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  const getStatusBgColor = (status: StatusUso) => {
+    switch (status) {
+      case StatusUso.APROVADO:
+        return "bg-emerald-50 text-emerald-800 border-emerald-250";
+      case StatusUso.APROVADO_COM_RESTRICOES:
+        return "bg-amber-50 text-amber-800 border-amber-250";
+      case StatusUso.EM_AVALIACAO:
+        return "bg-indigo-50 text-indigo-800 border-indigo-250";
+      case StatusUso.EM_TESTE_PILOTO:
+        return "bg-cyan-50 text-cyan-850 border-cyan-250";
+      case StatusUso.SUSPENSO:
+        return "bg-slate-100 text-slate-800 border-slate-200";
+      case StatusUso.NAO_APROVADO:
+      default:
+        return "bg-rose-50 text-rose-800 border-rose-250";
+    }
+  };
+
+  const getRiskTextColor = (risk: ClassificacaoRisco) => {
+    switch (risk) {
+      case ClassificacaoRisco.BAIXO:
+        return "text-[#075618] font-black";
+      case ClassificacaoRisco.MEDIO:
+        return "text-[#F59E0B] font-black";
+      case ClassificacaoRisco.ALTO:
+        return "text-orange-600 font-black";
+      case ClassificacaoRisco.CRITICO:
+        return "text-[#B42318] font-black";
+      default:
+        return "text-[#667085] font-black";
+    }
+  };
+
+  const getNextStepDescription = (status: StatusUso) => {
+    switch (status) {
+      case StatusUso.EM_AVALIACAO:
+        return "Aguardar parecer técnico das comissões multidisciplinares de TI, Inovação e diretrizes do dpo.";
+      case StatusUso.APROVADO:
+        return "Fluxo regular de monitoramento contínuo nas atividades laboratoriais regulares.";
+      case StatusUso.APROVADO_COM_RESTRICOES:
+        return "Acompanhar cumprimento de pendências técnicas indicadas no termo do comitê.";
+      case StatusUso.EM_TESTE_PILOTO:
+        return "Avaliar logs de segurança e métricas de precisão emitidos no ciclo experimental.";
+      case StatusUso.SUSPENSO:
+        return "Operação retida. Solicitar auditoria extraordinária ou reunião técnica reguladora.";
+      case StatusUso.NAO_APROVADO:
+      default:
+        return "Revisar diretrizes rejeitadas ou reformular cadastro regulatório junto ao NIT.";
+    }
+  };
 
   const handlePrint = () => {
     window.print();
@@ -84,48 +217,50 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
 
   // Timeline events fallback
   const getTimelineEvents = () => {
+    let timeline: Array<{ date: string; action: string; user?: string; message?: string }> = [];
+
     if (record.historico && record.historico.length > 0) {
-      return record.historico;
-    }
-    // Generated based on records info
-    const timeline = [
-      {
+      timeline = [...record.historico];
+    } else {
+      // Fallback baseline events
+      timeline.push({
         date: record.dataRegistro || "01/06/2026",
         action: "Cadastro Inicial da Solução",
         user: record.responsavelPreenchimento,
         message: "O cadastro inicial e autodeclaração de conformidade da IA foi estruturado e submetido para apreciação do NIT."
-      }
-    ];
+      });
 
-    if (record.alinhadoLGPD !== "Sim") {
-      timeline.push({
-        date: "01/06/2026",
-        action: "Análise de Privacidade Desencadeada",
-        user: "Encarregado de Proteção de Dados (DPO)",
-        message: "Devido ao processamento indicado de dados internos ou sensíveis, foi solicitada revisão dos controles."
-      });
-    } else {
-      timeline.push({
-        date: "01/06/2026",
-        action: "Conformidade LGPD Homologada",
-        user: "Encarregado de Proteção de Dados (DPO)",
-        message: "As diretrizes técnicas apresentadas cumprem as salvaguardas de conformidade básica regulatória."
-      });
+      if (record.alinhadoLGPD === "Sim") {
+        timeline.push({
+          date: record.dataRegistro || "01/06/2026",
+          action: "Conformidade LGPD Homologada",
+          user: "Encarregado de Proteção de Dados (DPO)",
+          message: "Conformidade preliminar LGPD homologada perante as salvaguardas regulatórias declaradas."
+        });
+      }
     }
 
-    if (record.statusUso === StatusUso.EM_AVALIACAO) {
-      timeline.push({
-        date: "Em andamento",
-        action: "Aguardando Parecer Multidisciplinar",
-        user: "Comitê de Governança de IA",
-        message: "Análise técnica de riscos residuais e avaliação operacional para futura comissão deliberativa."
-      });
-    } else if (record.statusUso === StatusUso.APROVADO) {
-      timeline.push({
-        date: record.dataAprovacao || "01/06/2026",
-        action: "Homologado para Uso Operacional",
-        user: "Presidência & Comitê NIT",
-        message: "Avaliação técnica concluída com êxito. Autorização para produção ativa liberada."
+    // Dynamically append decided workflow steps as history nodes
+    if (workflow && workflow.steps) {
+      workflow.steps.forEach((step) => {
+        if (step.status !== "aguardando" && step.decidedAt) {
+          const rawDate = new Date(step.decidedAt);
+          const formattedDate = rawDate.toLocaleDateString("pt-BR") + " " + rawDate.toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' });
+          const statusVerb = step.status === "aprovado" ? "APROVADO" : step.status === "negado" ? "REJEITADO" : "OPINADO";
+          
+          const alreadyExists = timeline.some(t => t.action.includes(step.roleName) && t.date.includes(rawDate.toLocaleDateString("pt-BR")));
+          
+          if (!alreadyExists) {
+            timeline.push({
+              date: formattedDate,
+              action: `Etapa ${step.stepNumber}: ${step.roleName} - ${statusVerb}`,
+              user: step.assignedUserName || "Decisor do Comitê",
+              message: step.comment 
+                ? `Parecer técnico registrado pelo relator da etapa: "${step.comment.replace(/###.+/g, "").replace(/•/g, "").trim()}"` 
+                : `Fluxo de decisão da etapa técnica concluído com parecer favorável.`
+            });
+          }
+        }
       });
     }
 
@@ -137,11 +272,30 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
     <div id="report-content" className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xl relative text-slate-800">
       {/* Header Documento */}
       <div className="bg-gradient-to-br from-slate-50 via-slate-100 to-transparent p-10 relative overflow-hidden border-b-4 border-[#075618] shadow-sm">
+        
+        {/* Top Brand Logo Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/60 pb-6 mb-8 relative z-10 select-none">
+          <img 
+            src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" 
+            alt="Laboratório Cedro" 
+            className="h-12 w-auto object-contain"
+            referrerPolicy="no-referrer"
+          />
+          <div className="text-left sm:text-right font-sans">
+            <span className="px-2.5 py-1 bg-[#075618] text-white text-[9px] font-black tracking-widest uppercase rounded">
+              LAD – Laboratório Cedro
+            </span>
+            <p className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest mt-1.5 font-mono">
+              Governança de IA & Conformidade
+            </p>
+          </div>
+        </div>
+
         <div className="relative z-10">
           <div className="flex flex-col lg:flex-row justify-between items-start gap-8 mb-8">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 bg-[#075618] text-white text-[9px] font-black tracking-widest uppercase rounded-full">Laudo de Inteligência Artificial</span>
+                <span className="px-3 py-1 bg-[#075618]/10 text-[#075618] text-[9px] font-black tracking-widest uppercase rounded-full">Laudo de Inteligência Artificial</span>
                 <span className="text-[9px] font-mono font-bold text-slate-700 bg-slate-200/60 px-2.5 py-1 rounded border border-slate-200 uppercase tracking-tight">REF: {record.id}</span>
               </div>
               <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight leading-none uppercase">{record.nomeFerramenta}</h1>
@@ -184,7 +338,6 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
             ))}
           </div>
         </div>
-        <img src="https://raw.githubusercontent.com/nitlabcedro/assets/refs/heads/main/Ativo%206.png" alt="Cedro IA – Laboratório Cedro" className="absolute right-[-40px] top-[-40px] size-[400px] opacity-5 -rotate-12 brightness-0 pointer-events-none" />
       </div>
 
       {/* Conteúdo Laudo */}
@@ -301,15 +454,48 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
         <div className="h-px bg-slate-200/80 my-8" />
         
         <div className="bg-slate-100/50 p-8 rounded-2xl border border-slate-200/60 relative">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
-            <div className="border-t border-slate-300 pt-4 text-center">
-              <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">{record.responsavelPreenchimento}</p>
-              <p className="text-[10px] text-[#075618] uppercase font-bold tracking-wider mt-1">{record.cargo || "Responsável Técnico"}</p>
-            </div>
-            <div className="border-t border-slate-300 pt-4 text-center">
-              <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">Comitê de Governança de IA</p>
-              <p className="text-[10px] text-[#075618] uppercase font-bold tracking-wider mt-1">Laboratório Cedro</p>
-            </div>
+          <div className="pt-4">
+            {workflow && workflow.steps && workflow.steps.some((s) => s.status !== "aguardando" && s.decidedAt) ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 gap-y-12">
+                {/* Always include requester signature */}
+                <div className="border-t border-slate-300 pt-4 text-center">
+                  <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">{record.responsavelPreenchimento || "Requisitante Técnico"}</p>
+                  <p className="text-[10px] text-[#075618] uppercase font-bold tracking-wider mt-1">{record.cargo || "Responsável Técnico"}</p>
+                  <p className="text-[8px] text-slate-400 mt-0.5">Autor da Autodeclaração</p>
+                </div>
+
+                {/* Dinamic workflow signers */}
+                {workflow.steps
+                  .filter((step) => step.status !== "aguardando" && step.decidedAt)
+                  .map((step) => {
+                    const rawDate = step.decidedAt ? new Date(step.decidedAt) : new Date();
+                    const formattedDate = rawDate.toLocaleDateString("pt-BR") + " " + rawDate.toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' });
+                    
+                    return (
+                      <div key={step.stepNumber} className="border-t border-slate-200 pt-4 text-center flex flex-col justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">{step.assignedUserName || "Comitê Autorizado"}</p>
+                          <p className="text-[10px] text-[#075618] uppercase font-bold tracking-wider mt-1">{step.roleName}</p>
+                        </div>
+                        <p className="text-[8.5px] text-emerald-700 bg-emerald-50/50 rounded py-0.5 mt-2 select-none border border-emerald-100/60 font-black uppercase tracking-wider">
+                          ✓ Assinado em {formattedDate}
+                        </p>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div className="border-t border-slate-300 pt-4 text-center">
+                  <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">{record.responsavelPreenchimento}</p>
+                  <p className="text-[10px] text-[#075618] uppercase font-bold tracking-wider mt-1">{record.cargo || "Responsável Técnico"}</p>
+                </div>
+                <div className="border-t border-slate-300 pt-4 text-center">
+                  <p className="text-xs font-bold text-slate-800 uppercase tracking-tight">Comitê de Governança de IA</p>
+                  <p className="text-[10px] text-[#075618] uppercase font-bold tracking-wider mt-1">Laboratório Cedro</p>
+                </div>
+              </div>
+            )}
           </div>
           <div className="mt-12 text-center">
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest max-w-xl mx-auto leading-relaxed">
@@ -322,9 +508,9 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
   );
 
   return (
-    <div className="space-y-8 pb-20 max-w-7xl mx-auto px-4 sm:px-0">
-      {/* 1. Header Ficha Técnica (Topo da página com Voltar, Título, badges e botões de ação) */}
-      <div className="flex flex-col gap-6 border-b border-slate-200/60 pb-6 print:hidden">
+    <div className="space-y-10 pb-24 max-w-7xl mx-auto px-4 sm:px-0 bg-[#F6F8F5]/30">
+      {/* 1. Cabeçalho da IA */}
+      <div className="flex flex-col gap-6 border-b border-[#E3E8E1] pb-8 print:hidden">
         {/* Back Link */}
         <div>
           <button 
@@ -338,24 +524,22 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
 
         {/* Title, Badge status y acciones */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="space-y-2 min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase leading-none truncate pr-2">
+          <div className="space-y-3 min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight uppercase leading-none truncate pr-2">
                 {record.nomeFerramenta}
               </h1>
               {/* Status Badge */}
-              <div className={`px-3 py-1 bg-white border text-[10px] font-black uppercase tracking-tight rounded-full flex items-center gap-1.5 shadow-sm shrink-0 ${getStatusColor(record.statusUso)}`}>
+              <div className={`px-3 py-1 bg-white border text-[10px] font-black uppercase tracking-tight rounded-full flex items-center gap-1.5 shadow-3xs shrink-0 ${getStatusColor(record.statusUso)}`}>
                 <div className={`size-1.5 rounded-full ${getStatusColor(record.statusUso).split(" ").pop()}`} />
                 <span>{record.statusUso}</span>
               </div>
               {/* Risk Badge */}
-              <div className={`px-3 py-1 bg-white border text-[10px] font-black uppercase tracking-tight rounded-full shadow-sm shrink-0 ${getRiskColor(record.classificacaoRiscoManual)}`}>
+              <div className={`px-3 py-1 bg-white border text-[10px] font-black uppercase tracking-tight rounded-full shadow-3xs shrink-0 ${getRiskColor(record.classificacaoRiscoManual)}`}>
                 <span>{record.classificacaoRiscoManual}</span>
               </div>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium tracking-tight">
-              Ficha técnica de governança, riscos de privacidade e auditoria regulatória da solução.
-            </p>
+
           </div>
 
           {/* Action Buttons Toolbar */}
@@ -363,7 +547,7 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
             {onEdit && (
               <button
                 onClick={() => onEdit(record)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:border-[#075618] hover:text-[#075618] text-slate-700 text-xs font-black uppercase rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4.5 py-3 bg-white border border-[#E3E8E1] hover:border-[#075618] hover:text-[#075618] text-slate-700 text-xs font-black uppercase rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
               >
                 <Edit size={14} />
                 Editar cadastro
@@ -371,69 +555,323 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
             )}
 
             {record.statusUso === StatusUso.EM_AVALIACAO && (
-              <div className="flex-1 sm:flex-none flex items-center gap-2.5 px-4 py-2.5 bg-indigo-50/60 border border-indigo-100 text-indigo-800 text-xs font-bold uppercase rounded-xl shadow-sm">
+              <div className="flex-1 sm:flex-none flex items-center gap-2.5 px-4.5 py-3 bg-indigo-50/60 border border-indigo-100 text-indigo-800 text-xs font-bold uppercase rounded-xl shadow-sm">
                 <Activity size={14} className="animate-pulse flex-shrink-0" />
                 <span>Em Aprovação</span>
               </div>
             )}
 
-            <button
-              onClick={() => setActiveTab("relatorio")}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                activeTab === "relatorio" 
-                  ? "bg-[#075618] text-white border-[#075618] hover:bg-[#075618]/90" 
-                  : "bg-white text-slate-700 border-slate-200 hover:border-[#075618] hover:text-[#075618]"
-              }`}
-            >
-              <FileCheck2 size={14} />
-              Ver Relatório / Laudo
-            </button>
 
-            <button
-              onClick={handlePrint}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-50 text-[#075618] border border-emerald-100 hover:bg-emerald-100/60 text-xs font-black uppercase rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
-            >
-              <Download size={14} />
-              Exportar PDF
-            </button>
+
+
           </div>
         </div>
       </div>
 
-      {/* 2. Card Principal de Resumo (Visão Unificada da Ficha) - hidden on print */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white border border-slate-200/60 p-6 rounded-2xl shadow-sm print:hidden">
-        {[
-          { label: "ID do Sistema", value: record.id, icon: Bookmark, valColor: "text-slate-900 font-mono" },
-          { label: "Setor / Divisão", value: record.unidadeSetor, icon: Users, valColor: "text-slate-800" },
-          { label: "Responsável", value: record.responsavelPreenchimento, icon: Info, valColor: "text-slate-800 text-xs sm:text-sm" },
-          { label: "Fornecedor da IA", value: record.fornecedor, icon: Cpu, valColor: "text-slate-800" },
-          { label: "Grau de Autonomia", value: record.grauAutonomia?.slice(0, 15) || "Médio", icon: TrendingUp, valColor: "text-slate-800" },
-          { label: "Frequência de Revisão", value: record.frequenciaReavaliacao, icon: History, valColor: "text-slate-800" },
-          { label: "Conformidade LGPD", value: record.alinhadoLGPD, icon: ShieldCheck, valColor: record.alinhadoLGPD === 'Sim' ? 'text-emerald-700' : 'text-amber-700' },
-          { label: "Data de Cadastro", value: record.dataRegistro || "Não cadastrada", icon: Clipboard, valColor: "text-slate-800" },
-        ].map((item, i) => (
-          <div key={i} className="flex gap-3 bg-slate-50/50 hover:bg-slate-50/95 transition-colors p-3.5 rounded-xl border border-slate-100">
-            <div className="p-2 rounded-lg bg-white border border-slate-200/50 text-[#075618] self-start shadow-sm">
-              <item.icon size={14} className="shrink-0" />
+      {/* 2. Resumo executivo */}
+      <section className="rounded-2xl border border-[#E3E8E1] bg-[#F6F8F5] p-6 lg:p-8 space-y-6 print:hidden">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#075618]">
+              Resumo executivo
+            </p>
+            <h2 className="mt-1 text-lg font-black text-[#003F1D]">
+              Visão rápida da solicitação
+            </h2>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Finalidade da IA */}
+          <div className="bg-white border border-[#E3E8E1] p-5 rounded-2xl flex flex-col justify-between shadow-3xs hover:border-[#075618]/30 transition-all">
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-[#075618] uppercase tracking-widest block">Finalidade da IA</span>
+              <p className="text-xs text-slate-700 font-bold leading-relaxed line-clamp-4">
+                {record.descricaoAtividade || "Nenhuma descrição de atividade registrada."}
+              </p>
             </div>
-            <div className="space-y-0.5 min-w-0 flex-1">
-              <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block truncate">{item.label}</label>
-              <p className={`font-black text-xs uppercase tracking-tight truncate ${item.valColor}`}>{item.value}</p>
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-[#667085]">
+              <span>Setor: {record.unidadeSetor}</span>
+              <span className="text-[9px] font-black uppercase text-[#075618] bg-[#EAF4EC] px-2 py-0.5 rounded">Ativa</span>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* 3. Navegação por Abas - hidden on print */}
+          {/* Card 2: Status e Próxima Etapa */}
+          <div className="bg-white border border-[#E3E8E1] p-5 rounded-2xl flex flex-col justify-between shadow-3xs hover:border-[#075618]/30 transition-all">
+            <div className="space-y-3">
+              <span className="text-[10px] font-bold text-[#075618] uppercase tracking-widest block">Status da Avaliação</span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`px-2.5 py-1 text-[10px] font-black uppercase rounded ${getStatusBgColor(record.statusUso)}`}>
+                  {record.statusUso}
+                </span>
+              </div>
+              <div className="space-y-1 bg-[#F6F8F5] p-3 rounded-xl border border-[#E3E8E1]">
+                <span className="text-[9px] font-black text-[#667085] uppercase tracking-tight block">Próxima Etapa</span>
+                <p className="text-[11px] font-semibold text-slate-800 leading-normal">
+                  {getDynamicNextStepText()}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Risco & Solicitante */}
+          <div className="bg-white border border-[#E3E8E1] p-5 rounded-2xl flex flex-col justify-between shadow-3xs hover:border-[#075618]/30 transition-all">
+            <div className="space-y-3">
+              <span className="text-[10px] font-bold text-[#075618] uppercase tracking-widest block">Risco & Responsabilidade</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] font-bold text-[#667085] uppercase tracking-tight block">Responsável</span>
+                  <p className="text-xs font-black text-slate-800 uppercase tracking-tight truncate">{record.responsavelPreenchimento || "Não informado"}</p>
+                  <p className="text-[9px] font-bold text-slate-400 capitalize truncate">{record.cargo || "Não cadastrado"}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-[#667085] uppercase tracking-tight block">Risco Geral</span>
+                  <p className={`text-xs ${getRiskTextColor(record.classificacaoRiscoManual)} uppercase tracking-tight`}>
+                    {record.classificacaoRiscoManual || "Não avaliado"}
+                  </p>
+                </div>
+              </div>
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                <span>Fornecedora:</span>
+                <span className="text-xs font-black text-slate-700 uppercase truncate max-w-[120px]">{record.fornecedor || "Não informada"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Situação atual da aprovação */}
+      <section className="rounded-2xl border border-[#E3E8E1] bg-white p-6 lg:p-8 space-y-6 print:hidden">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#075618]">
+            Situação da aprovação
+          </p>
+          <h2 className="mt-1 text-lg font-black text-[#003F1D]">
+            Etapas de aprovação
+          </h2>
+        </div>
+
+        {/* Metadata grid summary */}
+        <div className="bg-[#F6F8F5] p-5 rounded-2xl border border-[#E3E8E1] grid grid-cols-2 md:grid-cols-4 gap-6 text-xs font-semibold">
+          <div>
+            <span className="text-[9px] text-[#667085] uppercase block font-bold mb-1">Etapa Atual</span>
+            <span className="text-slate-800 font-extrabold uppercase tracking-tight">
+              {getEtapaAtualText()}
+            </span>
+          </div>
+          <div>
+            <span className="text-[9px] text-[#667085] uppercase block font-bold mb-1">Responsável Atual</span>
+            <span className="text-slate-800 font-extrabold uppercase tracking-tight">
+              {getResponsavelAtualText()}
+            </span>
+          </div>
+          <div>
+            <span className="text-[9px] text-[#667085] uppercase block font-bold mb-1">Situação</span>
+            <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${getStatusBgColor(record.statusUso)}`}>
+              {record.statusUso === StatusUso.EM_AVALIACAO ? "Em Avaliação" : record.statusUso}
+            </span>
+          </div>
+          <div>
+            <span className="text-[9px] text-[#667085] uppercase block font-bold mb-1">Situação de Fluxo</span>
+            <span className="text-[#075618] font-bold leading-normal">
+              {getSituacaoFluxoText()}
+            </span>
+          </div>
+        </div>
+
+        {/* Dynamic Stepper */}
+        <div className="pt-2">
+          {workflow && workflow.steps && workflow.steps.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              {[...workflow.steps].sort((a, b) => a.stepNumber - b.stepNumber).map((step) => {
+                const isFailed = step.status === "negado";
+                const isPassed = step.status === "aprovado" || step.status === "opiniao";
+                const isCurrent = step.stepNumber === currentStepNum && !isWfFinished;
+                const isAwaiting = !isPassed && !isFailed && !isCurrent;
+                
+                const signerName = step.assignedUserName || "Assinatura livre";
+                
+                return (
+                  <div 
+                    key={step.stepNumber} 
+                    className={`border p-4 flex flex-col justify-between transition-all rounded-2xl shadow-3xs hover:shadow-xs min-h-[140px] ${
+                      isPassed 
+                        ? "bg-[#EAF4EC]/65 border-[#EBF5EC] text-[#075618]" 
+                        : isFailed 
+                          ? "bg-rose-50 border-rose-200 text-rose-900" 
+                          : isCurrent 
+                            ? "bg-amber-50/70 border-amber-300 text-amber-900 ring-2 ring-amber-100 ring-offset-1 animate-fade-in" 
+                            : "bg-slate-50/50 border-[#E3E8E1] text-slate-400"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`size-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                          isPassed 
+                            ? "bg-[#075618] text-white" 
+                            : isFailed 
+                              ? "bg-[#B42318] text-white" 
+                              : isCurrent 
+                                ? "bg-[#F59E0B] text-white animate-pulse" 
+                                : "bg-slate-200 text-slate-500"
+                        }`}>
+                          {isPassed ? "✓" : isFailed ? "✗" : step.stepNumber}
+                        </div>
+                        <span className={`text-[9.5px] font-black uppercase tracking-widest ${
+                          isPassed ? "text-[#075618]" : isFailed ? "text-rose-800" : isCurrent ? "text-amber-800" : "text-slate-400"
+                        }`}>
+                          Etapa {step.stepNumber}
+                        </span>
+                      </div>
+                      
+                      <p className={`text-[11.5px] font-extrabold uppercase line-clamp-1 ${isCurrent ? "text-slate-900 font-black" : isAwaiting ? "text-slate-400" : "text-slate-800"}`}>
+                        {step.roleName}
+                      </p>
+                      <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-slate-100 border border-slate-200/60 text-slate-500 rounded mt-1.5 inline-block">
+                        {step.stepNumber === 1 ? "Foco: Resumo" : step.stepNumber === 2 ? "Foco: Riscos" : step.stepNumber === 3 ? "Foco: Dados Tratados" : step.stepNumber === 4 ? "Foco: Uso da IA" : step.stepNumber === 5 ? "Foco: Relatório" : "Foco: LGPD"}
+                      </span>
+                    </div>
+
+                    <div className="mt-4">
+                      
+                      <div className="pt-2 border-t border-slate-100/60 text-[10px] leading-relaxed">
+                        <span className="text-slate-400 font-bold block uppercase text-[8px] tracking-wide">Responsável</span>
+                        <span className={`font-black uppercase truncate block text-[10.5px] ${isCurrent ? "text-[#003F1D]" : isAwaiting ? "text-slate-400 font-medium" : "text-slate-700"}`}>
+                          {signerName}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-1 relative">
+              {/* Step 1: Cadastro */}
+              <div className="bg-[#EAF4EC]/60 border border-[#E3E8E1] p-4.5 rounded-2xl flex flex-col justify-between">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="size-5 rounded-full bg-[#075618] text-white flex items-center justify-center text-[9px] font-bold">
+                    ✓
+                  </div>
+                  <span className="text-[9px] font-black uppercase text-[#075618] tracking-widest">1. Triagem</span>
+                </div>
+                <p className="text-xs font-bold text-[#003F1D]">Cadastro do Projeto</p>
+                <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-[#075618]/10 text-[#075618] rounded self-start mt-1.5 mb-1">
+                  Foco: Resumo
+                </span>
+                <p className="text-[10px] text-slate-500 mt-1 leading-normal">Cadastro inicial e autoenquadramento efetuados.</p>
+              </div>
+ 
+              {/* Step 2: Análise NIT */}
+              <div className={`border p-4.5 rounded-2xl flex flex-col justify-between ${
+                record.statusUso !== StatusUso.EM_AVALIACAO 
+                  ? "bg-[#EAF4EC]/60 border-[#E3E8E1] text-[#075618]" 
+                  : "bg-amber-50/50 border-amber-200 text-amber-900"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`size-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                    record.statusUso !== StatusUso.EM_AVALIACAO 
+                      ? "bg-[#075618] text-white" 
+                      : "bg-[#F59E0B] text-white animate-pulse"
+                  }`}>
+                    {record.statusUso !== StatusUso.EM_AVALIACAO ? "✓" : "2"}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest">2. Parecer NIT</span>
+                </div>
+                <p className="text-xs font-bold text-slate-800">Análise de Viabilidade</p>
+                <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded self-start mt-1.5 mb-1">
+                  Foco: Uso da IA
+                </span>
+                <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                  {record.statusUso !== StatusUso.EM_AVALIACAO 
+                    ? "Concluído com parecer de viabilidade." 
+                    : "Aguardando homologação do colegiado NIT."}
+                </p>
+              </div>
+ 
+              {/* Step 3: LGPD */}
+              <div className={`border p-4.5 rounded-2xl flex flex-col justify-between ${
+                record.alinhadoLGPD === 'Sim' 
+                  ? "bg-[#EAF4EC]/60 border-[#E3E8E1]" 
+                  : record.alinhadoLGPD === 'Em avaliação'
+                    ? "bg-amber-50/50 border-amber-200 text-amber-900"
+                    : "bg-slate-50/60 border-[#E3E8E1]"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`size-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                    record.alinhadoLGPD === 'Sim' 
+                      ? "bg-[#075618] text-white" 
+                      : record.alinhadoLGPD === 'Em avaliação'
+                        ? "bg-[#F59E0B] text-white"
+                        : "bg-slate-300 text-slate-600"
+                  }`}>
+                    {record.alinhadoLGPD === 'Sim' ? "✓" : "3"}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest">3. Segurança & LGPD</span>
+                </div>
+                <p className="text-xs font-bold text-slate-800">Avaliação DPO</p>
+                <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded self-start mt-1.5 mb-1">
+                  Foco: Dados Tratados & LGPD
+                </span>
+                <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                  {record.alinhadoLGPD === 'Sim'
+                    ? "Conformidade e bases legais atestadas pelo DPO."
+                    : record.alinhadoLGPD === 'Não'
+                      ? "Ajustes de segurança recomendados."
+                      : "Diligências e mapeamento de dados de pacientes."}
+                </p>
+              </div>
+ 
+              {/* Step 4: Homologação */}
+              <div className={`border p-4.5 rounded-2xl flex flex-col justify-between ${
+                record.statusUso === StatusUso.APROVADO || record.statusUso === StatusUso.APROVADO_COM_RESTRICOES
+                  ? "bg-[#EAF4EC]/60 border-[#E3E8E1]"
+                  : record.statusUso === StatusUso.NAO_APROVADO
+                    ? "bg-rose-50 border-rose-220 text-rose-905"
+                    : "bg-slate-50/60 border-[#E3E8E1]"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`size-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                    record.statusUso === StatusUso.APROVADO || record.statusUso === StatusUso.APROVADO_COM_RESTRICOES
+                      ? "bg-[#075618] text-white"
+                      : record.statusUso === StatusUso.NAO_APROVADO
+                        ? "bg-[#B42318] text-white"
+                        : "bg-slate-300 text-slate-600"
+                  }`}>
+                    {(record.statusUso === StatusUso.APROVADO || record.statusUso === StatusUso.APROVADO_COM_RESTRICOES) ? "✓" : "4"}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest">4. Homologação</span>
+                </div>
+                <p className="text-xs font-bold text-slate-800">Autorização Final</p>
+                <span className="text-[8.5px] font-black uppercase tracking-tight px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded self-start mt-1.5 mb-1">
+                  Foco: Riscos & Relatório
+                </span>
+                <p className="text-[10px] text-slate-500 mt-1 leading-normal">
+                  {record.statusUso === StatusUso.APROVADO 
+                    ? "Solução homologada para uso ativo no Laboratório."
+                    : record.statusUso === StatusUso.APROVADO_COM_RESTRICOES
+                      ? "Homologada com restrições técnicas."
+                      : record.statusUso === StatusUso.NAO_APROVADO
+                        ? "Projeto declinado pelo comitê colegiado."
+                        : "Aguardando parecer final das etapas."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+
+
+      {/* 5. Navegação por Abas - hidden on print */}
       <div className="flex border-b border-slate-200 overflow-x-auto print:hidden gap-1 select-none custom-scrollbar pb-px">
         {[
-          { id: "visao-geral", label: "Visão Geral", icon: Info },
-          { id: "finalidade-uso", label: "Finalidade e Uso", icon: Target },
-          { id: "dados-utilizados", label: "Dados Utilizados", icon: Database },
-          { id: "riscos-controles", label: "Riscos e Controles", icon: ShieldAlert },
-          { id: "lgpd-conformidade", label: "LGPD e Conformidade", icon: ShieldCheck },
+          { id: "visao-geral", label: "Resumo", icon: Info },
+          { id: "finalidade-uso", label: "Uso da IA", icon: Target },
+          { id: "dados-utilizados", label: "Dados tratados", icon: Database },
+          { id: "riscos-controles", label: "Riscos", icon: ShieldAlert },
           { id: "historico", label: "Histórico", icon: History },
-          { id: "relatorio", label: "Laudo / Relatório", icon: FileText },
+          { id: "relatorio", label: "Relatório", icon: FileText },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -442,7 +880,7 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
               onClick={() => setActiveTab(tab.id as TabType)}
               className={`flex items-center gap-1.5 px-5 py-3.5 border-b-2 text-xs font-black uppercase tracking-tight whitespace-nowrap transition-all cursor-pointer ${
                 isActive
-                  ? "border-[#075618] text-[#075618] bg-[#075618]/5 font-black"
+                  ? "border-[#075618] text-[#075618] bg-[#EAF4EC]/30 font-black"
                   : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200"
               }`}
             >
@@ -453,70 +891,116 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
         })}
       </div>
 
-      {/* 4. Conteúdo Dinâmico das Abas */}
-      <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-sm">
+      {/* 6. Conteúdo Dinâmico das Abas */}
+      <div className="bg-white border border-[#E3E8E1] rounded-3xl p-6 md:p-8 shadow-sm">
         
-        {/* TAB 1: VISÃO GERAL */}
+        {/* TAB 1: RESUMO / VISÃO GERAL */}
         {activeTab === "visao-geral" && (
           <div className="space-y-8 animate-fade-in text-slate-700">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <Info size={16} className="text-[#075618]" />
-                Visão Geral do Mapeamento
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Identificação institucional, criticidade e descrição operacional da solução de IA.</p>
+            <div className="border-b border-[#E3E8E1] pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-[#003F1D] uppercase tracking-widest flex items-center gap-2">
+                  <Info size={16} className="text-[#075618]" />
+                  Resumo da Ficha Técnica
+                </h3>
+              </div>
+              <div className="bg-[#EAF4EC]/50 border border-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase text-[#075618] shadow-3xs self-start md:self-auto">
+                <span>Avaliador: Coordenador NIT (Etapa 1)</span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* Descrição em Card de Destaque */}
-              <div className="md:col-span-2 space-y-4">
-                <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-2xl">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2.5">Descrição da Atividade</h4>
-                  <p className="text-sm text-slate-700 leading-relaxed font-semibold">
-                    {record.descricaoAtividade || "Nenhuma descrição informada."}
-                  </p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Card 1 — O que é esta IA? */}
+              <div className="bg-[#F6F8F5]/40 border border-[#E3E8E1] p-6 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <span className="p-1 px-2.5 bg-[#EAF4EC] text-[#075618] text-[9px] font-black rounded-lg">Identidade</span>
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-[#003F1D]">O que é esta IA?</h4>
                 </div>
-
-                <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-2xl">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-3">Modelos de IA Autodeclarados</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {record.tipoIA && record.tipoIA.length > 0 ? (
-                      record.tipoIA.map((t, i) => (
-                        <span key={i} className="px-3.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-black text-slate-700 uppercase tracking-tight shadow-sm">
-                          {t}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">Não informado</span>
-                    )}
+                <div className="space-y-3.5 text-xs">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Nome da Ferramenta</span>
+                    <p className="font-extrabold text-[#1F2933] text-sm uppercase">{record.nomeFerramenta || "Não informado"}</p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Descrição da Atividade</span>
+                    <p className="font-semibold text-slate-650 leading-relaxed text-[12.5px]">
+                      {record.descricaoAtividade || "Não informada"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Tipo de Inteligência Artificial</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {record.tipoIA && record.tipoIA.length > 0 ? (
+                        record.tipoIA.map((t, idx) => (
+                          <span key={idx} className="px-2.5 py-1 bg-white border border-[#E3E8E1] text-[10px] font-bold text-[#003F1D] uppercase rounded-md shadow-3xs">
+                            {t}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-slate-400 italic font-semibold">Não informado</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Fornecedor da Solução</span>
+                    <p className="font-extrabold text-slate-800 uppercase">{record.fornecedor || "Não informado"}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Parâmetros Organizacionais */}
-              <div className="space-y-4 bg-slate-50 border border-slate-200/60 p-5 rounded-2xl">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-200 pb-2">Informações Organizacionais</h4>
-                {[
-                  { label: "Setor Requisitante", value: record.unidadeSetor },
-                  { label: "Público Alvo / Impactado", value: record.naturezaUso === "Assistencial" || record.naturezaUso === "Diagnóstico" ? "Pacientes / Médicos Assistentes" : "Interno Corporativo" },
-                  { label: "Grau de Criticidade", value: record.criticidade || "Médio" },
-                  { label: "Grau de Autonomia", value: record.grauAutonomia || "Não avaliado" },
-                  { label: "Versão do Sistema", value: record.versao || "1.0.0" },
-                  { label: "Situação da Avaliação", value: record.statusUso, isBadge: true }
-                ].map((row, i) => (
-                  <div key={i} className="space-y-0.5">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{row.label}</span>
-                    {row.isBadge ? (
-                      <div className="pt-0.5">
-                        <span className="inline-flex px-2 py-0.5 text-[9px] font-extrabold uppercase rounded bg-[#075618]/10 text-[#075618] border border-[#075618]/10">
-                          {row.value}
-                        </span>
-                      </div>
-                    ) : (
-                      <p className="text-xs font-extrabold text-slate-700 uppercase tracking-tight truncate">{row.value}</p>
-                    )}
+              {/* Card 2 — Quem solicitou? */}
+              <div className="bg-[#F6F8F5]/40 border border-[#E3E8E1] p-6 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <span className="p-1 px-2.5 bg-[#EAF4EC] text-[#075618] text-[9px] font-black rounded-lg">Ficha Solicitante</span>
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-[#003F1D]">Quem solicitou?</h4>
+                </div>
+                <div className="space-y-3.5 text-xs font-semibold">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Setor Requisitante</span>
+                    <p className="font-extrabold text-[#003F1D] text-sm uppercase">{record.unidadeSetor || "Não informado"}</p>
                   </div>
-                ))}
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Responsável Técnico</span>
+                    <p className="font-extrabold text-[#1F2933] uppercase">{record.responsavelPreenchimento || "Não informado"}</p>
+                    <p className="text-[10px] text-[#667085] mt-0.5">{record.cargo || "Função não especificada"}</p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block">Data de Cadastro</span>
+                    <p className="font-extrabold text-slate-800 uppercase">{record.dataRegistro || "Não informada"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3 — Classificação inicial */}
+              <div className="bg-[#F6F8F5]/40 border border-[#E3E8E1] p-6 rounded-2xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <span className="p-1 px-2.5 bg-[#EAF4EC] text-[#075618] text-[9px] font-black rounded-lg">Classificação</span>
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-[#003F1D]">Classificação Inicial</h4>
+                </div>
+                <div className="space-y-3.5 text-xs font-semibold text-slate-800">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Nível de Criticidade</span>
+                    <span className={`px-2.5 py-1 text-[10px] font-black uppercase border rounded-md shadow-3xs ${getRiskColor(record.criticidade as unknown as ClassificacaoRisco)}`}>
+                      {record.criticidade || "MÉDIO"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Autonomia Operacional</span>
+                    <p className="font-extrabold text-slate-800 uppercase">{record.grauAutonomia || "Não avaliado"}</p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Público Impactado</span>
+                    <p className="font-extrabold text-slate-800 uppercase">
+                      {record.naturezaUso === "Assistencial" || record.naturezaUso === "Diagnóstico" ? "Pacientes e Corpo Assistencial" : "Processos de Negócios / Interno"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Status de Produção</span>
+                    <span className={`px-2.5 py-1 text-[10px] font-black uppercase border rounded-md ${getStatusBgColor(record.statusUso)}`}>
+                      {record.statusUso}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -525,12 +1009,16 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
         {/* TAB 2: FINALIDADE E USO */}
         {activeTab === "finalidade-uso" && (
           <div className="space-y-8 animate-fade-in text-slate-700">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <Target size={16} className="text-[#075618]" />
-                Finalidade e Fluxo de Uso
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5 font-medium">Processos de negócio impactados, limites operacionais e impactos em inteligência clínica.</p>
+            <div className="border-b border-[#E3E8E1] pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <Target size={16} className="text-[#075618]" />
+                  Finalidade e Fluxo de Uso
+                </h3>
+              </div>
+              <div className="bg-[#EAF4EC]/50 border border-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase text-[#075618] shadow-3xs self-start md:self-auto">
+                <span>Avaliador: Período de Teste (Etapa 4)</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -551,18 +1039,12 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
                     )}
                   </div>
                 </div>
-
-                <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-2xl">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2">Etapa do Processo Laboratorial</h4>
-                  <p className="text-sm font-extrabold text-slate-800 uppercase tracking-tight">{record.etapaProcesso || "Não especificado"}</p>
-                  <p className="text-[11px] text-slate-400 mt-1 leading-normal font-medium">Assegura o fluxo de governança mapeado no setor "{record.unidadeSetor}".</p>
-                </div>
               </div>
 
               {/* Benefícios e Decisão */}
               <div className="space-y-6">
                 <div className="bg-[#075618]/5 border border-emerald-100/60 p-6 rounded-2xl">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2">Benefícios e Geração de Valor</h4>
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-2">Benefícios</h4>
                   <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold italic">
                     "{record.beneficiosEsperados || "Nenhum benefício foi autodeclarado."}"
                   </p>
@@ -595,12 +1077,16 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
         {/* TAB 3: DADOS UTILIZADOS */}
         {activeTab === "dados-utilizados" && (
           <div className="space-y-8 animate-fade-in text-slate-700">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <Database size={16} className="text-[#075618]" />
-                Modelagem de Dados & Coleta
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Categorias de dados, origem, fluxo de transmissão e integridade estrutural.</p>
+            <div className="border-b border-[#E3E8E1] pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <Database size={16} className="text-[#075618]" />
+                  Modelagem de Dados & Coleta
+                </h3>
+              </div>
+              <div className="bg-[#EAF4EC]/50 border border-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase text-[#075618] shadow-3xs self-start md:self-auto">
+                <span>Avaliador: Gerente TI (Etapa 3)</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -674,12 +1160,54 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
         {/* TAB 4: RISCOS E CONTROLES */}
         {activeTab === "riscos-controles" && (
           <div className="space-y-8 animate-fade-in text-slate-700">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <ShieldAlert size={16} className="text-[#075618]" />
-                Análise de Riscos & Controles Mitigadores
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5 font-medium">Classificação de perigos operacionais, salvaguardas implementadas e governança integrada.</p>
+            <div className="border-b border-[#E3E8E1] pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-[#003F1D] uppercase tracking-widest flex items-center gap-2">
+                  <ShieldAlert size={16} className="text-[#075618]" />
+                  Análise de Riscos & Controles Mitigadores
+                </h3>
+              </div>
+              <div className="bg-[#EAF4EC]/50 border border-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase text-[#075618] shadow-3xs self-start md:self-auto">
+                <span>Avaliador: Gerente NIT (Etapa 2)</span>
+              </div>
+            </div>
+
+            {/* COLORIZED RISK ANALYSIS BANNER */}
+            <div className={`p-5 rounded-2xl border ${
+              record.classificacaoRiscoManual === ClassificacaoRisco.BAIXO 
+                ? "bg-emerald-50 border-emerald-250 text-[#03440c]" 
+                : record.classificacaoRiscoManual === ClassificacaoRisco.MEDIO 
+                  ? "bg-amber-50 border-amber-250 text-[#6a4c10]"
+                  : record.classificacaoRiscoManual === ClassificacaoRisco.ALTO 
+                    ? "bg-orange-50 border-orange-250 text-orange-900"
+                    : record.classificacaoRiscoManual === ClassificacaoRisco.CRITICO
+                      ? "bg-rose-50 border-rose-250 text-[#6a1510]"
+                      : "bg-slate-50 border-slate-200 text-slate-600"
+            }`}>
+              <div className="flex items-start gap-3.5">
+                <AlertTriangle size={20} className="mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <h4 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                    Classificação Geral de Risco: {record.classificacaoRiscoManual || "Não avaliado"}
+                  </h4>
+                  <p className="text-xs font-semibold leading-relaxed">
+                    {(() => {
+                      switch(record.classificacaoRiscoManual) {
+                        case ClassificacaoRisco.BAIXO:
+                          return "Baixo Risco: Esta solução apresenta impacto de privacidade e operabilidade muito reduzido. Os riscos são mínimos e perfeitamente gerenciados pelos controles regulares da equipe.";
+                        case ClassificacaoRisco.MEDIO:
+                          return "Médio Risco: Atenção moderada necessária. A solução utiliza dados regulados ou possui automações sensíveis. Exige conformidade padrão e supervisão periódica.";
+                        case ClassificacaoRisco.ALTO:
+                          return "Alto Risco: Nível elevado de sensibilidade técnica ou proteção de privacidade de pacientes. Recomenda-se implementar controles mitigadores redundantes e auditorias semestrais.";
+                        case ClassificacaoRisco.CRITICO:
+                          return "Risco Crítico: Máxima sensibilidade de conformidade jurídica ou clínica. Requer validação humana por profissionais seniores e revisão regular compulsória do comitê de ética.";
+                        default:
+                          return "Grau de Risco Não Avaliado: Esta IA ainda não possui classificação de risco homologada pelo comitê. Recomendado submeter os fluxofogramas para auditoria.";
+                      }
+                    })()}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -718,7 +1246,7 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
                   </div>
                   <div className="space-y-1 text-right">
                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Gestor do Risco</span>
-                    <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">{record.responsavelRisco || record.responsavelPreenchimento || "Não informado"}</p>
+                    <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">{record.responsavelRisco || "Gestor de Risco designado"}</p>
                   </div>
                 </div>
               </div>
@@ -760,71 +1288,7 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
           </div>
         )}
 
-        {/* TAB 5: LGPD E CONFORMIDADE */}
-        {activeTab === "lgpd-conformidade" && (
-          <div className="space-y-8 animate-fade-in text-slate-700">
-            <div>
-              <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <ShieldCheck size={16} className="text-[#075618]" />
-                Segurança Jurídica & Direitos de Privacidade (LGPD)
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Bases legais aplicadas, transparência, procedimentos de privacidade e auditoria regulatória.</p>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* LGPD Badges and Summary */}
-              <div className="md:col-span-2 space-y-6">
-                {/* Ripa / Dpia Warning Banner */}
-                {record.usaDadosSensiveis === "Sim" && (
-                  <div className="p-4 bg-orange-50 border border-orange-100 text-orange-850 rounded-xl flex gap-3 text-xs leading-relaxed font-semibold">
-                    <AlertTriangle size={18} className="text-orange-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-extrabold uppercase text-[10px] tracking-tight mb-0.5 text-orange-900">RIPD/DPIA Recomendado institucionalmente</p>
-                      <p className="text-slate-600">Este sistema processa dados pessoais sensíveis protegidos pela LGPD. O comitê recomenda gerar e arquivar o Relatório de Impacto à Proteção de Dados (RIPD).</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-2xl">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[#075618] mb-4">Parâmetros de Auditoria Regulatória</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {[
-                      { label: "Acordo de Processamento de Dados (DPA)", value: record.contratoProtecaoDados || "Não informado" },
-                      { label: "Política de Governança Interna", value: record.politicaInterna === "Sim" ? "Ativa" : "Inexistente" },
-                      { label: "Treinamentos Realizados", value: record.treinamentoColaboradores === "Sim" ? "Sim (Concluído)" : "Não" },
-                      { label: "Trilha de Auditoria (Logs)", value: record.trilhaAuditoria || "Não informado" },
-                      { label: "Controle de Perfil e RBAC", value: record.controleAcessoPerfil || "Não informado" },
-                      { label: "Procedimento de Incidentes", value: record.procedimentoIncidente === "Sim" ? "Ativo" : "Não" },
-                    ].map((item, idx) => (
-                      <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200/70 shadow-sm flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-500 uppercase tracking-tight truncate mr-3">{item.label}</span>
-                        <span className="font-black text-slate-800 uppercase tracking-tight shrink-0">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Legal Base & Review */}
-              <div className="bg-slate-50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 pb-2">Base Legal Mapeada</h4>
-                <div className="bg-white p-4.5 rounded-xl border border-slate-200/60 shadow-sm">
-                  <p className="text-[10.5px] font-black uppercase text-[#075618] mb-1">Base Legal Sugerida</p>
-                  <p className="text-xs font-bold text-slate-700 leading-normal">
-                    {record.usaDadosSensiveis === "Sim" ? "Artigo 11, II, 'g' da LGPD (Prevenção a fraudes e segurança)" : "Artigo 7, V ou IX (Legítimo interesse / Execução de contrato)"}
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight block">Parecer de Conformidade Legal</span>
-                  <p className="text-xs text-slate-500 bg-white p-4 rounded-xl border border-slate-200/50 italic leading-relaxed">
-                    {record.obsConformidade || "O departamento responsável não emitiu restrições adicionais à operação."}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* TAB 6: HISTÓRICO */}
         {activeTab === "historico" && (
@@ -834,39 +1298,55 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
                 <History size={16} className="text-[#075618]" />
                 Registros de Auditoria & Alterações
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Trilha histórica das avaliações do comitê, status regulatório e revisões técnicas.</p>
+
             </div>
 
             <div className="max-w-3xl mx-auto py-4">
               <div className="relative border-l-2 border-slate-200 ml-3.5 pl-6 space-y-8 pb-4">
-                {getTimelineEvents().map((ev, i) => (
-                  <div key={i} className="relative group">
-                    {/* Circle Indicator */}
-                    <div className="absolute -left-[32px] top-1.5 size-4.5 rounded-full border-4 border-white bg-[#075618] shadow group-hover:scale-110 transition-transform flex items-center justify-center">
-                      <div className="size-1 bg-white rounded-full"></div>
-                    </div>
-                    
-                    {/* Content Box */}
-                    <div className="bg-slate-50 border border-slate-200/80 p-5 rounded-2xl hover:bg-slate-50/90 transition-colors">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
-                        <h4 className="font-black text-xs sm:text-sm text-slate-800 uppercase tracking-tight leading-none text-[#075618]">
-                          {ev.action}
-                        </h4>
-                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-tight shrink-0 bg-white px-2 py-0.5 rounded border border-slate-200/60 shadow-sm leading-none">
-                          {ev.date}
-                        </span>
+                {getTimelineEvents().map((ev, i) => {
+                  const isLong = ev.message.length > 120;
+                  const isExpanded = !!expandedEvents[i];
+                  return (
+                    <div key={i} className="relative group">
+                      {/* Circle Indicator */}
+                      <div className="absolute -left-[32px] top-1.5 size-4.5 rounded-full border-4 border-white bg-[#075618] shadow group-hover:scale-110 transition-transform flex items-center justify-center">
+                        <div className="size-1 bg-white rounded-full"></div>
                       </div>
-                      <p className="text-xs text-slate-500 leading-normal font-semibold mb-2">
-                        {ev.message}
-                      </p>
-                      {ev.user && (
-                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1 mt-3">
-                          <Users size={10} /> Executor: {ev.user}
-                        </p>
-                      )}
+                      
+                      {/* Content Box */}
+                      <div className="bg-[#F6F8F5]/40 border border-[#E3E8E1] p-5 rounded-2xl hover:bg-white transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2.5">
+                          <h4 className="font-black text-xs sm:text-sm text-[#003F1D] uppercase tracking-tight leading-none">
+                            {ev.action}
+                          </h4>
+                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-tight shrink-0 bg-white px-2 py-0.5 rounded border border-[#E3E8E1] shadow-3xs leading-none">
+                            {ev.date}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                            {isLong && !isExpanded ? `${ev.message.substring(0, 120)}...` : ev.message}
+                          </p>
+                          {isLong && (
+                            <button
+                              onClick={() => toggleEvent(i)}
+                              className="text-[10px] font-black uppercase text-[#075618] hover:text-[#003F1D] transition-colors cursor-pointer flex items-center gap-1"
+                            >
+                              {isExpanded ? "Ver menos" : "Ver mais"}
+                            </button>
+                          )}
+                        </div>
+
+                        {ev.user && (
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1 mt-3 pt-2.5 border-t border-slate-100">
+                            <Users size={10} /> Executor: {ev.user}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -875,23 +1355,6 @@ export default function ReportView({ record, onBack, onEdit, isAdmin }: ReportVi
         {/* TAB 7: RELATÓRIO DO LAUDO (PRINTABLE ORIGINAL DOC VIEW) */}
         {activeTab === "relatorio" && (
           <div className="space-y-6 animate-fade-in text-slate-800">
-            {/* Control banner inside Report Tab */}
-            <div className="p-4 bg-emerald-50 border border-emerald-100 text-[#075618] rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs font-semibold select-none print:hidden">
-              <div className="flex items-center gap-2">
-                <FileCheck2 size={16} className="text-[#075618]" />
-                <span>Modo de visualização do laudo completo para impressão institucional.</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={handlePrint}
-                  className="px-4 py-2 bg-white text-slate-800 hover:text-[#075618] hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold uppercase transition-all shadow-sm active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer size={12} />
-                  Imprimir Laudo
-                </button>
-              </div>
-            </div>
-
             {/* Official Report Area */}
             {renderFormalReport()}
           </div>

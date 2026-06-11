@@ -546,15 +546,45 @@ export default function RegistrationForm({ initialData, onSave, onCancel, isAdmi
                     required
                   />
                 </InputGroup>
-                <InputGroup label="Cargo" required>
-                  <input 
-                    className={getInputClass(formData.cargo)}
-                    value={formData.cargo || ""}
-                    onChange={(e) => updateField("cargo", e.target.value)}
-                    placeholder="Seu cargo atual"
-                    required
-                  />
-                </InputGroup>
+                 <InputGroup label="Cargo" required>
+                   <select 
+                     className={getInputClass(formData.cargo)}
+                     value={formData.cargo || ""}
+                     onChange={(e) => updateField("cargo", e.target.value)}
+                     required
+                   >
+                     <option value="">Selecione seu cargo / função...</option>
+                     {(() => {
+                       const currentSector = formData.unidadeSetor || "";
+                       try {
+                         const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
+                         if (rawDetails) {
+                           const details = JSON.parse(rawDetails);
+                           if (details[currentSector] && Array.isArray(details[currentSector].cargos)) {
+                             return details[currentSector].cargos;
+                           }
+                         }
+                       } catch (e) {
+                         console.error("Error getting cargos in registration form:", e);
+                       }
+                       const PRESET_CARGOS: Record<string, string[]> = {
+                         "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
+                         "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
+                         "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
+                         "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
+                         "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
+                         "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
+                         "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
+                         "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
+                         "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
+                         "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
+                       };
+                       return PRESET_CARGOS[currentSector] || ["Colaborador"];
+                     })().map((c: string) => (
+                       <option key={c} value={c}>{c}</option>
+                     ))}
+                   </select>
+                 </InputGroup>
                 <InputGroup label="Data do Registro" required badge={<BadgeAutomatico />}>
                   <input 
                     type="date"

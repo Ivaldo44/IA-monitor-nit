@@ -46,6 +46,7 @@ interface SectorDetail {
   description: string;
   responsible: string;
   status: "Ativo" | "Inativo";
+  cargos?: string[];
 }
 
 // Predefined detailed description & representatives mapping of institutional sectors
@@ -53,52 +54,62 @@ const PRESET_SECTORS_DETAILS: Record<string, SectorDetail> = {
   "NIT": {
     description: "Núcleo de Inovação e Tecnologia responsável por pesquisa, desenvolvimento e inovação estruturada do laboratório.",
     responsible: "Ricardo Almeida",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"]
   },
   "TI": {
     description: "Gerencia a infraestrutura cibernética, servidores locais, sistemas internos e suporte tecnológico de alta performance.",
     responsible: "Mariana Souza",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"]
   },
   "Marketing": {
     description: "Responsável pela comunicação institucional, reputação de marca e relacionamento estratégico com o público.",
     responsible: "Juliana Martins",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"]
   },
   "Administrativo": {
     description: "Cuida do planejamento estratégico administrativo, fluxos financeiros e suporte de governança corporativa.",
     responsible: "Carlos Henrique",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"]
   },
   "Jurídico": {
     description: "Responsável pelo suporte legal, conformidade com a LGPD, redação de contratos e assessoria regulatória geral.",
     responsible: "Beatriz Lima",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"]
   },
   "Direção Técnica": {
     description: "Liderança médica, supervisão de laudos técnicos e garantia irrestrita de qualidade analítica laboratorial.",
     responsible: "Dr. Felipe Costa",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"]
   },
   "Qualidade": {
     description: "Coordena acreditações de qualidade, aplicação jurídica de normas ISO e planos de verificação de processos sanitários.",
     responsible: "Ana Teresa",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"]
   },
   "Atendimento / Recepção": {
     description: "Suporte direto do público na triagem, agendamentos presenciais e pesquisa ativa de satisfação clínica.",
     responsible: "Fernanda Costa",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"]
   },
   "Laboratório de Patologia": {
     description: "Preparação macroscópica de biópsias, análises citológicas detalhadas e controle de laudos imuno-histoquímicos.",
     responsible: "Dr. Sergio Morais",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"]
   },
   "Laboratório Central": {
     description: "Processamento automatizado de exames bioquímicos e hematológicos de rotina clínica emergencial ou diagnóstica.",
     responsible: "Dra. Heloísa Abreu",
-    status: "Ativo"
+    status: "Ativo",
+    cargos: ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
   }
 };
 
@@ -158,6 +169,8 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
   const [formDescription, setFormDescription] = useState("");
   const [formResponsible, setFormResponsible] = useState("");
   const [formStatus, setFormStatus] = useState<"Ativo" | "Inativo">("Ativo");
+  const [formCargos, setFormCargos] = useState<string[]>([]);
+  const [newCargoInput, setNewCargoInput] = useState("");
 
   // Sync sector details to LocalStorage
   useEffect(() => {
@@ -281,6 +294,8 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
     setFormDescription("");
     setFormResponsible("");
     setFormStatus("Ativo");
+    setFormCargos(["Colaborador"]);
+    setNewCargoInput("");
     setErrorMsg(null);
     setIsModalOpen(true);
   };
@@ -292,6 +307,11 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
     setFormDescription(sec.description);
     setFormResponsible(sec.responsible);
     setFormStatus(sec.status);
+    
+    const details = sectorDetails[sec.name] || PRESET_SECTORS_DETAILS[sec.name] || {};
+    setFormCargos(details.cargos || ["Colaborador"]);
+    setNewCargoInput("");
+    
     setErrorMsg(null);
     setIsModalOpen(true);
   };
@@ -303,6 +323,11 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
     setFormDescription(sec.description);
     setFormResponsible(sec.responsible);
     setFormStatus(sec.status);
+    
+    const details = sectorDetails[sec.name] || PRESET_SECTORS_DETAILS[sec.name] || {};
+    setFormCargos(details.cargos || ["Colaborador"]);
+    setNewCargoInput("");
+    
     setErrorMsg(null);
     setIsModalOpen(true);
   };
@@ -387,7 +412,8 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
           [sName]: {
             description: formDescription.trim() || "Setor de saúde e governança corporativa.",
             responsible: formResponsible.trim() || "Não especificado",
-            status: formStatus
+            status: formStatus,
+            cargos: formCargos.length > 0 ? formCargos : ["Colaborador"]
           }
         }));
         setSuccessMsg(`Setor "${sName}" criado com sucesso!`);
@@ -421,7 +447,8 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
           next[sName] = {
             description: formDescription.trim() || "Setor de saúde e governança.",
             responsible: formResponsible.trim() || "Não especificado",
-            status: formStatus
+            status: formStatus,
+            cargos: formCargos.length > 0 ? formCargos : ["Colaborador"]
           };
           return next;
         });
@@ -986,6 +1013,73 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
                     onChange={(e) => setFormDescription(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 disabled:bg-slate-100 border border-slate-250 disabled:text-slate-500 rounded-xl text-xs outline-none focus:bg-white focus:border-[#03440c] transition-all resize-none leading-relaxed font-sans text-slate-700"
                   />
+                </div>
+
+                {/* Cargos / Funções no Setor */}
+                <div className="space-y-2 border-t border-slate-100 pt-4">
+                  <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider block">
+                    Cargos / Funções Cadastrados para este Setor *
+                  </label>
+                  
+                  {/* List of badges */}
+                  <div className="flex flex-wrap gap-2 py-1">
+                    {formCargos.length === 0 ? (
+                      <span className="text-xs text-slate-450 italic">Nenhum cargo cadastrado. Adicione pelo menos um.</span>
+                    ) : (
+                      formCargos.map((cargoItem, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-150 text-[#03440c] rounded-full text-xs font-semibold"
+                        >
+                          <span>{cargoItem}</span>
+                          {modalMode !== "view" && (
+                            <button
+                              type="button"
+                              onClick={() => setFormCargos(formCargos.filter(c => c !== cargoItem))}
+                              className="text-slate-400 hover:text-red-700 cursor-pointer transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {modalMode !== "view" && (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Adicionar novo cargo (ex: Analista de TI, Médico Patologista)"
+                        value={newCargoInput || ""}
+                        onChange={(e) => setNewCargoInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const val = newCargoInput.trim();
+                            if (val && !formCargos.includes(val)) {
+                              setFormCargos([...formCargos, val]);
+                              setNewCargoInput("");
+                            }
+                          }
+                        }}
+                        className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-250 rounded-xl text-xs outline-none focus:bg-white focus:border-[#03440c] transition-all text-slate-800 font-semibold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = newCargoInput.trim();
+                          if (val && !formCargos.includes(val)) {
+                            setFormCargos([...formCargos, val]);
+                            setNewCargoInput("");
+                          }
+                        }}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-250 font-bold text-xs rounded-xl cursor-pointer transition-all h-10"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Active solution count preview if viewing details */}

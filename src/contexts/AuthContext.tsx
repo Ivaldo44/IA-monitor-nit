@@ -9,7 +9,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (updatedFields?: Partial<UserProfile>, skipFetch?: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,7 +32,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error("Erro ao buscar perfil:", error);
       }
       
-      setProfile(data || null);
+      if (data) {
+        setProfile(prev => {
+          if (!prev) return data;
+          // Mantém o preview de blob local temporário se ele estiver ativo
+          const keepBlob = prev.avatar_url?.startsWith("blob:") ? prev.avatar_url : null;
+          return {
+            ...prev,
+            ...data,
+            avatar_url: keepBlob || data.avatar_url
+          };
+        });
+      } else {
+        setProfile(null);
+      }
     } catch (err) {
       console.error("Erro inesperado ao buscar perfil:", err);
     }
@@ -112,8 +125,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id);
+  const refreshProfile = async (updatedFields?: Partial<UserProfile>, skipFetch?: boolean) => {
+    if (updatedFields) {
+      setProfile(prev => prev ? { ...prev, ...updatedFields } : null);
+    }
+    if (user && !skipFetch) await fetchProfile(user.id);
   };
 
   return (

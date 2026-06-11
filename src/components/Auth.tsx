@@ -16,7 +16,6 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [fullName, setFullName] = useState("");
   const [setor, setSetor] = useState("");
   const [cargo, setCargo] = useState("");
-  const [contato, setContato] = useState("");
   const [sectors, setSectors] = useState<string[]>([]);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -24,6 +23,36 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   useEffect(() => {
     getSectors().then(setSectors);
   }, []);
+
+  const getCargosForSector = (sectorName: string): string[] => {
+    if (!sectorName) return [];
+    try {
+      const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
+      if (rawDetails) {
+        const details = JSON.parse(rawDetails);
+        if (details[sectorName] && Array.isArray(details[sectorName].cargos)) {
+          return details[sectorName].cargos;
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao obter cargos no login:", e);
+    }
+
+    const PRESET_CARGOS: Record<string, string[]> = {
+      "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
+      "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
+      "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
+      "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
+      "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
+      "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
+      "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
+      "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
+      "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
+      "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
+    };
+
+    return PRESET_CARGOS[sectorName] || ["Colaborador"];
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +77,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           return;
         }
         if (!cargo.trim()) {
-          setMessage({ type: "error", text: "Por favor, informe seu cargo / função." });
-          setLoading(false);
-          return;
-        }
-        if (!contato.trim()) {
-          setMessage({ type: "error", text: "Por favor, informe seu contato / ramal." });
+          setMessage({ type: "error", text: "Por favor, selecione seu cargo / função." });
           setLoading(false);
           return;
         }
@@ -88,7 +112,6 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
               full_name: fullName,
               setor: setor,
               cargo: cargo.trim(),
-              contato: contato.trim(),
               updated_at: new Date().toISOString()
             })
             .eq("id", userId);
@@ -105,7 +128,6 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
               full_name: fullName,
               setor: setor,
               cargo: cargo.trim(),
-              contato: contato.trim(),
               role: "user",
               status: "Autorizado",
               updated_at: new Date().toISOString()
@@ -210,26 +232,19 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                     </select>
                   </div>
                   <div className="relative">
-                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-[#075618]" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Cargo / Função"
+                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-[#075618] pointer-events-none" size={18} />
+                    <select
                       required
+                      disabled={!setor}
                       value={cargo}
                       onChange={(e) => setCargo(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-2 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-semibold shadow-sm"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#075618]" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Contato / Ramal"
-                      required
-                      value={contato}
-                      onChange={(e) => setContato(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-2 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-semibold shadow-sm"
-                    />
+                      className="w-full pl-12 pr-10 py-4 bg-white disabled:bg-slate-50 border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-2 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-semibold shadow-sm appearance-none cursor-pointer"
+                    >
+                      <option value="">{setor ? "Selecione seu cargo / função *" : "Selecione o setor primeiro"}</option>
+                      {getCargosForSector(setor).map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                   </div>
                 </motion.div>
               )}
