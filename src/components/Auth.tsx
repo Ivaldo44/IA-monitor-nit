@@ -16,6 +16,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [fullName, setFullName] = useState("");
   const [setor, setSetor] = useState("");
   const [cargo, setCargo] = useState("");
+  const [cargosDisponiveis, setCargosDisponiveis] = useState<string[]>([]);
   const [sectors, setSectors] = useState<string[]>([]);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -24,18 +25,25 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     getSectors().then(setSectors);
   }, []);
 
-  const getCargosForSector = (sectorName: string): string[] => {
-    if (!sectorName) return [];
+  useEffect(() => {
+    if (!setor) {
+      setCargosDisponiveis([]);
+      setCargo("");
+      return;
+    }
+
     try {
       const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
       if (rawDetails) {
         const details = JSON.parse(rawDetails);
-        if (details[sectorName] && Array.isArray(details[sectorName].cargos)) {
-          return details[sectorName].cargos;
+        if (details[setor]?.cargos?.length > 0) {
+          setCargosDisponiveis(details[setor].cargos);
+          setCargo("");
+          return;
         }
       }
     } catch (e) {
-      console.error("Erro ao obter cargos no login:", e);
+      console.error("Erro ao ler localStorage:", e);
     }
 
     const PRESET_CARGOS: Record<string, string[]> = {
@@ -50,9 +58,11 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
       "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
     };
+    setCargosDisponiveis(PRESET_CARGOS[setor] || ["Colaborador"]);
+    setCargo("");
+  }, [setor]);
 
-    return PRESET_CARGOS[sectorName] || ["Colaborador"];
-  };
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +251,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                       className="w-full pl-12 pr-10 py-4 bg-white disabled:bg-slate-50 border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-2 focus:ring-[#075618]/5 outline-none transition-all text-sm text-[#1F2933] font-semibold shadow-sm appearance-none cursor-pointer"
                     >
                       <option value="">{setor ? "Selecione seu cargo / função *" : "Selecione o setor primeiro"}</option>
-                      {getCargosForSector(setor).map(c => (
+                      {cargosDisponiveis.map(c => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
