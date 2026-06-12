@@ -32,34 +32,54 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       return;
     }
 
-    try {
-      const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
-      if (rawDetails) {
-        const details = JSON.parse(rawDetails);
-        if (details[setor]?.cargos?.length > 0) {
-          setCargosDisponiveis(details[setor].cargos);
+    const loadCargos = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("sectors")
+          .select("cargos")
+          .eq("name", setor)
+          .maybeSingle();
+
+        if (!error && data && Array.isArray(data.cargos) && data.cargos.length > 0) {
+          setCargosDisponiveis(data.cargos);
           setCargo("");
           return;
         }
+      } catch (err) {
+        console.error("Erro ao carregar cargos do Supabase em Auth:", err);
       }
-    } catch (e) {
-      console.error("Erro ao ler localStorage:", e);
-    }
 
-    const PRESET_CARGOS: Record<string, string[]> = {
-      "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
-      "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
-      "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
-      "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
-      "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
-      "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
-      "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
-      "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
-      "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
-      "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
+      try {
+        const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
+        if (rawDetails) {
+          const details = JSON.parse(rawDetails);
+          if (details[setor]?.cargos?.length > 0) {
+            setCargosDisponiveis(details[setor].cargos);
+            setCargo("");
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao ler localStorage:", e);
+      }
+
+      const PRESET_CARGOS: Record<string, string[]> = {
+        "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
+        "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
+        "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
+        "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
+        "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
+        "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
+        "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
+        "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
+        "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
+        "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
+      };
+      setCargosDisponiveis(PRESET_CARGOS[setor] || ["Colaborador"]);
+      setCargo("");
     };
-    setCargosDisponiveis(PRESET_CARGOS[setor] || ["Colaborador"]);
-    setCargo("");
+
+    loadCargos();
   }, [setor]);
 
   

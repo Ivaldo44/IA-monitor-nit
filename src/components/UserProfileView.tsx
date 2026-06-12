@@ -38,6 +38,62 @@ export const UserProfileView: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [sectors, setSectors] = useState<string[]>([]);
   const [avatarPreview, setAvatarPreview] = useState<string>(profile?.avatar_url || "");
+  const [cargosDisponiveis, setCargosDisponiveis] = useState<string[]>([]);
+
+  useEffect(() => {
+    const currentSector = formData.setor;
+    if (!currentSector) {
+      setCargosDisponiveis([]);
+      return;
+    }
+
+    const loadCargos = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("sectors")
+          .select("cargos")
+          .eq("name", currentSector)
+          .maybeSingle();
+
+        if (!error && data && Array.isArray(data.cargos) && data.cargos.length > 0) {
+          setCargosDisponiveis(data.cargos);
+          return;
+        }
+      } catch (err) {
+        console.error("Erro ao carregar cargos do Supabase em UserProfileView:", err);
+      }
+
+      try {
+        const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
+        if (rawDetails) {
+          const details = JSON.parse(rawDetails);
+          if (details[currentSector] && Array.isArray(details[currentSector].cargos)) {
+            setCargosDisponiveis(details[currentSector].cargos);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Error getting cargos in profile view:", e);
+      }
+
+      const PRESET_CARGOS: Record<string, string[]> = {
+        "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
+        "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
+        "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
+        "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
+        "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
+        "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
+        "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
+        "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
+        "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
+        "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
+      };
+
+      setCargosDisponiveis(PRESET_CARGOS[currentSector] || ["Colaborador"]);
+    };
+
+    loadCargos();
+  }, [formData.setor]);
 
   // Password alteration modal state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -481,33 +537,7 @@ export const UserProfileView: React.FC = () => {
                         className="w-full pl-5 pr-12 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm appearance-none cursor-pointer text-[#1F2933] font-bold shadow-3xs"
                       >
                         <option value="">Selecione seu cargo / função...</option>
-                        {(() => {
-                          const currentSector = formData.setor;
-                          try {
-                            const rawDetails = localStorage.getItem("cedro_sectors_details_v2");
-                            if (rawDetails) {
-                              const details = JSON.parse(rawDetails);
-                              if (details[currentSector] && Array.isArray(details[currentSector].cargos)) {
-                                return details[currentSector].cargos;
-                              }
-                            }
-                          } catch (e) {
-                            console.error("Error getting cargos in profile view:", e);
-                          }
-                          const PRESET_CARGOS: Record<string, string[]> = {
-                            "NIT": ["Pesquisador de IA", "Analista de Inovação", "Gestor de Portfólio", "Engenheiro de Processos"],
-                            "TI": ["Analista de Suporte", "Administrador de Sistemas", "Desenvolvedor de Software", "Engenheiro de Dados"],
-                            "Marketing": ["Analista de Comunicação", "Designer Gráfico", "Especialista em SEO", "Social Media"],
-                            "Administrativo": ["Auxiliar Administrativo", "Assistente Financeiro", "Gerente de Operações", "Analista de Contratos"],
-                            "Jurídico": ["Advogado Integrado", "Assessor LGPD", "Consultor Regulatório", "Assistente Jurídico"],
-                            "Direção Técnica": ["Diretor Técnico", "Supervisor Analítico", "Responsável Técnico", "Auditor Médico"],
-                            "Qualidade": ["Gestor de Qualidade", "Analista de Qualidade", "Auditor de Processos", "Inspetor Sanitário"],
-                            "Atendimento / Recepção": ["Recepcionista", "Atendente Técnico", "Supervisor de Relacionamento", "Auxiliar de Caixa"],
-                            "Laboratório de Patologia": ["Médico Patologista", "Técnico em Histologia", "Citotécnico", "Auxiliar de Laboratório"],
-                            "Laboratório Central": ["Biomédico Palestrante", "Técnico em Análises Clínicas", "Farmacêutico Bioquímico", "Auxiliar de Coleta"]
-                          };
-                          return PRESET_CARGOS[currentSector] || ["Colaborador"];
-                        })().map((c: string) => (
+                        {cargosDisponiveis.map((c: string) => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
