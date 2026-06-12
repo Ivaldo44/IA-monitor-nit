@@ -33,6 +33,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { IARecord, UserProfile } from "../types";
 import { getSectors, saveSectors } from "../storage";
+import { supabase } from "../lib/supabase";
 
 interface SectorsProps {
   records: IARecord[];
@@ -139,17 +140,7 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
   const [quickFilter, setQuickFilter] = useState<"All" | "Active" | "Inactive" | "WithIA" | "WithoutIA">("All");
   
   // Sector Meta Info Dictionary
-  const [sectorDetails, setSectorDetails] = useState<Record<string, SectorDetail>>(() => {
-    const local = localStorage.getItem("cedro_sectors_details_v2");
-    if (local) {
-      try {
-        return JSON.parse(local);
-      } catch (e) {
-        console.error("Erro ao carregar detalhes locais:", e);
-      }
-    }
-    return PRESET_SECTORS_DETAILS;
-  });
+  const [sectorDetails, setSectorDetails] = useState<Record<string, SectorDetail>>(PRESET_SECTORS_DETAILS);
 
   // Action states
   const [activeMenuSector, setActiveMenuSector] = useState<string | null>(null);
@@ -172,11 +163,6 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
   const [formCargos, setFormCargos] = useState<string[]>([]);
   const [newCargoInput, setNewCargoInput] = useState("");
 
-  // Sync sector details to LocalStorage
-  useEffect(() => {
-    localStorage.setItem("cedro_sectors_details_v2", JSON.stringify(sectorDetails));
-  }, [sectorDetails]);
-
   // Load baseline sector names from DB / storage
   const fetchSectorsList = async () => {
     setLoading(true);
@@ -192,6 +178,28 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
 
   useEffect(() => {
     fetchSectorsList();
+  }, []);
+
+  useEffect(() => {
+    const loadSectorDetails = async () => {
+      const { data, error } = await supabase
+        .from("sectors")
+        .select("name, description, responsible, status, cargos");
+      
+      if (!error && data && data.length > 0) {
+        const details: Record<string, SectorDetail> = {};
+        data.forEach((row: any) => {
+          details[row.name] = {
+            description: row.description || "",
+            responsible: row.responsible || "",
+            status: row.status || "Ativo",
+            cargos: Array.isArray(row.cargos) ? row.cargos : ["Colaborador"]
+          };
+        });
+        setSectorDetails(details);
+      }
+    };
+    loadSectorDetails();
   }, []);
 
   // Merge dynamic properties and metrics with sector names
@@ -350,6 +358,9 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
         status: newStatus
       }
     }));
+    await supabase.from("sectors")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("name", sectorName);
 
     setSuccessMsg(`O status do setor "${sectorName}" foi alterado para ${newStatus}.`);
   };
@@ -381,6 +392,7 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
         delete next[sectorName];
         return next;
       });
+      await supabase.from("sectors").delete().eq("name", sectorName);
       setSuccessMsg(`Setor "${sectorName}" removido com sucesso.`);
       if (onRefresh) onRefresh();
     } else {
@@ -416,6 +428,14 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
             cargos: formCargos.length > 0 ? formCargos : ["Colaborador"]
           }
         }));
+        await supabase.from("sectors").upsert({
+          name: sName,
+          description: formDescription.trim() || "Setor de saúde e governança corporativa.",
+          responsible: formResponsible.trim() || "Não especificado",
+          status: formStatus,
+          cargos: formCargos.length > 0 ? formCargos : ["Colaborador"],
+          updated_at: new Date().toISOString()
+        }, { onConflict: "name" });
         setSuccessMsg(`Setor "${sName}" criado com sucesso!`);
         setIsModalOpen(false);
         if (onRefresh) onRefresh();
@@ -452,6 +472,19 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
           };
           return next;
         });
+        await supabase.from("sectors").upsert({
+          name: sName,
+          description: formDescription.trim() || "Setor de saúde e governança.",
+          responsible: formResponsible.trim() || "Não especificado",
+          status: formStatus,
+          cargos: formCargos.length > 0 ? formCargos : ["Colaborador"],
+          updated_at: new Date().toISOString()
+        }, { onConflict: "name" });
+
+        // Se o nome mudou, deletar o registro antigo
+        if (selectedSectorName !== sName) {
+          await supabase.from("sectors").delete().eq("name", selectedSectorName);
+        }
 
         // Update records in local lists dynamically if any mismatch
         setSuccessMsg(`Setor "${sName}" atualizado com sucesso.`);
