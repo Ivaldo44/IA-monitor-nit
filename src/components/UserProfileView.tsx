@@ -29,7 +29,7 @@ export const UserProfileView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || "",
-    cargo: profile?.cargo && profile?.cargo !== "Colaborador" ? profile?.cargo : "",
+    cargo: profile?.cargo || "",
     setor: profile?.setor || "",
     contato: profile?.contato || "",
     avatar_url: profile?.avatar_url || ""
@@ -117,7 +117,7 @@ export const UserProfileView: React.FC = () => {
         const keepsBlob = prev.avatar_url?.startsWith("blob:") || uploading;
         return {
           full_name: prev.full_name || profile.full_name || "",
-          cargo: prev.cargo || (profile.cargo && profile.cargo !== "Colaborador" ? profile.cargo : "") || "",
+          cargo: prev.cargo || profile.cargo || "",
           setor: prev.setor || profile.setor || "",
           contato: prev.contato || profile.contato || "",
           avatar_url: keepsBlob ? prev.avatar_url : (profile.avatar_url || "")
@@ -147,7 +147,7 @@ export const UserProfileView: React.FC = () => {
           const keepsBlob = prev.avatar_url?.startsWith("blob:") || uploading;
           return {
             full_name: prev.full_name || source.full_name || "",
-            cargo: prev.cargo || (source.cargo && source.cargo !== "Colaborador" ? source.cargo : "") || "",
+            cargo: prev.cargo || source.cargo || "",
             setor: prev.setor || source.setor || "",
             contato: prev.contato || source.contato || "",
             avatar_url: keepsBlob ? prev.avatar_url : (source.avatar_url || "")
@@ -161,7 +161,7 @@ export const UserProfileView: React.FC = () => {
     };
 
     loadProfileData();
-  }, [user?.id, profile?.setor]);
+  }, [user?.id, profile?.setor, profile?.cargo]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -537,9 +537,15 @@ export const UserProfileView: React.FC = () => {
                         className="w-full pl-5 pr-12 py-4 bg-white border border-[#E3E8E1] rounded-2xl focus:border-[#075618] focus:ring-4 focus:ring-[#075618]/5 outline-none transition-all text-sm appearance-none cursor-pointer text-[#1F2933] font-bold shadow-3xs"
                       >
                         <option value="">Selecione seu cargo / função...</option>
-                        {cargosDisponiveis.map((c: string) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
+                        {(() => {
+                          const distinctCargos = [...cargosDisponiveis];
+                          if (formData.cargo && !distinctCargos.includes(formData.cargo)) {
+                            distinctCargos.push(formData.cargo);
+                          }
+                          return distinctCargos.map((c: string) => (
+                            <option key={c} value={c}>{c}</option>
+                          ));
+                        })()}
                       </select>
                       <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#667085]">
                         <svg className="size-4 fill-current opacity-70" viewBox="0 0 20 20">
