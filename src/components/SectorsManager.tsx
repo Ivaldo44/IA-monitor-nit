@@ -155,6 +155,7 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit" | "view">("create");
   const [selectedSectorName, setSelectedSectorName] = useState<string | null>(null);
+  const [deleteConfirmSector, setDeleteConfirmSector] = useState<string | null>(null);
   
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -162,6 +163,13 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
   const [formStatus, setFormStatus] = useState<"Ativo" | "Inativo">("Ativo");
   const [formCargos, setFormCargos] = useState<string[]>([]);
   const [newCargoInput, setNewCargoInput] = useState("");
+
+  const isNameDuplicate = 
+    modalMode === "create"
+      ? (formName.trim() !== "" && sectors.some(s => s.toLowerCase().trim() === formName.toLowerCase().trim()))
+      : modalMode === "edit"
+      ? (selectedSectorName !== null && formName.trim() !== "" && formName.toLowerCase().trim() !== selectedSectorName.toLowerCase().trim() && sectors.some(s => s.toLowerCase().trim() === formName.toLowerCase().trim()))
+      : false;
 
   // Load baseline sector names from DB / storage
   const fetchSectorsList = async () => {
@@ -369,35 +377,39 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const hasIAs = records.some(r => (r.unidadeSetor || "").trim().toLowerCase() === sectorName.trim().toLowerCase());
-    const hasUsers = profiles.some(p => (p.setor || "").trim().toLowerCase() === sectorName.trim().toLowerCase());
-
-    if (hasIAs || hasUsers) {
-      const confirmed = window.confirm(
-        `O setor "${sectorName}" possui ligações com soluções de IA (${records.filter(r => (r.unidadeSetor || "").trim().toLowerCase() === sectorName.trim().toLowerCase()).length}) ou perfis de colaboradores (${profiles.filter(p => (p.setor || "").trim().toLowerCase() === sectorName.trim().toLowerCase()).length}) cadastrados. Excluir mesmo assim?`
-      );
-      if (!confirmed) return;
-    } else {
-      const confirmed = window.confirm(`Deseja realmente excluir o setor "${sectorName}" da governança?`);
-      if (!confirmed) return;
-    }
-
     const updatedSectors = sectors.filter(s => s !== sectorName);
+    const previousSectors = [...sectors];
     setSectors(updatedSectors);
-    
-    const ok = await saveSectors(updatedSectors);
-    if (ok) {
-      setSectorDetails(prev => {
-        const next = { ...prev };
-        delete next[sectorName];
-        return next;
-      });
-      await supabase.from("sectors").delete().eq("name", sectorName);
-      setSuccessMsg(`Setor "${sectorName}" removido com sucesso.`);
-      if (onRefresh) onRefresh();
-    } else {
-      setErrorMsg("Erro ao salvar a remoção no banco sincronizado.");
-      setSectors(sectors); // rollback
+
+    // 1. Deletar do banco Supabase na tabela "sectors" primeiro
+    try {
+      const { error: deleteError } = await supabase.from("sectors").delete().eq("name", sectorName);
+      
+      if (deleteError) {
+        console.error("Erro ao deletar setor do Supabase:", deleteError);
+        setErrorMsg(`Não foi possível apagar no Supabase: ${deleteError.message}`);
+        setSectors(previousSectors); // rollback
+        return;
+      }
+      
+      // 2. Com a remoção garantida, atualizar o metadata secundário e detalhes locais
+      const ok = await saveSectors(updatedSectors);
+      if (ok) {
+        setSectorDetails(prev => {
+          const next = { ...prev };
+          delete next[sectorName];
+          return next;
+        });
+        setSuccessMsg(`Setor "${sectorName}" removido com sucesso.`);
+        if (onRefresh) onRefresh();
+      } else {
+        setErrorMsg("Erro ao atualizar o cache e metadados de listagem após exclusão.");
+        setSectors(previousSectors); // rollback
+      }
+    } catch (e: any) {
+      console.error("Erro inesperado na exclusão do setor:", e);
+      setErrorMsg(`Erro inesperado ao excluir: ${e.message || e}`);
+      setSectors(previousSectors); // rollback
     }
   };
 
@@ -813,7 +825,7 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
                                   onClick={() => { handleDeleteSector(sec.name); setActiveMenuSector(null); }} 
                                   className="w-full text-left px-3.5 py-1.5 hover:bg-red-50 text-red-600 transition-colors block font-bold"
                                 >
-                                  Excluir de vez
+                                  Excluir
                                 </button>
                               </div>
                             )}
@@ -974,8 +986,17 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
                       disabled={modalMode === "view"}
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 disabled:bg-slate-100 border border-slate-250 disabled:text-slate-500 rounded-xl text-xs outline-none focus:bg-white focus:border-[#03440c] transition-all font-semibold text-slate-800"
+                      className={`w-full px-3.5 py-2.5 disabled:bg-slate-100 border disabled:text-slate-500 rounded-xl text-xs outline-none focus:bg-white transition-all font-semibold ${
+                        isNameDuplicate 
+                          ? "border-red-300 text-red-900 bg-red-50/25 focus:border-red-500" 
+                          : "bg-slate-50 border-slate-250 text-slate-800 focus:border-[#03440c]"
+                      }`}
                     />
+                    {isNameDuplicate && (
+                      <span className="text-[10px] font-bold text-red-650 tracking-tight block mt-1 animate-pulse">
+                        ⚠️ Este setor já está cadastrado no sistema.
+                      </span>
+                    )}
                   </div>
 
                   {/* Responsável */}
@@ -1152,8 +1173,9 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
                 {modalMode !== "view" && (
                   <button
                     type="submit"
+                    disabled={isNameDuplicate}
                     onClick={handleSaveForm}
-                    className="bg-[#03440c] hover:bg-[#02330a] text-white font-bold text-xs px-5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 h-9 shadow-xs"
+                    className="bg-[#03440c] hover:bg-[#02330a] disabled:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs px-5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 h-9 shadow-xs"
                   >
                     Salvar alterações
                   </button>
@@ -1164,6 +1186,8 @@ export default function SectorsManager({ records, profiles, onRefresh }: Sectors
           </div>
         )}
       </AnimatePresence>
+
+
 
     </div>
   );

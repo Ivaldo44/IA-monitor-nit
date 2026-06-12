@@ -440,13 +440,12 @@ const SECTORS_STORAGE_KEY = "cedro_custom_sectors";
 export const getSectors = async (): Promise<string[]> => {
   try {
     const { data, error } = await supabase
-      .from('ia_records')
-      .select('data')
-      .eq('id', 'METADATA-SECTORS')
-      .maybeSingle();
+      .from('sectors')
+      .select('name')
+      .order('name', { ascending: true });
 
-    if (!error && data && data.data && Array.isArray((data.data as any).sectors)) {
-      const dbSectors = (data.data as any).sectors as string[];
+    if (!error && data && data.length > 0) {
+      const dbSectors = data.map((row: any) => row.name);
       localStorage.setItem(SECTORS_STORAGE_KEY, JSON.stringify(dbSectors));
       return dbSectors;
     }
@@ -476,6 +475,30 @@ export const saveSectors = async (sectors: string[]): Promise<boolean> => {
   }
 
   try {
+    // 1. Fetch current sectors in "sectors" table to prevent overwriting existing details
+    const { data: existingData, error: fetchError } = await supabase
+      .from('sectors')
+      .select('name');
+
+    if (!fetchError) {
+      const existingNames = (existingData || []).map((row: any) => row.name);
+      const missingNames = sectors.filter(name => !existingNames.includes(name));
+
+      if (missingNames.length > 0) {
+        const newRows = missingNames.map(name => ({
+          name,
+          description: "Setor de saúde e governança corporativa.",
+          responsible: "Não especificado",
+          status: "Ativo",
+          cargos: ["Colaborador"],
+          updated_at: new Date().toISOString()
+        }));
+
+        await supabase.from('sectors').insert(newRows);
+      }
+    }
+
+    // 2. Backward compatibility: update METADATA-SECTORS configuration
     const payload = {
       id: "METADATA-SECTORS",
       unidade_setor: "METADATA",
@@ -495,7 +518,7 @@ export const saveSectors = async (sectors: string[]): Promise<boolean> => {
       .upsert(payload);
 
     if (error) {
-      console.error("Erro ao salvar setores no Supabase:", error);
+      console.error("Erro ao salvar config de setores no Supabase:", error);
       return false;
     }
     return true;
